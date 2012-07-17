@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# PODNAME: metrics-to-graphite.pl
+# PODNAME: es-metrics-to-graphite.pl
 # ABSTRACT: Gather performance metrics from an ES node and send them to Graphite
 use strict;
 use warnings;
