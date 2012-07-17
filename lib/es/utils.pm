@@ -18,11 +18,11 @@ distribution.
 
 To install the utilities, simply:
 
-    export RELEASE=0.009
+    export RELEASE=0.010
 
-    wget --no-check-certificate https://github.com/reyjrar/es-utils/releases/es-utils-$RELEASE.tar.gz
+    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/es-utils-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 
-    tar -zxvf es-utils-$RELEASE.tar.gz
+    tar -zxvf es-utils.tgz
 
     cd es-utils-$RELEASE
 
