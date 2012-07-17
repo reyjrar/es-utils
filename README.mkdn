@@ -4,7 +4,7 @@ es::utils - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 0.006
+version 0.007
 
 # SYNOPSIS
 
@@ -18,10 +18,6 @@ Included is:
 
 The es::utils module simply serves as a wrapper around the scripts for packaging and
 distribution.
-
-# NAME
-
-es::utils - Utilities for monitoring ElasticSearch
 
 # INSTALL
 

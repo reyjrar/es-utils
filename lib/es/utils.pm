@@ -1,10 +1,6 @@
 # ABSTRACT: Utilities for Monitoring ElasticSearch
 package es::utils;
 
-=head1 NAME
-
-es::utils - Utilities for monitoring ElasticSearch
-
 =head1 SYNOPSIS
 
 This a set of utilities to make monitoring ElasticSearch clusters much simpler.
