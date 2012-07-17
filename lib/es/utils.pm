@@ -41,9 +41,9 @@ directory as your Perl executable.
 
 The tools are all wrapped in their own documentation, please see:
 
-* es-status.pl --help
-* es-metric-to-graphite.pl --help
-* es-nagios-check.pl --help
+    es-status.pl --help
+    es-metric-to-graphite.pl --help
+    es-nagios-check.pl --help
 
 For individual options and capabilities
 
