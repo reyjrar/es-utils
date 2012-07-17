@@ -26,13 +26,16 @@ To install the utilities, simply:
 
     tar -zxvf es-utils.tar.gz
 
-    cd es-utils-*
+    cd reyjrar-es-utils-*
 
     perl Makefile.PL
 
     make
 
     make install
+
+This will take care of ensuring all the dependencies are satisfied and will install the scripts into the same
+directory as your Perl executable.
 
 =head2 USAGE
 
