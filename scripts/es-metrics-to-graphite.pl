@@ -252,11 +252,11 @@ __END__
 
 =head1 NAME
 
-perf_elastic_search.pl - Check Elastic Search Performance
+es-metrics-to-graphite.pl - Check Elastic Search Performance
 
 =head1 SYNOPSIS
 
-perf_elastic_search.pl --format=graphite --host [host] [options]
+es-metrics-to-graphite.pl --format=graphite --host [host] [options]
 
 Options:
 
