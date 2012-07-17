@@ -18,6 +18,33 @@ Included is:
 The es::utils module simply serves as a wrapper around the scripts for packaging and
 distribution.
 
+=head1 INSTALL
+
+To install the utilities, simply:
+
+    wget --no-check-certificate https://github.com/reyjrar/es-utils/tarball/master -O es-utils.tar.gz
+
+    tar -zxvf es-utils.tar.gz
+
+    cd es-utils-*
+
+    perl Makefile.PL
+
+    make
+
+    make install
+
+=head2 USAGE
+
+The tools are all wrapped in their own documentation, please see:
+
+* es-status.pl --help
+* es-metric-to-graphite.pl --help
+* es-nagios-check.pl --help
+
+For individual options and capabilities
+
+
 =cut
 
 
