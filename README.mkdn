@@ -4,7 +4,7 @@ es::utils - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 0.003
+version 0.005
 
 # SYNOPSIS
 
@@ -22,6 +22,32 @@ distribution.
 # NAME
 
 es::utils - Utilities for monitoring ElasticSearch
+
+# INSTALL
+
+To install the utilities, simply:
+
+    wget --no-check-certificate https://github.com/reyjrar/es-utils/tarball/master -O es-utils.tar.gz
+
+    tar -zxvf es-utils.tar.gz
+
+    cd es-utils-*
+
+    perl Makefile.PL
+
+    make
+
+    make install
+
+## USAGE
+
+The tools are all wrapped in their own documentation, please see:
+
+\* es-status.pl --help
+\* es-metric-to-graphite.pl --help
+\* es-nagios-check.pl --help
+
+For individual options and capabilities
 
 # AUTHOR
 
