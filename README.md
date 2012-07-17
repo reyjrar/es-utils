@@ -1,4 +1,0 @@
-es-utils
-========
-
-ElasticSearch Utilities

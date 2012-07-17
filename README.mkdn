@@ -1,0 +1,19 @@
+# NAME
+
+es::utils - Utilities for Monitoring ElasticSearch
+
+# VERSION
+
+version 0.001
+
+# AUTHOR
+
+Brad Lhotsky <brad.lhotsky@gmail.com>
+
+# COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by Brad Lhotsky.
+
+This is free software, licensed under:
+
+    The (three-clause) BSD License
