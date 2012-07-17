@@ -18,11 +18,13 @@ distribution.
 
 To install the utilities, simply:
 
-    wget --no-check-certificate https://github.com/reyjrar/es-utils/tarball/master -O es-utils.tar.gz
+    export RELEASE=0.009
 
-    tar -zxvf es-utils.tar.gz
+    wget --no-check-certificate https://github.com/reyjrar/es-utils/releases/es-utils-$RELEASE.tar.gz
 
-    cd reyjrar-es-utils-*
+    tar -zxvf es-utils-$RELEASE.tar.gz
+
+    cd es-utils-$RELEASE
 
     perl Makefile.PL
 
