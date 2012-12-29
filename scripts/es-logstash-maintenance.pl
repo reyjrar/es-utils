@@ -57,11 +57,15 @@ my %CFG = (
     'date-separator' => '.',
     timezone         => 'Europe/Amsterdam',
     port             => 9200,
+    delete           => 0,
+    optimize         => 0,
 );
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
 }
+$CFG{delete} = $CFG{optimize} = 1 if exists $opt{all} and $opt{all};
+
 my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
 $TARGET .= ":$CFG{port}";
 
@@ -91,7 +95,7 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
     my $idx_dt = DateTime->new( year => $parts[0], month => $parts[1], day => $parts[2] );
 
     # Delete the Index if it's too old
-    if( $idx_dt < $DEL ) {
+    if( $CFG{delete} && $idx_dt < $DEL ) {
         print "$index will be deleted.\n";
         try {
             my $rc = $es->delete_index( index => $index );
@@ -99,52 +103,53 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
         next;
     }
 
-    # Check if we can optimize
-    my $segment_ratio = undef;
-    try {
-        my $json = get( qq{http://$TARGET/$index/_segments} );
-        my $res = decode_json( $json );
-        my $shard_data = $res->{indices}{$index}{shards};
-        my $shards = 0;
-        my $segments = 0;
-        foreach my $id (keys %{$shard_data} ){
-            $segments += $shard_data->{$id}[0]{num_search_segments};
-            $shards++;
-        }
-        if( $shards > 0 ) {
-            $segment_ratio = sprintf( "%0.2f", $segments / $shards );
-        }
-    };
-
-    if( $idx_dt <= $OPTIMIZE && defined($segment_ratio) && $segment_ratio > 1 ) {
-        my $error = undef;
-        print " + Optimization required (segment_ratio: $segment_ratio).\n";
-
+    # Run optimize?
+    if( $CFG{optimize} ) {
+        my $segment_ratio = undef;
         try {
-            my $o_res = $es->optimize_index(
-                index            => $index,
-                max_num_segments => 1,
-                wait_for_merge   => 0,
-            );
-            print " + Success: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.\n";
-        } catch {
-            $error = shift;
+            my $json = get( qq{http://$TARGET/$index/_segments} );
+            my $res = decode_json( $json );
+            my $shard_data = $res->{indices}{$index}{shards};
+            my $shards = 0;
+            my $segments = 0;
+            foreach my $id (keys %{$shard_data} ){
+                $segments += $shard_data->{$id}[0]{num_search_segments};
+                $shards++;
+            }
+            if( $shards > 0 ) {
+                $segment_ratio = sprintf( "%0.2f", $segments / $shards );
+            }
         };
-        print " ! Encountered error during optimize: $error\n" if defined $error;
-    }
-    else {
-        print " + ";
-        if( $segment_ratio > 1 ) {
-            print " Active index, not optimizing.";
+
+        if( $idx_dt <= $OPTIMIZE && defined($segment_ratio) && $segment_ratio > 1 ) {
+            my $error = undef;
+            print " + Optimization required (segment_ratio: $segment_ratio).\n";
+
+            try {
+                my $o_res = $es->optimize_index(
+                    index            => $index,
+                    max_num_segments => 1,
+                    wait_for_merge   => 0,
+                );
+                print " + Success: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.\n";
+            } catch {
+                $error = shift;
+            };
+            print " ! Encountered error during optimize: $error\n" if defined $error;
         }
         else {
-            print " Already optimized!";
+            print " + ";
+            if( $segment_ratio > 1 ) {
+                print " Active index, not optimizing.";
+            }
+            else {
+                print " Already optimized!";
+            }
+            print " (segment_ratio:$segment_ratio)\n";
         }
-        print " (segment_ratio:$segment_ratio)\n";
     }
     print "\n";
 }
-
 
 __END__
 
