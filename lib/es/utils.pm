@@ -1,8 +1,37 @@
 # ABSTRACT: Utilities for Monitoring ElasticSearch
 package es::utils;
 
+use strict;
+use warnings;
+
 use IPC::Run3;
 use Term::ANSIColor;
+use YAML;
+use Getopt::Long qw(:config pass_through);
+use Sub::Exporter -setup => {
+    exports => [
+        qw(output verbose debug debug_var)
+    ],
+};
+
+# Extract the basics from the command line
+my %opt = ();
+GetOptions(\%opt,
+    'color',
+    'csv',
+    'verbose+',
+    'debug',
+    'quiet',
+);
+# Set defaults
+my %DEF = (
+    DEBUG       => $opt{debug} || 0,
+    VERBOSE     => $opt{verbose} || 0,
+    COLOR       => $opt{color} || git_color_check(),
+    KV_FORMART  => $opt{csv} ? ',' : ':',
+    QUIET       => $opt{quiet} || 0,
+);
+debug_var(\%DEF);
 
 sub git_color_check {
     my @cmd = qw(git config --global --get color.ui);
@@ -20,36 +49,19 @@ sub git_color_check {
     }
     return 0;
 }
-sub get_stats {
-    my $stat_path = shift;
-
-    my $stats = undef;
-    eval {
-        my $url = "$DEF{BASE_URL}/$stat_path";
-        my $json = get( $url );
-        die "retreival of $url failed to return data" unless $json;
-        $stats =  $JSON->decode($json);
-    };
-    if( my $err = $@ ){
-        output({color=>"red"}, "Encountered error: $err" );
-        exit 1;
-    }
-
-    return $stats;
-}
 sub colorize {
     my ($color,$string) = @_;
 
-    if( $DEF{NICOLAI} ) {
-        $string = nicolai_colorize( $string );
-    }
-    elsif( defined $color && $DEF{COLOR} ) {
+   if( defined $color && $DEF{COLOR} ) {
         $string=colored([ $color ], $string);
     }
     return $string;
 }
 sub output {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
+
+    # Quiet mode!
+    return if $DEF{quiet};
 
     # Input/output Arrays
     my @input = @_;
@@ -101,10 +113,24 @@ sub debug {
     return unless $DEF{DEBUG};
     output( $opts, @msgs );
 }
+sub debug_var {
+    return unless $DEF{DEBUG};
+
+    my $opts = {clear => 1};
+    if( ref $_[0] eq 'HASH' && defined $_[1] && ref $_[1] ) {
+        my $ref = shift;
+        foreach my $k (keys %{ $ref } ) {
+            $opts->{$k} = $ref->{$k};
+        };
+    }
+    output( $opts, Dump shift);
+}
 
 
 
 =head1 SYNOPSIS
+
+This library contains utilities for unified interfaces in the scripts.
 
 This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
