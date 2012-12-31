@@ -8,6 +8,8 @@ version 0.011
 
 # SYNOPSIS
 
+This library contains utilities for unified interfaces in the scripts.
+
 This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
 Included is:
