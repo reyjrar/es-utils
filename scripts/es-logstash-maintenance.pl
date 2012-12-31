@@ -1,4 +1,4 @@
-#!/usr/local/bin/booking-perl
+#!/usr/bin/env perl
 # PODNAME: es-logstash-maintenance.pl
 # ABSTRACT: Run to prune old indexes and optimize existing
 use strict;
@@ -15,6 +15,7 @@ use JSON::XS;
 use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;
+use es::utils qw(:all);
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -34,9 +35,6 @@ GetOptions(\%opt,
     # Basic options
     'help|h',
     'manual|m',
-    'verbose|v',
-    'quiet|q',
-    'debug|d',
 );
 
 #------------------------------------------------------------------------#
@@ -46,9 +44,7 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
 #------------------------------------------------------------------------#
 # Host or Local
-pod2usage(1) if !$opt{local} and !$opt{host};
-# Must choose a Mode
-pod2usage(1) if !$opt{all} and (!$opt{optimize} or !$opt{delete});
+pod2usage(1) unless defined $opt{local} or defined $opt{host};
 
 my %CFG = (
     'optimize-days'  => 1,
@@ -65,9 +61,14 @@ foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
 }
 $CFG{delete} = $CFG{optimize} = 1 if exists $opt{all} and $opt{all};
+if ( $CFG{delete} == 0 and $CFG{optimize} == 0 ) {
+    pod2usage(1);
+}
 
 my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
 $TARGET .= ":$CFG{port}";
+debug("Target is: $TARGET");
+debug_var(\%CFG);
 
 my $es = ElasticSearch->new(
     servers   => [ $TARGET ],
@@ -80,23 +81,26 @@ my $DEL      = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day'
 my $OPTIMIZE = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'optimize-days'} );
 my $d_res    = $es->index_stats(
     index => undef,
-    type  => undef,
+    types => undef,
     clear => 1
 );
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
-    print "$index being evaluated\n";
+    verbose("$index being evaluated");
 
 
     my ($basename,$dateStr) = split /\-/, $index;
+    debug("Basename: $basename");
+    debug("date string: $dateStr");
     next unless $basename eq $CFG{'index-basename'};
 
-    my @parts = split $CFG{'date-separator'}, $dateStr;
+    my $sep = $CFG{'date-separator'};
+    my @parts = split /\Q$sep\E/, $dateStr;
     my $idx_dt = DateTime->new( year => $parts[0], month => $parts[1], day => $parts[2] );
 
     # Delete the Index if it's too old
     if( $CFG{delete} && $idx_dt < $DEL ) {
-        print "$index will be deleted.\n";
+        output({color=>"red"}, "$index will be deleted.");
         try {
             my $rc = $es->delete_index( index => $index );
         };
@@ -123,7 +127,7 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
 
         if( $idx_dt <= $OPTIMIZE && defined($segment_ratio) && $segment_ratio > 1 ) {
             my $error = undef;
-            print " + Optimization required (segment_ratio: $segment_ratio).\n";
+            verbose({color=>"yellow"}, "$index: required (segment_ratio: $segment_ratio).");
 
             try {
                 my $o_res = $es->optimize_index(
@@ -131,24 +135,21 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
                     max_num_segments => 1,
                     wait_for_merge   => 0,
                 );
-                print " + Success: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.\n";
+                output({color=>"green"}, "$index: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.");
             } catch {
                 $error = shift;
             };
-            print " ! Encountered error during optimize: $error\n" if defined $error;
+            output({color=>"red"}, "$index: Encountered error during optimize: $error") if defined $error;
         }
         else {
-            print " + ";
             if( $segment_ratio > 1 ) {
-                print " Active index, not optimizing.";
+                verbose("$index is active not optimizing (segment_ratio:$segment_ratio)");
             }
             else {
-                print " Already optimized!";
+                verbose("$index already optimized");
             }
-            print " (segment_ratio:$segment_ratio)\n";
         }
     }
-    print "\n";
 }
 
 __END__
