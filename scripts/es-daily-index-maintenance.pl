@@ -5,6 +5,7 @@ use strict;
 use warnings;
 
 BEGIN {
+    # Clear out any proxy settings
     delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
 }
 
@@ -64,6 +65,7 @@ if ( $CFG{delete} == 0 and $CFG{optimize} == 0 ) {
     pod2usage(1);
 }
 
+# Create the target uri for the ES Cluster
 my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
 $TARGET .= ":$CFG{port}";
 debug("Target is: $TARGET");
