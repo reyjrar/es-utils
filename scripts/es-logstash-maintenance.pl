@@ -10,7 +10,6 @@ BEGIN {
 
 use DateTime;
 use ElasticSearch;
-use Try::Tiny;
 use JSON::XS;
 use LWP::Simple;
 use Getopt::Long;
@@ -101,7 +100,7 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
     # Delete the Index if it's too old
     if( $CFG{delete} && $idx_dt < $DEL ) {
         output({color=>"red"}, "$index will be deleted.");
-        try {
+        eval {
             my $rc = $es->delete_index( index => $index );
         };
         next;
@@ -110,7 +109,7 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
     # Run optimize?
     if( $CFG{optimize} ) {
         my $segment_ratio = undef;
-        try {
+        eval {
             my $json = get( qq{http://$TARGET/$index/_segments} );
             my $res = decode_json( $json );
             my $shard_data = $res->{indices}{$index}{shards};
@@ -129,17 +128,17 @@ foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
             my $error = undef;
             verbose({color=>"yellow"}, "$index: required (segment_ratio: $segment_ratio).");
 
-            try {
+            eval {
                 my $o_res = $es->optimize_index(
                     index            => $index,
                     max_num_segments => 1,
                     wait_for_merge   => 0,
                 );
                 output({color=>"green"}, "$index: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.");
-            } catch {
-                $error = shift;
             };
-            output({color=>"red"}, "$index: Encountered error during optimize: $error") if defined $error;
+            if( my $error = $@ ) {
+                output({color=>"red"}, "$index: Encountered error during optimize: $error");
+            }
         }
         else {
             if( $segment_ratio > 1 ) {
