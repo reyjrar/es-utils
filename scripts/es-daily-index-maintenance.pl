@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# PODNAME: es-logstash-maintenance.pl
+# PODNAME: es-daily-index-maintenance.pl
 # ABSTRACT: Run to prune old indexes and optimize existing
 use strict;
 use warnings;
@@ -155,7 +155,7 @@ __END__
 
 =head1 SYNOPSIS
 
-es-logstash-maintenance.pl --all --local
+es-daily-index-maintenance.pl --all --local
 
 Options:
 
@@ -207,7 +207,7 @@ routine deletion and optimization of indexes.
 
 Use with cron:
 
-    22 4 * * * es-logstash-maintenance.pl --local --all --delete-days=180
+    22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180
 
 =head1 AUTHOR
 

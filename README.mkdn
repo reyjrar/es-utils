@@ -4,7 +4,7 @@ es::utils - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 0.011
+version 0.012
 
 # SYNOPSIS
 
@@ -26,7 +26,7 @@ distribution.
 
 To install the utilities, simply:
 
-    export RELEASE=0.010
+    export RELEASE=0.012
 
     wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/es-utils-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 

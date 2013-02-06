@@ -139,7 +139,7 @@ Included is:
     scripts/es-status.pl - Command line utility for ES Metrics
     scripts/es-metrics-to-graphite.pl - Send ES Metrics to Graphite or Cacti
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
-    scripts/es-logstash-maintenance.pl - Perform index maintenance on logstash indexes
+    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
 
 The es::utils module simply serves as a wrapper around the scripts for packaging and
 distribution.
@@ -148,7 +148,7 @@ distribution.
 
 To install the utilities, simply:
 
-    export RELEASE=0.010
+    export RELEASE=0.012
 
     wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/es-utils-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 
@@ -172,7 +172,7 @@ The tools are all wrapped in their own documentation, please see:
     es-status.pl --help
     es-metric-to-graphite.pl --help
     es-nagios-check.pl --help
-    es-logstash-maintenance.pl --help
+    es-daily-index-maintenance.pl --help
 
 For individual options and capabilities
 
