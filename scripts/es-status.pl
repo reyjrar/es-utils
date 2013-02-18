@@ -162,8 +162,8 @@ sub handle_segments {
             $size_short /= 1024;
             $unit = shift @units;
         }
-        output({kv=>1,indent=>1}, "index_size", sprintf("%.2f %s", $size_short, $unit) );
-        verbose({kv=>1,indent=>1}, "index_size_bytes", $index_size );
+        verbose({kv=>1,indent=>1}, "index_size", sprintf("%.2f %s", $size_short, $unit) );
+        verbose({kv=>1,indent=>1,level=>2}, "index_size_bytes", $index_size );
     }
 }
 

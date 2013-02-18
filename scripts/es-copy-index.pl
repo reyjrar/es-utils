@@ -39,6 +39,11 @@ pod2usage(1) if $OPT{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $OPT{manual};
 my $INDEX = shift @ARGV;
 
+# Check for valid use cases
+if ( !defined($INDEX) || !exists $OPT{from} || !exists $OPT{to} ) {
+    pod2usage(-exitstatus => 1, -verbose => 2);
+}
+
 # Connect to ElasticSearch
 my %ES = ();
 foreach my $dir (qw(from to)) {
@@ -48,7 +53,6 @@ foreach my $dir (qw(from to)) {
         timeout   => 0,
     );
 }
-
 croak "Invalid index: $INDEX\n" unless valid_index($INDEX);
 my $RECORDS = 0;
 my $LAST = time;
@@ -71,7 +75,7 @@ eval {
         dest_index => $INDEX,
         transform  => \&show_counts,
         bulk_size  => 10000,
-        quiet      => es::utils::def('verbose') > 0,
+        quiet      => !es::utils::def('verbose') > 0,
     );
 
     # Optimize
