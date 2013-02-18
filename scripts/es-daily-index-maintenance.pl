@@ -209,8 +209,4 @@ Use with cron:
 
     22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180
 
-=head1 AUTHOR
-
-Brad Lhotsky <brad.lhotsky@gmail.com>
-
 =cut

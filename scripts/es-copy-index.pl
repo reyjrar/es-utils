@@ -167,9 +167,5 @@ Example:
 
    es-copy-index.pl --from localhost --to remote.cluster.com logstash-2013.01.11
 
-=head1 AUTHOR
-
-Brad Lhotsky <brad.lhotsky@gmail.com>
-
 =cut
 

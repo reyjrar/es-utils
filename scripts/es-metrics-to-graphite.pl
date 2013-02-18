@@ -323,8 +323,4 @@ Verbose stats, to not interfere with cacti, output goes to STDERR
 This is a plugin to poll elasticsearch for performance data and stats it in a relevant
 format for your monitoring infrastructure.
 
-=head1 AUTHOR
-
-Brad Lhotsky <brad.lhotsky@gmail.com>
-
 =cut

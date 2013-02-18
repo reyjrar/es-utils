@@ -431,8 +431,4 @@ I'm the dude writing this script, so show me ALL THE THINGS!
 This script is designed to help you get information about the state of the
 ElasticSearh cluster in a hurry.
 
-=head1 AUTHOR
-
-Brad Lhotsky <brad.lhotsky@gmail.com>
-
 =cut

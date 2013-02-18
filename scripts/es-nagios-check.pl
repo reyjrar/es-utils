@@ -268,8 +268,4 @@ shards to check for segmentation.
 
 This is a plugin to poll elasticsearch for it's status and report back to Nagios.
 
-=head1 AUTHOR
-
-Brad Lhotsky <brad.lhotsky@gmail.com>
-
 =cut
