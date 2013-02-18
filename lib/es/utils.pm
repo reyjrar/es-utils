@@ -33,6 +33,8 @@ my %DEF = (
 );
 debug_var(\%DEF);
 
+sub def { return exists $DEF{$_[0]} ? $DEF{$_[0]} : undef }
+
 sub git_color_check {
     my @cmd = qw(git config --global --get color.ui);
     my($out,$err);
@@ -92,10 +94,11 @@ sub output {
             push @output, $msg;
         }
     }
+    my $out_handle = exists $opts->{stderr} && $opts->{stderr} ? \*STDERR : \*STDOUT;
     # Do clearing
-    print "\n"x$opts->{clear} if exists $opts->{clear};
+    print $out_handle "\n"x$opts->{clear} if exists $opts->{clear};
     # Print output
-    print "${indent}$_\n" for @output;
+    print $out_handle "${indent}$_\n" for @output;
 }
 sub verbose {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
@@ -140,6 +143,7 @@ Included is:
     scripts/es-metrics-to-graphite.pl - Send ES Metrics to Graphite or Cacti
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
+    scripts/es-copy-index.pl - Copy an index from one cluster to another
 
 The es::utils module simply serves as a wrapper around the scripts for packaging and
 distribution.
@@ -148,7 +152,7 @@ distribution.
 
 To install the utilities, simply:
 
-    export RELEASE=0.012
+    export RELEASE=0.013
 
     wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/es-utils-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 
@@ -173,6 +177,7 @@ The tools are all wrapped in their own documentation, please see:
     es-metric-to-graphite.pl --help
     es-nagios-check.pl --help
     es-daily-index-maintenance.pl --help
+    es-copy-index.pl --help
 
 For individual options and capabilities
 
