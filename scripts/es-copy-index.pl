@@ -21,7 +21,7 @@ use MIME::Lite;
 use Pod::Usage;
 use Sys::Hostname;
 use YAML;
-use es::utils qw(:all);
+use App::ElasticSearch::Utilities qw(:all);
 
 #------------------------------------------------------------------------#
 # Argument Parsing
@@ -75,7 +75,7 @@ eval {
         dest_index => $INDEX,
         transform  => \&show_counts,
         bulk_size  => 10000,
-        quiet      => !es::utils::def('verbose') > 0,
+        quiet      => !App::ElasticSearch::Utilities::def('verbose') > 0,
     );
 
     # Optimize

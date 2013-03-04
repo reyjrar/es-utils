@@ -14,7 +14,7 @@ use JSON::XS;
 use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;
-use es::utils qw(:all);
+use App::ElasticSearch::Utilities qw(:all);
 
 #------------------------------------------------------------------------#
 # Argument Collection

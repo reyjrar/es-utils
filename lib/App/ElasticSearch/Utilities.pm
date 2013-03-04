@@ -1,5 +1,5 @@
 # ABSTRACT: Utilities for Monitoring ElasticSearch
-package es::utils;
+package App::ElasticSearch::Utilities;
 
 use strict;
 use warnings;
@@ -145,20 +145,20 @@ Included is:
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-copy-index.pl - Copy an index from one cluster to another
 
-The es::utils module simply serves as a wrapper around the scripts for packaging and
+The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.
 
 =head1 INSTALL
 
 To install the utilities, simply:
 
-    export RELEASE=0.013
+    export RELEASE=0.014
 
-    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/es-utils-$RELEASE.tar.gz?raw=true -O es-utils.tgz
+    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 
     tar -zxvf es-utils.tgz
 
-    cd es-utils-$RELEASE
+    cd App-ElasticSearch-Utilities-$RELEASE
 
     perl Makefile.PL
 
