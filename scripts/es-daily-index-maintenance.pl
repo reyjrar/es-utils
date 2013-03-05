@@ -80,11 +80,19 @@ my $DEL      = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day'
 my $OPTIMIZE = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'optimize-days'} );
 my $d_res    = $es->index_stats(
     index => undef,
-    types => undef,
     clear => 1
 );
+# Handle Old and New versions of ElasticSearch
+my $indices = (exists $d_res->{_all}{indices} && ref $d_res->{_all}{indices} eq 'HASH') ? $d_res->{_all}{indices} :
+              (exists $d_res->{indices}       && ref $d_res->{indices} eq 'HASH')       ? $d_res->{indices} :
+              undef;
+
+if ( !defined $indices ) {
+    output({color=>"red"}, "Unable to locate indices in status!");
+    exit 1;
+}
 # Loop through the indices and take appropriate actions;
-foreach my $index (sort keys %{ $d_res->{_all}{indices} }) {
+foreach my $index (sort keys %{ $indices }) {
     verbose("$index being evaluated");
 
 

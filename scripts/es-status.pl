@@ -124,7 +124,7 @@ sub handle_segments {
     my $stats = get_stats('_segments');
     output({clear=>1,color=>"cyan"}, "Index Segmentation Check", "-="x20);
 
-    foreach my $index ( keys %{ $stats->{indices} } ) {
+    foreach my $index ( sort keys %{ $stats->{indices} } ) {
         output({color=>"cyan"},"$index:");
         my $shards = 0;
         my $segments = 0;
