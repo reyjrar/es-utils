@@ -152,7 +152,7 @@ distribution.
 
 To install the utilities, simply:
 
-    export RELEASE=0.014
+    export RELEASE=<CurrentRelease>
 
     wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 
