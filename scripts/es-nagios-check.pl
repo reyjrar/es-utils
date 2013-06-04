@@ -127,7 +127,9 @@ if( exists $OPT{'shard-state'} ) {
         push @status, "$stats{health}->{initializing_shards} initializing";
     }
     if( $stats{health}->{unassigned_shards} > 0 ) {
-        $status = "CRITICAL";
+        # We may have unassigned shards if we're in an initialization state, and that's less severe than
+        # if we have no shard initializing or relocating and there are unassigned shards.
+        $status = $stats{health}->{relocating_shards} > 0 || $stats{health}->{initializing_shards} > 0 ? "WARNING": "CRITICAL";
         push @status, "$stats{health}->{unassigned_shards} unassigned";
     }
     push @status, "normal" unless scalar @status;
