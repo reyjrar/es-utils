@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 1.001
+version 1.002
 
 # SYNOPSIS
 
@@ -66,7 +66,7 @@ For individual options and capabilities
 
 # AUTHOR
 
-Brad Lhotsky <brad.lhotsky@gmail.com>
+Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
