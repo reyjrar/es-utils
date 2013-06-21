@@ -154,11 +154,11 @@ distribution.
 
 Recommended install with L<CPAN Minus|http://cpanmin.us>:
 
-    cpanm App::ElsticSearch::Utilities
+    cpanm App::ElasticSearch::Utilities
 
 You can also use CPAN:
 
-    cpan App::ElsticSearch::Utilities
+    cpan App::ElasticSearch::Utilities
 
 Or if you'd prefer to manually install:
 
