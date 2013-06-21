@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 1.000
+version 1.001
 
 # SYNOPSIS
 
@@ -25,13 +25,13 @@ distribution.
 
 # INSTALL
 
-To install the utilities, simply:
-
-    cpan App::ElsticSearch::Utilities
-
-With CPAN Minus:
+Recommended install with [CPAN Minus](http://cpanmin.us):
 
     cpanm App::ElsticSearch::Utilities
+
+You can also use CPAN:
+
+    cpan App::ElsticSearch::Utilities
 
 Or if you'd prefer to manually install:
 
