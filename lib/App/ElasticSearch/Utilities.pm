@@ -1,6 +1,8 @@
 # ABSTRACT: Utilities for Monitoring ElasticSearch
 package App::ElasticSearch::Utilities;
 
+our $VERSION = 0.999;
+
 use strict;
 use warnings;
 
