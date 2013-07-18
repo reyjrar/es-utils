@@ -98,7 +98,7 @@ foreach my $index (sort keys %{ $indices }) {
     verbose("$index being evaluated");
 
 
-    my ($basename,$dateStr) = split /\-/, $index;
+    my ($basename,$dateStr) = ($index =~ /^(.*)\-([^\-]+)/);
     debug("Basename: $basename");
     debug("date string: $dateStr");
     next unless $basename eq $CFG{'index-basename'};
