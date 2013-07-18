@@ -146,6 +146,7 @@ Included is:
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-copy-index.pl - Copy an index from one cluster to another
+    scripts/es-alias-manager.pl - Manage index aliases automatically
 
 The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.
@@ -188,6 +189,7 @@ The tools are all wrapped in their own documentation, please see:
     es-nagios-check.pl --help
     es-daily-index-maintenance.pl --help
     es-copy-index.pl --help
+    es-alias-manager.pl --help
 
 For individual options and capabilities
 
