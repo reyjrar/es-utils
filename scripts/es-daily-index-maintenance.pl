@@ -80,15 +80,11 @@ my $es = ElasticSearch->new(
 # Delete Indexes older than a certain point
 my $DEL      = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'delete-days'} );
 my $OPTIMIZE = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'optimize-days'} );
-my $d_res    = $es->index_stats(
-    index => undef,
-    clear => 1
+my $d_res = $es->cluster_state(
+    filter_nodes         => 1,
+    filter_routing_table => 1,
 );
-# Handle Old and New versions of ElasticSearch
-my $indices = (exists $d_res->{_all}{indices} && ref $d_res->{_all}{indices} eq 'HASH') ? $d_res->{_all}{indices} :
-              (exists $d_res->{indices}       && ref $d_res->{indices} eq 'HASH')       ? $d_res->{indices} :
-              undef;
-
+my $indices = $d_res->{metadata}{indices};
 if ( !defined $indices ) {
     output({color=>"red"}, "Unable to locate indices in status!");
     exit 1;
@@ -96,12 +92,18 @@ if ( !defined $indices ) {
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $indices }) {
     verbose("$index being evaluated");
+    debug_var($indices->{$index});
 
+    my @words = split /\-/, $index;
+    my $dateStr = pop @words;
 
-    my ($basename,$dateStr) = ($index =~ /^(.*)\-([^\-]+)/);
+    next unless defined $dateStr && $dateStr =~ /\d{4}.?\d{2}.?\d{2}/;
+
+    my $basename = join('-', @words);
     debug("Basename: $basename");
-    debug("date string: $dateStr");
-    next unless $basename eq $CFG{'index-basename'};
+    debug("Date string: $dateStr");
+    my %words = map { $_=>1 } @words;
+    next unless exists $words{$CFG{'index-basename'}};
 
     my $sep = $CFG{'date-separator'};
     my @parts = split /\Q$sep\E/, $dateStr;
