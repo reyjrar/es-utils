@@ -105,7 +105,7 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 
 #------------------------------------------------------------------------#
 # Collect and Decode the Cluster Statistics
-my @stats = qw(http os jvm process transport);
+my @stats = qw(indices os process jvm network transport http fs thread_pool);
 my $qs = join('&', map { "$_=true" } @stats );
 my $url = exists $opt{local} && $opt{local}
         ? "http://localhost:9200/_cluster/nodes/_local/stats?$qs"
@@ -186,6 +186,9 @@ sub parse_stats {
         # Flush
         "indices.flush.total $node->{indices}{flush}{total}",
         "indices.flush.total_ms $node->{indices}{flush}{total_time_in_millis}",
+        # Field Data
+        "indices.fielddata.evictions $node->{indices}{fielddata}{evictions}",
+        "indices.fielddata.size $node->{indices}{fielddata}{memory_size_in_bytes}",
         ;
 
     # Transport Details
@@ -223,10 +226,27 @@ sub parse_stats {
                 "jvm.mem.$heap.$gm $val";
         }
     }
+    # GC Pools
+    my %_pool = ( used_bytes => 'used_in_bytes', max_bytes => 'max_in_bytes' );
+    foreach my $gcpool ( keys %{ $node->{jvm}{mem}{pools} }) {
+        my $name = $gcpool;
+        $name =~ s/\s+//g;
+        foreach my $metric (keys %_pool) {
+            push @stats, "jvm.mem.pools.$name.$metric $node->{jvm}{mem}{pools}{$gcpool}{$_pool{$metric}}";
+        }
+    }
     # JVM Threads
     push @stats,
         "jvm.threads $node->{jvm}{threads}{count}",
         ;
+    my @pools_of_interest = qw/ search bulk index generic get management /;
+    foreach my $pool ( @pools_of_interest ) {
+        foreach my $metric ( keys %{$node->{thread_pool}{$pool}} ) {
+            push @stats,
+                "jvm.thread_pool.$pool.$metric $node->{thread_pool}{$pool}{$metric}"
+                ;
+        }
+    }
     # OS Information
     push @stats,
         "process.openfds $node->{process}{open_file_descriptors}",
