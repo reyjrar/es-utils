@@ -106,11 +106,25 @@ foreach my $base (keys %{ $ALIAS }) {
     }
     if (exists $ALIAS->{$base}{relative}) {
         $ALIAS->{$base}{relative}{alias} =~ s/\{\{([^\}]+)\}\}/$PARTS{$1}->{FMT}/g;
+        while( my ($period,$def) =  each %{ $ALIAS->{$base}{relative}{periods} }) {
+            my %dt = (
+                to => $TODAY->clone(),
+                from => exists $def->{from} ? $TODAY->clone() : DateTime->from_epoch(epoch => 0)->truncate( to => 'day'),
+            );
+            debug("Period[$period] subtracting: ");
+            debug_var($def);
+            foreach my $d (keys %dt) {
+                if ( exists $def->{$d} ) {
+                    $dt{$d}->subtract( %{ $def->{$d}} );
+                    warn "$period $d ", $dt{$d}->ymd;
+                }
+            }
+            $ALIAS->{$base}{relative}{periods}{$period} = \%dt;
+        }
     }
 }
-debug( "Aliases being applied:");
+debug("Aliases being applied:");
 debug_var($ALIAS);
-
 
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $indices }) {
@@ -128,6 +142,17 @@ foreach my $index (sort keys %{ $indices }) {
                 $desired{$daily} = 1;
             }
             if ( exists $map->{relative} ) {
+                while (my ($period,$def) = each %{ $map->{relative}{periods} }) {
+                    debug(sprintf("Checking index date (%s) is between %s and %s",
+                            $idx_dt->ymd,
+                            $def->{from}->ymd,
+                            $def->{to}->ymd,
+                        ));
+                    if( $idx_dt <= $def->{to} && $idx_dt >= $def->{from} ) {
+                        my $alias = sprintf( $map->{relative}{alias}, $period );
+                        $desired{$alias} = 1;
+                    }
+                }
             }
         }
     }
@@ -163,7 +188,6 @@ Options:
     --host|-H           Host to poll for statistics
     --local             Assume localhost as the host
     --all               Run delete and optimize
-    --date-separator    Default is '.'
     --quiet             Ideal for running on cron, only outputs errors
     --verbose           Send additional messages to STDERR
 
@@ -214,7 +238,15 @@ If I create the following in /etc/elasticsearch/aliases.yml
         alias: logstash-{{PERIOD}}
         periods:
           today:
-            days: 0
+            from:
+              days: 0
+            to:
+              days: 0
+          lastweek:
+            from:
+              days: 14
+            to:
+              days: 7
 
 Assuming today is the 2013.07.18 and I have 3 datacenters (IAD, NYC, AMS) with the following indices:
 
@@ -246,5 +278,23 @@ This lets you use index templates and the index.routing.allocation to isolate da
 parameter to certain nodes while allowing all the nodes to work together as cleanly as possible.  This also facilitates
 the default expectations of Kibana to have a single index per day when you may need more.
 
+=head2 PATTERN VARIABLES
+
+Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
+regular expressions.  Those patterns are:
+
+    The '*' expands to match any number of any characters.
+    The '?' expands to match any single character.
+    {{DATE}} expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
+
+=head2 ALIAS VARIABLES
+
+For daily indices, the following variables are available:
+
+    {{DATE}} - Expands to YYYY.MM.DD for the current day of the current index
+
+For relative period indices, the following variable is B<required>.
+
+    {{PERIOD}} - Name of the period
 
 =cut
