@@ -29,6 +29,7 @@ my %OPT;
 GetOptions(\%OPT,
     'from:s',
     'to:s',
+    'rename:s',
     'help|h',
     'manual|m',
 );
@@ -37,10 +38,16 @@ GetOptions(\%OPT,
 # Documentation
 pod2usage(1) if $OPT{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $OPT{manual};
-my $INDEX = shift @ARGV;
+my $index = shift @ARGV;
+
+my %INDEX = (
+    from => $index,
+    to   => exists $OPT{rename} && length $OPT{rename} ? $OPT{rename} : $index,
+
+);
 
 # Check for valid use cases
-if ( !defined($INDEX) || !exists $OPT{from} || !exists $OPT{to} ) {
+if ( !defined($index) || !exists $OPT{from} || !exists $OPT{to} ) {
     pod2usage(-exitstatus => 1, -verbose => 2);
 }
 
@@ -53,17 +60,17 @@ foreach my $dir (qw(from to)) {
         timeout   => 0,
     );
 }
-croak "Invalid index: $INDEX\n" unless valid_index($INDEX);
+croak "Invalid index: $index\n" unless valid_index($index);
 my $RECORDS = 0;
 my $LAST = time;
 
 my $scroller;
 eval {
     $scroller = $ES{from}->scrolled_search(
-        index => $INDEX,
+        index => $INDEX{from},
         search_type => 'scan',
         scroll => '5m',
-        size   => 1000,
+        size   => 500,
     );
 };
 if( my $error = $@ ) {
@@ -72,16 +79,16 @@ if( my $error = $@ ) {
 eval {
     $ES{to}->reindex(
         source     => $scroller,
-        dest_index => $INDEX,
+        dest_index => $INDEX{to},
         transform  => \&show_counts,
         bulk_size  => 10000,
         quiet      => !App::ElasticSearch::Utilities::def('verbose') > 0,
     );
 
     # Optimize
-    print "Optimizing $INDEX.\n";
+    print "Optimizing $INDEX{to}.\n";
     $ES{to}->optimize_index(
-        index            => $INDEX,
+        index            => $INDEX{to},
         max_num_segments => 1,
         wait_for_merge   => 0,
     );
@@ -89,6 +96,8 @@ eval {
 
 sub show_counts {
     my $doc = shift;
+
+    output({color=>'green'}, "Starting copy of $INDEX{from} to $OPT{to}:$INDEX{to}.") if $RECORDS == 0;
 
     $RECORDS++;
     if( $RECORDS % 100_000 == 0 ) {
@@ -133,6 +142,7 @@ Options:
 
     --from              A server in the cluster where the index lives
     --to                A server in the cluster where the index will be copied to
+    --rename            Change the name of the index on the destination
     --help              print help
     --manual            print full manual
     --verbose           Send additional messages to STDERR
@@ -148,6 +158,11 @@ B<REQUIRED>: hostname or IP of the source cluster
 =item B<to>
 
 B<REQUIRED>: hostname or IP of the destination cluster
+
+=item B<rename>
+
+Optional: change the name of the index on the destination cluster
+
 
 =item B<help>
 
