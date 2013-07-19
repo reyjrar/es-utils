@@ -153,7 +153,7 @@ foreach my $index (sort keys %{ $indices }) {
             }
         }
         else {
-            if( $segment_ratio > 1 ) {
+            if( defined($segment_ratio) && $segment_ratio > 1 ) {
                 verbose("$index is active not optimizing (segment_ratio:$segment_ratio)");
             }
             else {
