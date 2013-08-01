@@ -11,7 +11,7 @@ BEGIN {
 
 use DateTime;
 use ElasticSearch;
-use JSON::XS;
+use JSON;
 use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;

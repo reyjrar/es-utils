@@ -16,7 +16,6 @@ use File::Basename;
 use File::Spec;
 use FindBin;
 use Getopt::Long;
-use JSON::XS;
 use MIME::Lite;
 use Pod::Usage;
 use Sys::Hostname;
