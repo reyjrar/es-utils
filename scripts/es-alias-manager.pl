@@ -11,9 +11,7 @@ BEGIN {
 
 use DateTime;
 use ElasticSearch;
-use JSON::XS;
 use YAML;
-use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;
 use App::ElasticSearch::Utilities qw(:all);
