@@ -27,6 +27,8 @@ GetOptions(\%opt,
     'port:i',
     'delete',
     'delete-days:i',
+    'replicas',
+    'replicas-age:s',
     'optimize',
     'optimize-days:i',
     'index-basename:s',
@@ -39,30 +41,41 @@ GetOptions(\%opt,
 
 #------------------------------------------------------------------------#
 # Documentations!
-pod2usage(1) if $opt{help};
-pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
+pod2usage(-exitval => 0) if $opt{help};
+pod2usage(-exitval => 0, -verbose => 2) if $opt{manual};
 
 #------------------------------------------------------------------------#
 # Host or Local
-pod2usage(1) unless defined $opt{local} or defined $opt{host};
+pod2usage(-exitval => 1, -message => "Destination host not specified, use --local or --host.") unless defined $opt{local} or defined $opt{host};
 
 my %CFG = (
     'optimize-days'  => 1,
     'delete-days'    => 90,
+    'replicas-age'   => "1,30",
     'index-basename' => 'logstash',
     'date-separator' => '.',
     timezone         => 'Europe/Amsterdam',
     port             => 9200,
     delete           => 0,
     optimize         => 0,
+    replicas         => 0,
 );
+my @MODES = qw(delete optimize replicas);
+
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
 }
-$CFG{delete} = $CFG{optimize} = 1 if exists $opt{all} and $opt{all};
-if ( $CFG{delete} == 0 and $CFG{optimize} == 0 ) {
-    pod2usage(1);
+if ( exists $opt{all} && $opt{all} ) {
+    $CFG{$_} = 1 for @MODES;
+}
+else {
+    my $operate = 0;
+    foreach my $mode (@MODES) {
+        $operate++ if $CFG{$mode};
+        last if $operate;
+    }
+    pod2usage(-message => "No operation selected, use --delete, --optimize, or --replicas.", -exitval => 1) unless $operate;
 }
 
 # Create the target uri for the ES Cluster
@@ -80,6 +93,9 @@ my $es = ElasticSearch->new(
 # Delete Indexes older than a certain point
 my $DEL      = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'delete-days'} );
 my $OPTIMIZE = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'optimize-days'} );
+my @AGES = grep { my $x = int($_); $x > 0 } split /,/, $CFG{'replicas-age'};
+
+# Retrieve a list of indexes
 my $d_res = $es->cluster_state(
     filter_nodes         => 1,
     filter_routing_table => 1,
@@ -89,6 +105,7 @@ if ( !defined $indices ) {
     output({color=>"red"}, "Unable to locate indices in status!");
     exit 1;
 }
+
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $indices }) {
     verbose("$index being evaluated");
@@ -116,6 +133,11 @@ foreach my $index (sort keys %{ $indices }) {
             my $rc = $es->delete_index( index => $index );
         };
         next;
+    }
+
+    # Manage replicas
+    if( $CFG{replicas} ) {
+        my $r_dt = $idx_dt->clone();
     }
 
     # Run optimize?
@@ -181,6 +203,8 @@ Options:
     --delete-days       Age of oldest index to keep (default: 90)
     --optimize          Run optimize on indexes
     --optimize-days     Age of first index to optimize (default: 1)
+    --replicas          Manage replicas
+    --replicas-age      CSV list of ages in days to decrement number of replicas
     --index-basename    Default is 'logstash'
     --date-separator    Default is '.'
     --quiet             Ideal for running on cron, only outputs errors
@@ -190,13 +214,42 @@ Options:
 
 =over 8
 
-=item B<help>
+=item B<optimize>
 
-Print this message and exit
+Run the optimization hook
 
-=item B<manual>
+=item B<optimize-days>
 
-Print this message and exit
+Integer, optimize indexes older than this number of days
+
+=item B<delete>
+
+Run the delete hook
+
+=item B<delete-days>
+
+Integer, delete indexes older than this number of days
+
+=item B<replicas>
+
+Run the replicas hook
+
+=item B<replicas-age>
+
+Comma separated list of ages to decrement the number of replicas examples:
+
+    --replicas-age 30
+
+Decrement replicas for every 30 days of age of the index
+
+    --replicas-age 1,30
+
+Decrement replicas after 1 day, then every 30 days thereafter
+
+    --replicas-age 1,30,90
+
+Decrement repliacs after 1 day, then after 30 days, and then at 90 days and every 90 days thereafter
+
 
 =item B<local>
 
@@ -209,6 +262,15 @@ Optional, the host to maintain (if not specified --local required)
 =item B<verbose>
 
 Verbose stats, to not interfere with cacti, output goes to STDERR
+
+=item B<help>
+
+Print this message and exit
+
+=item B<manual>
+
+Print this message and exit
+
 
 =back
 
