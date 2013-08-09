@@ -12,7 +12,7 @@ use YAML;
 use Getopt::Long qw(:config pass_through);
 use Sub::Exporter -setup => {
     exports => [
-        qw(output verbose debug debug_var)
+        qw(output verbose debug debug_var override)
     ],
 };
 
@@ -130,7 +130,15 @@ sub debug_var {
     }
     output( $opts, Dump shift);
 }
+my %_allow_override = map { $_ => 1 } qw(debug verbose);
+sub override {
+    my ($var,$value) = @_;
 
+    return unless exists $_allow_override{lc $var};
+
+    my $def_var = uc $var;
+    $DEF{$def_var} = $value;
+}
 
 
 =head1 SYNOPSIS
