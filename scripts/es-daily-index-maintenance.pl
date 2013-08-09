@@ -25,9 +25,11 @@ GetOptions(\%opt,
     'all',
     'host:s',
     'port:i',
+    'dry-run',
     'delete',
     'delete-days:i',
-    'replicas',
+    'replicas:i',
+    'replicas-min:i',
     'replicas-age:s',
     'optimize',
     'optimize-days:i',
@@ -51,6 +53,8 @@ pod2usage(-exitval => 1, -message => "Destination host not specified, use --loca
 my %CFG = (
     'optimize-days'  => 1,
     'delete-days'    => 90,
+    'replicas-min'   => 0,
+    'dry-run'        => 0,
     'replicas-age'   => "1,30",
     'index-basename' => 'logstash',
     'date-separator' => '.',
@@ -60,14 +64,19 @@ my %CFG = (
     optimize         => 0,
     replicas         => 0,
 );
-my @MODES = qw(delete optimize replicas);
-
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
 }
+# Turn on verbose if debug is enabled
+override(verbose => 1) if $CFG{'dry-run'};
+
+# Figure out what to run
+my @MODES = qw(delete optimize replicas);
 if ( exists $opt{all} && $opt{all} ) {
-    $CFG{$_} = 1 for @MODES;
+    map {
+        $CFG{$_} = 1 unless $_ eq 'replicas';
+    } @MODES;
 }
 else {
     my $operate = 0;
@@ -77,6 +86,8 @@ else {
     }
     pod2usage(-message => "No operation selected, use --delete, --optimize, or --replicas.", -exitval => 1) unless $operate;
 }
+# Can't have replicas-min below 0
+$CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
 
 # Create the target uri for the ES Cluster
 my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
@@ -91,9 +102,10 @@ my $es = ElasticSearch->new(
 );
 
 # Delete Indexes older than a certain point
-my $DEL      = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'delete-days'} );
-my $OPTIMIZE = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' )->subtract( days => $CFG{'optimize-days'} );
-my @AGES = grep { my $x = int($_); $x > 0 } split /,/, $CFG{'replicas-age'};
+my $NOW      = DateTime->now(time_zone => $CFG{timezone})->truncate( to => 'day' );
+my $DEL      = $NOW->clone->subtract( days => $CFG{'delete-days'} );
+my $OPTIMIZE = $NOW->clone->subtract( days => $CFG{'optimize-days'} );
+my @AGES     = grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'};
 
 # Retrieve a list of indexes
 my $d_res = $es->cluster_state(
@@ -131,13 +143,34 @@ foreach my $index (sort keys %{ $indices }) {
         output({color=>"red"}, "$index will be deleted.");
         eval {
             my $rc = $es->delete_index( index => $index );
-        };
+        } unless $CFG{'dry-run'};
         next;
     }
 
     # Manage replicas
     if( $CFG{replicas} ) {
-        my $r_dt = $idx_dt->clone();
+        my $days_old  = $NOW->delta_days($idx_dt)->delta_days;
+        my $current_replicas = $indices->{$index}{settings}{"index.number_of_replicas"};
+        debug({color=>"cyan"}, " - index is $days_old days old");
+        my $replicas = $CFG{replicas};
+        foreach my $age ( @AGES ) {
+            if ( $days_old >= $age ) {
+                $replicas--;
+            }
+        }
+        $replicas = $CFG{'replicas-min'} if $replicas < $CFG{'replicas-min'};
+        if ( $replicas != $current_replicas ) {
+            verbose({color=>'yellow'}, " - should have $replicas replicas, has $current_replicas");
+            eval {
+                $es->update_index_settings(
+                    index => $index,
+                    settings => { number_of_replicas => $replicas},
+                );
+            } unless $CFG{'dry-run'};
+            if (my $err = $@ ) {
+                output({color=>'red'}, "Failed setting replicas to $replicas for $index.", $err);
+            }
+        }
     }
 
     # Run optimize?
@@ -169,7 +202,7 @@ foreach my $index (sort keys %{ $indices }) {
                     wait_for_merge   => 0,
                 );
                 output({color=>"green"}, "$index: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.");
-            };
+            } unless $CFG{'dry-run'};
             if( my $error = $@ ) {
                 output({color=>"red"}, "$index: Encountered error during optimize: $error");
             }
@@ -195,6 +228,7 @@ Options:
 
     --help              print help
     --manual            print full manual
+    --dry-run           Tell me what you would do, but don't do it.
     --local             Poll localhost and use name reported by ES
     --host|-H           Host to poll for statistics
     --local             Assume localhost as the host
@@ -203,8 +237,9 @@ Options:
     --delete-days       Age of oldest index to keep (default: 90)
     --optimize          Run optimize on indexes
     --optimize-days     Age of first index to optimize (default: 1)
-    --replicas          Manage replicas
+    --replicas          Sets the number of initial replicas, and manages replica aging
     --replicas-age      CSV list of ages in days to decrement number of replicas
+    --replicas-min      Minimum number of replicas this index may have, default:0
     --index-basename    Default is 'logstash'
     --date-separator    Default is '.'
     --quiet             Ideal for running on cron, only outputs errors
@@ -232,24 +267,24 @@ Integer, delete indexes older than this number of days
 
 =item B<replicas>
 
-Run the replicas hook
+Sets the number of initial replicas for an index type.  This is used to compute the
+expected number of replicas based on the the age of the index.
+
+    --replicas=2
 
 =item B<replicas-age>
 
-Comma separated list of ages to decrement the number of replicas examples:
-
-    --replicas-age 30
-
-Decrement replicas for every 30 days of age of the index
+A comma separated list of the ages at which to decrement to the number of replicas, the default is:
 
     --replicas-age 1,30
 
-Decrement replicas after 1 day, then every 30 days thereafter
+Can be as long as you'd like, but the replica aging will stop at the replicas-min.
 
-    --replicas-age 1,30,90
+=item B<replicas-min>
 
-Decrement repliacs after 1 day, then after 30 days, and then at 90 days and every 90 days thereafter
+The minimum number of replicas to allow replica aging to set.  The default is 0
 
+    --replicas-min=1
 
 =item B<local>
 
