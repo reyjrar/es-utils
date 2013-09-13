@@ -114,7 +114,7 @@ foreach my $base (keys %{ $ALIAS }) {
             foreach my $d (keys %dt) {
                 if ( exists $def->{$d} ) {
                     $dt{$d}->subtract( %{ $def->{$d}} );
-                    warn "$period $d ", $dt{$d}->ymd;
+                    debug("$period $d " . $dt{$d}->ymd);
                 }
             }
             $ALIAS->{$base}{relative}{periods}{$period} = \%dt;
@@ -126,14 +126,14 @@ debug_var($ALIAS);
 
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $indices }) {
-    verbose("$index being evaluated");
+    debug("$index being evaluated");
     my %current = %{ $indices->{$index}{aliases}};
 
     my %desired = ();
     while( my($name,$map) = each %{ $ALIAS }) {
         if ($index =~ /$map->{re}/) {
             my $idx_dt = DateTime->new( map { $_ => $+{$_} } qw(year month day) );
-            print "$index is a $name index.\n";
+            verbose("$index is a $name index.");
 
             if ( exists $map->{daily} ) {
                 my $daily = $idx_dt->strftime($map->{daily});
@@ -154,7 +154,6 @@ foreach my $index (sort keys %{ $indices }) {
             }
         }
     }
-    verbose("$index aliases should be: " . join(',', keys %desired));
     my @updates = ();
     my %checks = map { $_ => 1 } keys(%desired),keys(%current);
     foreach my $alias (keys %checks) {
@@ -163,12 +162,17 @@ foreach my $index (sort keys %{ $indices }) {
         }
         my $action =  exists $desired{$alias} ? 'add' : 'remove';
         push @updates, { $action => { index => $index, alias => $alias} };
+        verbose({color=>'cyan'}, "$index: $action alias '$alias'");
     }
-    eval {
-        $es->aliases( actions => \@updates ) if @updates;
-    };
-    if( my $err = $@ ){
-        output({color=>'red'}, "Failed to set aliases for $index\n", $err);
+    debug({color=>'magenta'}, "Aliases for $index : " . join(',', keys %desired) );
+    if( @updates ) {
+        eval {
+            $es->aliases( actions => \@updates );
+            output({color=>'green'}, "Updates applied for $index : " . join(',', keys %desired) );
+        };
+        if( my $err = $@ ){
+            output({color=>'red'}, " + Failed to set aliases for $index\n", $err);
+        }
     }
 }
 
@@ -182,10 +186,10 @@ Options:
 
     --help              print help
     --manual            print full manual
+    --config            Location of Config File, default /etc/elasticsearch/aliases.yml
     --local             Poll localhost and use name reported by ES
     --host|-H           Host to poll for statistics
     --local             Assume localhost as the host
-    --all               Run delete and optimize
     --quiet             Ideal for running on cron, only outputs errors
     --verbose           Send additional messages to STDERR
 
@@ -200,6 +204,10 @@ Print this message and exit
 =item B<manual>
 
 Print this message and exit
+
+=item B<config>
+
+Location of the config file, default is /etc/elasticsearch/aliases.yml
 
 =item B<local>
 
