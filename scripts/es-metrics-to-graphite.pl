@@ -29,6 +29,7 @@ GetOptions(\%opt,
     'manual|m',
     'verbose|v',
     'debug|d',
+    'with-indices',
 );
 
 #------------------------------------------------------------------------#
@@ -107,16 +108,28 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 # Collect and Decode the Cluster Statistics
 my @stats = qw(indices os process jvm network transport http fs thread_pool);
 my $qs = join('&', map { "$_=true" } @stats );
-my $url = exists $opt{local} && $opt{local}
+my $nodes_url = exists $opt{local} && $opt{local}
         ? "http://localhost:9200/_cluster/nodes/_local/stats?$qs"
         : "http://$opt{host}:9200/_cluster/nodes/stats?$qs";
-my $json = get($url);
-my $data = JSON->new->decode( $json );
-my $node_data = parse_stats( $data );
+my $nodes_json = get($nodes_url);
+my $nodes_raw_data = JSON->new->decode( $nodes_json );
+my $nodes_data = parse_stats( $nodes_raw_data );
+
+# Collect individual indexes names and their own statistics
+my @index_data = ();
+if( exists $cfg{'with-indices'} ) {
+    my $index_url = exists $opt{local} && $opt{local}
+            ? "http://localhost:9200/_all/_stats"
+            : "http://$opt{host}:9200/_all/_stats";
+    my $index_json = get($index_url);
+    my $index_raw_data = JSON->new->decode( $index_json );
+    push @index_data, @{ parse_index_stats( $index_raw_data ) };
+}
+my @es_data = (@{ $nodes_data }, @index_data);
 
 #------------------------------------------------------------------------#
 # Send output to appropriate channels
-foreach my $stat ( @{ $node_data } ) {
+foreach my $stat ( @es_data ) {
     my $output = format_output( $stat );
     if( defined $carbon_socket && $carbon_socket->connected) {
         $carbon_socket->send( $output );
@@ -255,6 +268,54 @@ sub parse_stats {
 }
 
 #------------------------------------------------------------------------#
+# Generate Individual Index Statistics Stats
+sub parse_index_stats{
+    my $data = shift;
+    my $index_name;
+    my @indices_stats;
+    foreach my $index (keys %{ $data->{indices} }) {
+	foreach my $group ("primaries", "total") {
+	    my $index_data = $data->{indices}{$index}{$group};
+
+	    push @indices_stats,
+    		# Basic Stats
+    		"individual_indices.$index.$group.docs.count $index_data->{docs}{count}",
+    		"individual_indices.$index.$group.docs.deleted $index_data->{docs}{deleted}",
+    		"individual_indices.$index.$group.store.size_in_bytes $index_data->{store}{size_in_bytes}",
+    		"individual_indices.$index.$group.store.throttle_time_in_millis $index_data->{store}{throttle_time_in_millis}",
+
+    		# Indexing
+    		"individual_indices.$index.$group.indexing.index_total $index_data->{indexing}{index_total}",
+    		"individual_indices.$index.$group.indexing.index_time_in_millis $index_data->{indexing}{index_time_in_millis}",
+    		"individual_indices.$index.$group.indexing.index_current $index_data->{indexing}{index_current}",
+    		"individual_indices.$index.$group.indexing.delete_total $index_data->{indexing}{delete_total}",
+    		"individual_indices.$index.$group.indexing.delete_time_in_millis $index_data->{indexing}{delete_time_in_millis}",
+    		"individual_indices.$index.$group.indexing.delete_current $index_data->{indexing}{delete_current}",
+
+    		# Get
+    		"individual_indices.$index.$group.get.total $index_data->{get}{total}",
+    		"individual_indices.$index.$group.get.time_in_millis $index_data->{get}{time_in_millis}",
+    		"individual_indices.$index.$group.get.exists_total $index_data->{get}{exists_total}",
+    		"individual_indices.$index.$group.get.exists_time_in_millis $index_data->{get}{exists_time_in_millis}",
+    		"individual_indices.$index.$group.get.missing_total $index_data->{get}{missing_total}",
+    		"individual_indices.$index.$group.get.missing_time_in_millis $index_data->{get}{missing_time_in_millis}",
+    		"individual_indices.$index.$group.get.current $index_data->{get}{current}",
+
+    		# Search
+    		"individual_indices.$index.$group.search.open_contexts $index_data->{search}{open_contexts}",
+    		"individual_indices.$index.$group.search.query_total $index_data->{search}{query_total}",
+    		"individual_indices.$index.$group.search.query_time_in_millis $index_data->{search}{query_time_in_millis}",
+    		"individual_indices.$index.$group.search.query_current $index_data->{search}{query_current}",
+    		"individual_indices.$index.$group.search.fetch_total $index_data->{search}{fetch_total}",
+    		"individual_indices.$index.$group.search.fetch_time_in_millis $index_data->{search}{fetch_time_in_millis}",
+    		"individual_indices.$index.$group.search.fetch_current $index_data->{search}{fetch_current}",
+		;
+	}
+    }
+    return \@indices_stats;
+}
+
+#------------------------------------------------------------------------#
 # Formatters
 sub format_output {
     my $line = shift;
@@ -290,6 +351,7 @@ Options:
     --carbon-port       Port for to use for Carbon (Default: 2003)
     --carbon-proto      Protocol for to use for Carbon (Default: tcp)
     --verbose           Send additional messages to STDERR
+    --with-indices      Also send individual index stats
 
 =head1 OPTIONS
 
@@ -331,6 +393,10 @@ and does not produce stats on STDOUT
 =item B<carbon-port>
 
 Use this port for the carbon server, useless without --carbon-server
+
+=item B<with-indices>
+
+Also grab data at the individual index level
 
 =item B<verbose>
 
