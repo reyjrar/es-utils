@@ -204,6 +204,10 @@ The tools are all wrapped in their own documentation, please see:
 For individual options and capabilities
 
 
+=head2 CONTRIBUTORS
+
+    Mihai Oprea <mishu@mishulica.com>
+
 =cut
 
 
