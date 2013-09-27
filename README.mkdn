@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 1.2
+version 1.3
 
 # SYNOPSIS
 
@@ -67,6 +67,10 @@ The tools are all wrapped in their own documentation, please see:
     es-apply-settings.pl --help
 
 For individual options and capabilities
+
+## CONTRIBUTORS
+
+    Mihai Oprea <mishu@mishulica.com>
 
 # AUTHOR
 
