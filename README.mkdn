@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 1.3
+version 1.4
 
 # SYNOPSIS
 
@@ -71,6 +71,7 @@ For individual options and capabilities
 ## CONTRIBUTORS
 
     Mihai Oprea <mishu@mishulica.com>
+    Samit Badle
 
 # AUTHOR
 

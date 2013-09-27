@@ -19,7 +19,7 @@ use Sub::Exporter -setup => {
 # Extract the basics from the command line
 my %opt = ();
 GetOptions(\%opt,
-    'color',
+    'color!',
     'csv',
     'verbose+',
     'debug',
@@ -207,6 +207,7 @@ For individual options and capabilities
 =head2 CONTRIBUTORS
 
     Mihai Oprea <mishu@mishulica.com>
+    Samit Badle
 
 =cut
 
