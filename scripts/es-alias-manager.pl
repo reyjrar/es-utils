@@ -256,29 +256,29 @@ If I create the following in /etc/elasticsearch/aliases.yml
 
 Assuming today is the 2013.07.18 and I have 3 datacenters (IAD, NYC, AMS) with the following indices:
 
-    IAD-logstash-2013.07.17
-    IAD-logstash-2013.07.18
-    NYC-logstash-2013.07.17
-    NYC-logstash-2013.07.18
-    AMS-logstash-2013.07.17
-    AMS-logstash-2013.07.18
+    iad-logstash-2013.07.17
+    iad-logstash-2013.07.18
+    nyc-logstash-2013.07.17
+    nyc-logstash-2013.07.18
+    ams-logstash-2013.07.17
+    ams-logstash-2013.07.18
 
 The following aliases would be created
 
     logstash-2013.07.17
-        |- IAD-logstash-2013.07.17
-        |- NYC-logstash-2013.07.17
-        `- AMS-logstash-2013.07.17
+        |- iad-logstash-2013.07.17
+        |- nyc-logstash-2013.07.17
+        `- ams-logstash-2013.07.17
 
     logstash-2013.07.18
-        |- IAD-logstash-2013.07.18
-        |- NYC-logstash-2013.07.18
-        `- AMS-logstash-2013.07.18
+        |- iad-logstash-2013.07.18
+        |- nyc-logstash-2013.07.18
+        `- ams-logstash-2013.07.18
 
     logstash-today
-        |- IAD-logstash-2013.07.18
-        |- NYC-logstash-2013.07.18
-        `- AMS-logstash-2013.07.18
+        |- iad-logstash-2013.07.18
+        |- nyc-logstash-2013.07.18
+        `- ams-logstash-2013.07.18
 
 This lets you use index templates and the index.routing.allocation to isolate data by datacenter or another
 parameter to certain nodes while allowing all the nodes to work together as cleanly as possible.  This also facilitates
