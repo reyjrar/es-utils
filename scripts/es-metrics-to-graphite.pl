@@ -6,10 +6,10 @@ use warnings;
 
 BEGIN {
     delete $ENV{$_} for qw(http_proxy https_proxy);
-};
+}
 
-use JSON;
-use LWP::Simple qw( get );
+use App::ElasticSearch::Utilities qw(:all);
+use ElasticSearch;
 use IO::Socket::INET;
 use Getopt::Long;
 use Pod::Usage;
@@ -23,13 +23,11 @@ GetOptions(\%opt,
     'carbon-proto:s',
     'carbon-server:s',
     'carbon-port:i',
+    'with-indices',
     'host:s',
     'local',
     'help|h',
     'manual|m',
-    'verbose|v',
-    'debug|d',
-    'with-indices',
 );
 
 #------------------------------------------------------------------------#
@@ -105,45 +103,59 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 }
 
 #------------------------------------------------------------------------#
+# Connect to ElasticSearch
+my $HOST = exists $opt{local} && $opt{local} ? 'localhost:9200' : "$opt{host}:9200";
+my $ES = ElasticSearch->new(
+    transport  => 'http',
+    servers    => $HOST,
+    timeout    => 30,
+    no_refresh => 1,
+);
+#
+#------------------------------------------------------------------------#
 # Collect and Decode the Cluster Statistics
-my @stats = qw(indices os process jvm network transport http fs thread_pool);
-my $qs = join('&', map { "$_=true" } @stats );
-my $nodes_url = exists $opt{local} && $opt{local}
-        ? "http://localhost:9200/_cluster/nodes/_local/stats?$qs"
-        : "http://$opt{host}:9200/_cluster/nodes/stats?$qs";
-my $nodes_json = get($nodes_url);
-my $nodes_raw_data = JSON->new->decode( $nodes_json );
-my $nodes_data = parse_stats( $nodes_raw_data );
+my @metrics = ();
+my $stats = undef;
+eval {
+    $stats = $ES->nodes_stats( all => 1 );
+    debug_var({color=>'yellow'}, $stats);
+};
+if( my $err = $@ ) {
+    output({color=>'red'}, "Error retrieving nodes_stats(): $err");
+    exit 1;
+}
+push @metrics, @{ parse_nodes_stats($stats) };
 
 # Collect individual indexes names and their own statistics
-my @index_data = ();
 if( exists $cfg{'with-indices'} ) {
-    my $index_url = exists $opt{local} && $opt{local}
-            ? "http://localhost:9200/_all/_stats"
-            : "http://$opt{host}:9200/_all/_stats";
-    my $index_json = get($index_url);
-    my $index_raw_data = JSON->new->decode( $index_json );
-    push @index_data, @{ parse_index_stats( $index_raw_data ) };
+    my $index_stats = undef;
+    eval {
+        $index_stats = $ES->index_stats(
+            index => '_all',
+            all   => 1,
+        );
+        debug_var({color=>'yellow'}, $index_stats);
+    };
+    push @metrics, @{ parse_index_stats( $index_stats ) };
 }
-my @es_data = (@{ $nodes_data }, @index_data);
 
 #------------------------------------------------------------------------#
 # Send output to appropriate channels
-foreach my $stat ( @es_data ) {
+foreach my $stat ( @metrics ) {
     my $output = format_output( $stat );
     if( defined $carbon_socket && $carbon_socket->connected) {
         $carbon_socket->send( $output );
-        print STDERR $output if $cfg{verbose};
+        verbose($output);
     }
     else {
-        print $output;
+        output($output);
     }
 }
 
 
 #------------------------------------------------------------------------#
 # Generate Node Statistics Hash
-sub parse_stats {
+sub parse_nodes_stats {
     my $data = shift;
 
     my $node_id;
@@ -202,6 +214,11 @@ sub parse_stats {
         # Field Data
         "indices.fielddata.evictions $node->{indices}{fielddata}{evictions}",
         "indices.fielddata.size $node->{indices}{fielddata}{memory_size_in_bytes}",
+        # Filter Cache
+        "indices.filter.evictions $node->{indices}{filter_cache}{evictions}",
+        "indices.filter.size $node->{indices}{filter_cache}{memory_size_in_bytes}",
+        # ID Cache
+        "indices.id.size $node->{indices}{id_cache}{memory_size_in_bytes}",
         ;
 
     # Transport Details
