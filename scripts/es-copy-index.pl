@@ -11,7 +11,7 @@ use warnings;
 
 use Carp;
 use DateTime;
-use ElasticSearch;
+use Elasticsearch::Compat;
 use File::Basename;
 use File::Spec;
 use FindBin;
@@ -53,7 +53,7 @@ if ( !defined($index) || !exists $OPT{from} || !exists $OPT{to} ) {
 # Connect to ElasticSearch
 my %ES = ();
 foreach my $dir (qw(from to)) {
-    $ES{$dir} = ElasticSearch->new(
+    $ES{$dir} = Elasticsearch::Compat->new(
         servers   => "$OPT{$dir}:9200",
         transport => 'http',
         timeout   => 0,

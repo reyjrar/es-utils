@@ -9,7 +9,7 @@ BEGIN {
 }
 
 use App::ElasticSearch::Utilities qw(:all);
-use ElasticSearch;
+use Elasticsearch::Compat;
 use IO::Socket::INET;
 use Getopt::Long;
 use Pod::Usage;
@@ -105,7 +105,7 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 #------------------------------------------------------------------------#
 # Connect to ElasticSearch
 my $HOST = exists $opt{local} && $opt{local} ? 'localhost:9200' : "$opt{host}:9200";
-my $ES = ElasticSearch->new(
+my $ES = Elasticsearch::Compat->new(
     transport  => 'http',
     servers    => $HOST,
     timeout    => 30,

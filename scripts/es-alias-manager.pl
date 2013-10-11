@@ -10,7 +10,7 @@ BEGIN {
 }
 
 use DateTime;
-use ElasticSearch;
+use Elasticsearch::Compat;
 use YAML;
 use Getopt::Long;
 use Pod::Usage;
@@ -60,7 +60,7 @@ $TARGET .= ":$CFG{port}";
 debug("Target is: $TARGET");
 debug_var(\%CFG);
 
-my $es = ElasticSearch->new(
+my $es = Elasticsearch::Compat->new(
     servers   => [ $TARGET ],
     transport => 'http',
     timeout   => 0,     # Do Not Timeout

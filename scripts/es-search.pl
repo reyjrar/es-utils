@@ -7,7 +7,7 @@ use warnings;
 use App::ElasticSearch::Utilities qw(:all);
 use Carp;
 use DateTime;
-use ElasticSearch;
+use Elasticsearch::Compat;
 use File::Basename;
 use File::Spec;
 use FindBin;
@@ -67,7 +67,7 @@ debug({color=>"magenta"}, "Configuration");
 debug_var(\%CONFIG);
 
 # Connect to ElasticSearch
-my $ES = ElasticSearch->new(
+my $ES = Elasticsearch::Compat->new(
     servers   => $TARGET,
     transport  => 'http',
     timeout    => '60s',
