@@ -16,16 +16,12 @@ use JSON;
 use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;
-use App::ElasticSearch::Utilities qw(:all);
+use CLI::Helpers qw(:all);
 
 #------------------------------------------------------------------------#
 # Argument Collection
 my %opt;
 GetOptions(\%opt,
-    'local',
-    'host:s',
-    'port:i',
-    'pattern:s',
     'sort:s',
     'format:s',
     'view:s',
@@ -42,10 +38,6 @@ GetOptions(\%opt,
 # Documentations!
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
-
-#------------------------------------------------------------------------#
-# Host or Local
-pod2usage(1) unless defined $opt{local} or defined $opt{host};
 
 # Regexes for Pattern Expansion
 my %REGEX = (
@@ -246,18 +238,16 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --local             Poll localhost and use name reported by ES
-    --host|-H           Host to poll for statistics
-    --local             Assume localhost as the host
-    --pattern           Apply to indexes whose name matches this pattern
     --view              Show by node or index, default node
     --format            Output format for numeric data, pretty(default) or raw
     --sort              Sort by, name(default) or size
     --limit             Show only the top N, default no limit
     --asc               Sort ascending
     --desc              Sort descending (default)
-    --quiet             Ideal for running on cron, only outputs errors
-    --verbose           Send additional messages to STDERR
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -302,11 +292,6 @@ Sort ascending
 =item B<desc>
 
 Sort descending, the default
-
-
-=item B<verbose>
-
-Verbose data, see what's happening
 
 =back
 

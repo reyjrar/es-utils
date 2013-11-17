@@ -6,140 +6,148 @@ package App::ElasticSearch::Utilities;
 use strict;
 use warnings;
 
-use IPC::Run3;
-use Term::ANSIColor;
-use YAML;
+our $ES_CLASS = undef;
+our $_OPTIONS_PARSED;
+
+# Because of the poor decision to upload both ElasticSearch and Elasticsearch,
+# We need to support both libraries due to some production freezes of ElasticSearch.
+BEGIN {
+    if( eval { require Elasticsearch::Compat; } ) {
+        $ES_CLASS = "Elasticsearch::Compat";
+    }
+    elsif( eval { require ElasticSearch; } ) {
+        $ES_CLASS = "ElasticSearch";
+    }
+    else {
+        die "Please install Elasticsearch::Compat";
+    }
+}
+
+use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config pass_through);
 use Sub::Exporter -setup => {
     exports => [
-        qw(output verbose debug debug_var override)
+        qw(es_class es_interface es_pattern es_indices)
     ],
 };
 
-# Extract the basics from the command line
+=head1 ARGS
+
+From App::ElasticSearch::Utilities:
+
+    --local         Use localhost as the elasticsearch host
+    --host          ElasticSearch host to connect to
+    --port          HTTP port for your cluster
+    --index         Index to run commands against
+    --base          For daily indexes, reference only those starting with "logstash"
+                     (same as --pattern logstash-* or logstash-DATE)
+    --pattern       Use a pattern to operate on the indexes
+
+=cut
+
 my %opt = ();
-GetOptions(\%opt,
-    'color!',
-    'csv',
-    'verbose+',
-    'debug',
-    'quiet',
-);
+if( !defined $_OPTIONS_PARSED ) {
+    GetOptions(\%opt,
+        'local',
+        'host:s',
+        'port:i',
+        'index:s',
+        'pattern:s',
+        'base|index-basename:s',
+    );
+    $_OPTIONS_PARSED = 1;
+}
 # Set defaults
 my %DEF = (
-    DEBUG       => $opt{debug} || 0,
-    VERBOSE     => $opt{verbose} || 0,
-    COLOR       => $opt{color} || git_color_check(),
-    KV_FORMAT   => $opt{csv} ? ',' : ': ',
-    QUIET       => $opt{quiet} || 0,
+    HOST        => exists $opt{host} ? $opt{host} :
+                   exists $opt{local} ? 'localhost' : 'localhost',
+    PORT        => exists $opt{port} ? $opt{port} : 9200,
+    INDEX       => exists $opt{index} ? $opt{index} : undef,
+    BASE        => exists $opt{base} ? $opt{base} :
+                   exists $opt{'index-basename'} ? $opt{'index-basename'} :
+                   undef,
+    PATTERN     => exists $opt{pattern} ? $opt{pattern} : '*',
 );
 debug_var(\%DEF);
 
-sub def { return exists $DEF{$_[0]} ? $DEF{$_[0]} : undef }
+# Regexes for Pattern Expansion
+my %PATTERN_REGEX = (
+    '*'  => qr/.*/,
+    '?'  => qr/.?/,
+    DATE => qr/\d{4}[.\-]?\d{2}[.\-]?\d{2}/,
+    ANY  => qr/.*/,
+);
 
-sub git_color_check {
-    my @cmd = qw(git config --global --get color.ui);
-    my($out,$err);
-    eval {
-        run3(\@cmd, undef, \$out, \$err);
-    };
-    if( $@  || $err ) {
-        debug("git_color_check error: $err ($@)");
-        return 0;
-    }
-    debug("git_color_check out: $out");
-    if( $out =~ /auto/ || $out =~ /true/ ) {
-        return 1;
-    }
-    return 0;
-}
-sub colorize {
-    my ($color,$string) = @_;
-
-   if( defined $color && $DEF{COLOR} ) {
-        $string=colored([ $color ], $string);
-    }
-    return $string;
-}
-sub output {
-    my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
-
-    # Quiet mode!
-    return if $DEF{quiet};
-
-    # Input/output Arrays
-    my @input = @_;
-    my @output = ();
-
-    # Remove line endings
-    chomp(@input);
-
-    # Determine the color
-    my $color = exists $opts->{color} && defined $opts->{color} ? $opts->{color} : undef;
-
-    # Determine indentation
-    my $indent = exists $opts->{indent} ? " "x(2*$opts->{indent}) : '';
-
-    # Determine if we're doing Key Value Pairs
-    my $DO_KV = (scalar(@input) % 2 == 0 ) && (exists $opts->{kv} && $opts->{kv} == 1) ? 1 : 0;
-
-    if( $DO_KV ) {
-        while( @input ) {
-            my $k = shift @input;
-            # We only colorize the value
-            my $v = colorize($color, shift @input );
-            push @output, join($DEF{KV_FORMAT}, $k, $v);
-        }
-    }
-    else {
-        foreach my $msg ( map { colorize($color, $_); } @input) {
-            push @output, $msg;
-        }
-    }
-    my $out_handle = exists $opts->{stderr} && $opts->{stderr} ? \*STDERR : \*STDOUT;
-    # Do clearing
-    print $out_handle "\n"x$opts->{clear} if exists $opts->{clear};
-    # Print output
-    print $out_handle "${indent}$_\n" for @output;
-}
-sub verbose {
-    my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
-    $opts->{level} = 1 unless exists $opts->{level};
-    my @msgs=@_;
-
-    if( !$DEF{DEBUG} ) {
-        return unless $DEF{VERBOSE} >= $opts->{level};
-    }
-    output( $opts, @msgs );
-}
-sub debug {
-    my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
-    my @msgs=@_;
-    return unless $DEF{DEBUG};
-    output( $opts, @msgs );
-}
-sub debug_var {
-    return unless $DEF{DEBUG};
-
-    my $opts = {clear => 1};
-    if( ref $_[0] eq 'HASH' && defined $_[1] && ref $_[1] ) {
-        my $ref = shift;
-        foreach my $k (keys %{ $ref } ) {
-            $opts->{$k} = $ref->{$k};
-        };
-    }
-    output( $opts, Dump shift);
-}
-my %_allow_override = map { $_ => 1 } qw(debug verbose);
-sub override {
-    my ($var,$value) = @_;
-
-    return unless exists $_allow_override{lc $var};
-
-    my $def_var = uc $var;
-    $DEF{$def_var} = $value;
+# Build the Index Pattern
+my $PATTERN = $DEF{PATTERN};
+foreach my $literal ( keys %PATTERN_REGEX ) {
+    $PATTERN =~ s/\Q$literal\E/$PATTERN_REGEX{$literal}/g;
 }
 
+=func es_pattern
+
+Returns a hashref of the pattern filter used to get the indexes
+    {
+        string => '*',
+        re     => '.*',
+    }
+
+=cut
+
+my %_pattern=(
+    re     => $PATTERN,
+    string => $DEF{pattern},
+);
+sub es_pattern {
+    return wantarray ? %_pattern : { %_pattern };
+}
+
+
+=func es_class
+
+Return the name of the Elasticsearch class implementing our functionality.
+
+=cut
+
+sub es_class {
+    return $ES_CLASS;
+}
+
+=func es_interface
+
+Call this to retrieve the Elasticsearch object for making calls to the cluster.
+
+=cut
+
+my $ES = undef;
+
+sub es_interface {
+    no strict 'refs';
+
+    $ES ||= $ES_CLASS->new(
+        servers    => [ "$DEF{HOST}:$DEF{PORT}" ],
+        timeout    => 0,
+        transport  => 'http',
+        no_refresh => 1,
+    );
+
+    return $ES;
+}
+
+=func es_indices
+
+Returns a list of active indexes matching the filter criteria specified on the command
+line.
+
+=cut
+
+sub es_indices {
+    my @indices = ();
+
+    my $es = es_interface;
+
+    return @indices;
+}
 
 =head1 SYNOPSIS
 
