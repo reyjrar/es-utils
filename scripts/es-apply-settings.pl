@@ -4,28 +4,18 @@
 use strict;
 use warnings;
 
-BEGIN {
-    # Clear out any proxy settings
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
-}
-
 use DateTime;
-use Elasticsearch::Compat;
 use JSON;
-use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;
-use App::ElasticSearch::Utilities qw(:all);
+use CLI::Helpers qw(:all);
+use App::ElasticSearch::Utilities qw(:indices);
 
 #------------------------------------------------------------------------#
 # Argument Collection
 my %opt;
 GetOptions(\%opt,
     'dry-run',
-    'local',
-    'host:s',
-    'port:i',
-    'pattern:s',
     'close',
     # Basic options
     'help|h',
@@ -38,28 +28,13 @@ pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
 #------------------------------------------------------------------------#
-# Host or Local
-pod2usage(1) unless defined $opt{local} or defined $opt{host};
 
 my %CFG = (
-    port      => 9200,
     'dry-run' => 0,
 );
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
-}
-if ( ! exists $opt{pattern} ) {
-    pod2usage(1);
-}
-my %REGEX = (
-    '*'  => qr/.*/,
-    '?'  => qr/.?/,
-    DATE => qr/\d{4}[.\-]?\d{2}[.\-]?\d{2}/,
-    ANY  => qr/.*/,
-);
-foreach my $literal ( keys %REGEX ) {
-    $opt{pattern} =~ s/\Q$literal\E/$REGEX{$literal}/g;
 }
 # Read JSON Settings
 my $RawJSON = '';
@@ -77,17 +52,8 @@ if( my $err = $@ ) {
 debug("Settings to apply");
 debug_var($settings);
 
-# Create the target uri for the ES Cluster
-my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
-$TARGET .= ":$CFG{port}";
-debug("Target is: $TARGET");
-debug_var(\%CFG);
-
-my $es = Elasticsearch::Compat->new(
-    servers   => [ $TARGET ],
-    transport => 'http',
-    timeout   => 0,     # Do Not Timeout
-);
+# Grab an ElasticSearch connection
+my $es = es_connect();
 
 # Delete Indexes older than a certain point
 my $d_res = $es->cluster_state(
@@ -172,14 +138,12 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --local             Poll localhost and use name reported by ES
-    --host|-H           Host to poll for statistics
     --dry-run           Don't apply settings, just tell me what you would do
-    --local             Assume localhost as the host
-    --pattern           Apply to indexes whose name matches this pattern
     --close             Close the index, apply settings, and re-open the index
-    --quiet             Ideal for running on cron, only outputs errors
-    --verbose           Send additional messages to STDERR
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -193,18 +157,6 @@ Print this message and exit
 
 Print this message and exit
 
-=item B<local>
-
-Optional, operate on localhost (if not specified, --host required)
-
-=item B<host>
-
-Optional, the host to maintain (if not specified --local required)
-
-=item B<pattern>
-
-B<REQUIRED>: Use this pattern to match indexes
-
 =item B<close>
 
 B<IMPORTANT>: Settings are not dynamic, and the index needs to closed to have
@@ -214,10 +166,6 @@ next index.
 =item B<dry-run>
 
 Only tell me what you would do, don't actually perform any action
-
-=item B<verbose>
-
-Verbose stats, to not interfere with cacti, output goes to STDERR
 
 =back
 
@@ -234,14 +182,6 @@ Or specify a file containing the settings
 
     $ es-apply-settings.pl --local --pattern logstash-* settings.json
 
-=head2 PATTERNS
-
-Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
-regular expressions.  Those patterns are:
-
-    *       expands to match any number of any characters.
-    ?       expands to match any single character.
-    DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
-    ANY     expands to match any number of any characters.
+=from_other App::ElasticSearch::Utilities / PATTERNS / all
 
 =cut

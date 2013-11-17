@@ -5,13 +5,7 @@ use strict;
 use warnings;
 use feature qw(state);
 
-BEGIN {
-    # Clear out any proxy settings
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
-}
-
 use DateTime;
-use Elasticsearch::Compat;
 use JSON;
 use LWP::Simple;
 use Getopt::Long;
@@ -39,16 +33,8 @@ GetOptions(\%opt,
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
-# Regexes for Pattern Expansion
-my %REGEX = (
-    '*'  => qr/.*/,
-    '?'  => qr/.?/,
-    DATE => qr/\d{4}[.\-]?\d{2}[.\-]?\d{2}/,
-    ANY  => qr/.*/,
-);
 # Configuration
 my %CFG = (
-    port      => 9200,
     sort      => 'name',
     format    => 'pretty',
     view      => 'node',
@@ -77,49 +63,18 @@ foreach my $setting (keys %CFG) {
         }
     }
 }
-$opt{pattern} = '*' unless exists $opt{pattern};
 
-my $PATTERN = $opt{pattern};
+# Connect to ElasticSearch
+my $ES = es_connect();
 
-foreach my $literal ( keys %REGEX ) {
-    $opt{pattern} =~ s/\Q$literal\E/$REGEX{$literal}/g;
-}
+# Indices and Nodes
+my @INDICES = es_indices();
+my %NODES = es_nodes();
 
-# Create the target uri for the ES Cluster
-my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
-$TARGET .= ":$CFG{port}";
-debug("Target is: $TARGET");
-debug_var(\%CFG);
-
-my $es = Elasticsearch::Compat->new(
-    servers   => [ $TARGET ],
-    transport => 'http',
-    timeout   => 0,     # Do Not Timeout
-);
-
-# Delete Indexes older than a certain point
-my $d_res = $es->cluster_state(
-    filter_routing_table => 1,
-);
-
-my $INDICES = $d_res->{metadata}{indices};
-if ( !defined $INDICES ) {
-    output({color=>"red"}, "Unable to locate indices in status!");
-    exit 1;
-}
-
-# Node names
-my %NODES = ();
-foreach my $id ( keys %{ $d_res->{nodes} } ) {
-    $NODES{$id} = $d_res->{nodes}{$id}{name};
-}
 # Loop through the indices and take appropriate actions;
 my %indices = ();
 my %nodes = ();
 foreach my $index (sort keys %{ $INDICES }) {
-    debug("Checking '$index' against '$PATTERN'");
-
-    next unless $index =~ /^$opt{pattern}/;
     verbose({color=>'green'}, "$index - Gathering statistics");
 
     my $result = undef;

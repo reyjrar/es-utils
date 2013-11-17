@@ -4,26 +4,18 @@
 use strict;
 use warnings;
 
-BEGIN {
-    # Clear out any proxy settings
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
-}
-
 use DateTime;
-use Elasticsearch::Compat;
 use YAML;
 use Getopt::Long;
 use Pod::Usage;
-use App::ElasticSearch::Utilities qw(:all);
+use CLI::Helpers qw(:all);
+use App::ElasticSearch::Utilities qw(:default);
 
 #------------------------------------------------------------------------#
 # Argument Collection
 my %opt;
 GetOptions(\%opt,
-    'local',
     'all',
-    'host:s',
-    'port:i',
     'config:s',
     # Basic options
     'help|h',
@@ -35,13 +27,7 @@ GetOptions(\%opt,
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
-#------------------------------------------------------------------------#
-# Host or Local
-pod2usage(1) unless defined $opt{local} or defined $opt{host};
-
 my %CFG = (
-    host               => undef,
-    port               => 9200,
     config             => '/etc/elasticsearch/aliases.yml',
 
 );
@@ -56,15 +42,9 @@ my $ALIAS = YAML::LoadFile( $CFG{config} ) or die "unable to read $CFG{config}";
 
 # Create the target uri for the ES Cluster
 my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
-$TARGET .= ":$CFG{port}";
-debug("Target is: $TARGET");
-debug_var(\%CFG);
 
-my $es = Elasticsearch::Compat->new(
-    servers   => [ $TARGET ],
-    transport => 'http',
-    timeout   => 0,     # Do Not Timeout
-);
+# Grab a connection to ElasticSearch
+my $es = es_connect();
 
 # Delete Indexes older than a certain point
 my $TODAY = DateTime->now()->truncate( to => 'day' );
@@ -187,39 +167,18 @@ Options:
     --help              print help
     --manual            print full manual
     --config            Location of Config File, default /etc/elasticsearch/aliases.yml
-    --local             Poll localhost and use name reported by ES
-    --host|-H           Host to poll for statistics
-    --local             Assume localhost as the host
-    --quiet             Ideal for running on cron, only outputs errors
-    --verbose           Send additional messages to STDERR
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
 =over 8
 
-=item B<help>
-
-Print this message and exit
-
-=item B<manual>
-
-Print this message and exit
-
 =item B<config>
 
 Location of the config file, default is /etc/elasticsearch/aliases.yml
-
-=item B<local>
-
-Optional, operate on localhost (if not specified, --host required)
-
-=item B<host>
-
-Optional, the host to maintain (if not specified --local required)
-
-=item B<verbose>
-
-Verbose stats to STDERR
 
 =back
 

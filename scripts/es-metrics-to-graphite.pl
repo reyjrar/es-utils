@@ -4,12 +4,8 @@
 use strict;
 use warnings;
 
-BEGIN {
-    delete $ENV{$_} for qw(http_proxy https_proxy);
-}
-
-use App::ElasticSearch::Utilities qw(:all);
-use Elasticsearch::Compat;
+use CLI::Helpers qw(:all);
+use App::ElasticSearch::Utilities qw(es_connect);
 use IO::Socket::INET;
 use Getopt::Long;
 use Pod::Usage;
@@ -24,8 +20,6 @@ GetOptions(\%opt,
     'carbon-server:s',
     'carbon-port:i',
     'with-indices',
-    'host:s',
-    'local',
     'help|h',
     'manual|m',
 );
@@ -34,10 +28,6 @@ GetOptions(\%opt,
 # Documentations!
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
-
-#------------------------------------------------------------------------#
-# Host or Local
-pod2usage(1) if !$opt{local} and !$opt{host};
 
 #------------------------------------------------------------------------#
 # Argument Sanitazation
@@ -104,14 +94,8 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 
 #------------------------------------------------------------------------#
 # Connect to ElasticSearch
-my $HOST = exists $opt{local} && $opt{local} ? 'localhost:9200' : "$opt{host}:9200";
-my $ES = Elasticsearch::Compat->new(
-    transport  => 'http',
-    servers    => $HOST,
-    timeout    => 30,
-    no_refresh => 1,
-);
-#
+my $ES = es_connect();
+
 #------------------------------------------------------------------------#
 # Collect and Decode the Cluster Statistics
 my @metrics = ();
@@ -291,43 +275,43 @@ sub parse_index_stats{
     my $index_name;
     my @indices_stats;
     foreach my $index (keys %{ $data->{indices} }) {
-	foreach my $group ("primaries", "total") {
-	    my $index_data = $data->{indices}{$index}{$group};
+        foreach my $group ("primaries", "total") {
+            my $index_data = $data->{indices}{$index}{$group};
 
-	    push @indices_stats,
-    		# Basic Stats
-    		"individual_indices.$index.$group.docs.count $index_data->{docs}{count}",
-    		"individual_indices.$index.$group.docs.deleted $index_data->{docs}{deleted}",
-    		"individual_indices.$index.$group.store.size_in_bytes $index_data->{store}{size_in_bytes}",
-    		"individual_indices.$index.$group.store.throttle_time_in_millis $index_data->{store}{throttle_time_in_millis}",
+            push @indices_stats,
+                # Basic Stats
+                "individual_indices.$index.$group.docs.count $index_data->{docs}{count}",
+                "individual_indices.$index.$group.docs.deleted $index_data->{docs}{deleted}",
+                "individual_indices.$index.$group.store.size_in_bytes $index_data->{store}{size_in_bytes}",
+                "individual_indices.$index.$group.store.throttle_time_in_millis $index_data->{store}{throttle_time_in_millis}",
 
-    		# Indexing
-    		"individual_indices.$index.$group.indexing.index_total $index_data->{indexing}{index_total}",
-    		"individual_indices.$index.$group.indexing.index_time_in_millis $index_data->{indexing}{index_time_in_millis}",
-    		"individual_indices.$index.$group.indexing.index_current $index_data->{indexing}{index_current}",
-    		"individual_indices.$index.$group.indexing.delete_total $index_data->{indexing}{delete_total}",
-    		"individual_indices.$index.$group.indexing.delete_time_in_millis $index_data->{indexing}{delete_time_in_millis}",
-    		"individual_indices.$index.$group.indexing.delete_current $index_data->{indexing}{delete_current}",
+                # Indexing
+                "individual_indices.$index.$group.indexing.index_total $index_data->{indexing}{index_total}",
+                "individual_indices.$index.$group.indexing.index_time_in_millis $index_data->{indexing}{index_time_in_millis}",
+                "individual_indices.$index.$group.indexing.index_current $index_data->{indexing}{index_current}",
+                "individual_indices.$index.$group.indexing.delete_total $index_data->{indexing}{delete_total}",
+                "individual_indices.$index.$group.indexing.delete_time_in_millis $index_data->{indexing}{delete_time_in_millis}",
+                "individual_indices.$index.$group.indexing.delete_current $index_data->{indexing}{delete_current}",
 
-    		# Get
-    		"individual_indices.$index.$group.get.total $index_data->{get}{total}",
-    		"individual_indices.$index.$group.get.time_in_millis $index_data->{get}{time_in_millis}",
-    		"individual_indices.$index.$group.get.exists_total $index_data->{get}{exists_total}",
-    		"individual_indices.$index.$group.get.exists_time_in_millis $index_data->{get}{exists_time_in_millis}",
-    		"individual_indices.$index.$group.get.missing_total $index_data->{get}{missing_total}",
-    		"individual_indices.$index.$group.get.missing_time_in_millis $index_data->{get}{missing_time_in_millis}",
-    		"individual_indices.$index.$group.get.current $index_data->{get}{current}",
+                # Get
+                "individual_indices.$index.$group.get.total $index_data->{get}{total}",
+                "individual_indices.$index.$group.get.time_in_millis $index_data->{get}{time_in_millis}",
+                "individual_indices.$index.$group.get.exists_total $index_data->{get}{exists_total}",
+                "individual_indices.$index.$group.get.exists_time_in_millis $index_data->{get}{exists_time_in_millis}",
+                "individual_indices.$index.$group.get.missing_total $index_data->{get}{missing_total}",
+                "individual_indices.$index.$group.get.missing_time_in_millis $index_data->{get}{missing_time_in_millis}",
+                "individual_indices.$index.$group.get.current $index_data->{get}{current}",
 
-    		# Search
-    		"individual_indices.$index.$group.search.open_contexts $index_data->{search}{open_contexts}",
-    		"individual_indices.$index.$group.search.query_total $index_data->{search}{query_total}",
-    		"individual_indices.$index.$group.search.query_time_in_millis $index_data->{search}{query_time_in_millis}",
-    		"individual_indices.$index.$group.search.query_current $index_data->{search}{query_current}",
-    		"individual_indices.$index.$group.search.fetch_total $index_data->{search}{fetch_total}",
-    		"individual_indices.$index.$group.search.fetch_time_in_millis $index_data->{search}{fetch_time_in_millis}",
-    		"individual_indices.$index.$group.search.fetch_current $index_data->{search}{fetch_current}",
-		;
-	}
+                # Search
+                "individual_indices.$index.$group.search.open_contexts $index_data->{search}{open_contexts}",
+                "individual_indices.$index.$group.search.query_total $index_data->{search}{query_total}",
+                "individual_indices.$index.$group.search.query_time_in_millis $index_data->{search}{query_time_in_millis}",
+                "individual_indices.$index.$group.search.query_current $index_data->{search}{query_current}",
+                "individual_indices.$index.$group.search.fetch_total $index_data->{search}{fetch_total}",
+                "individual_indices.$index.$group.search.fetch_time_in_millis $index_data->{search}{fetch_time_in_millis}",
+                "individual_indices.$index.$group.search.fetch_current $index_data->{search}{fetch_current}",
+            ;
+        }
     }
     return \@indices_stats;
 }
@@ -348,10 +332,6 @@ sub format_output {
 
 __END__
 
-=head1 NAME
-
-es-metrics-to-graphite.pl - Check Elastic Search Performance
-
 =head1 SYNOPSIS
 
 es-metrics-to-graphite.pl --format=graphite --host [host] [options]
@@ -360,15 +340,16 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --local             Poll localhost and use name reported by ES
-    --host|-H           Host to poll for statistics
     --format            stats Format (graphite or cacti) (Default: graphite)
     --carbon-base       The prefix to use for carbon metrics (Default: general.es)
     --carbon-server     Send Graphite stats to Carbon Server (Automatically sets format=graphite)
     --carbon-port       Port for to use for Carbon (Default: 2003)
     --carbon-proto      Protocol for to use for Carbon (Default: tcp)
-    --verbose           Send additional messages to STDERR
     --with-indices      Also send individual index stats
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -381,14 +362,6 @@ Print this message and exit
 =item B<manual>
 
 Print this message and exit
-
-=item B<local>
-
-Optional, check local host (if not specified, --host required)
-
-=item B<host>
-
-Optional, the host to check (if not specified --local required)
 
 =item B<format>
 
@@ -414,10 +387,6 @@ Use this port for the carbon server, useless without --carbon-server
 =item B<with-indices>
 
 Also grab data at the individual index level
-
-=item B<verbose>
-
-Verbose stats, to not interfere with cacti, output goes to STDERR
 
 =back
 

@@ -7,15 +7,10 @@ use warnings;
 use App::ElasticSearch::Utilities qw(:all);
 use Carp;
 use DateTime;
-use Elasticsearch::Compat;
-use File::Basename;
-use File::Spec;
-use FindBin;
 use Getopt::Long;
 use JSON::XS;
 use MIME::Lite;
 use Pod::Usage;
-use Sys::Hostname;
 use YAML;
 
 #------------------------------------------------------------------------#
@@ -27,14 +22,8 @@ GetOptions(\%OPT,
     'exists:s',
     'missing:s',
     'size|n:i',
-    'index:s',
-    'base:s',
     'show:s',
-    'days:i',
-    'host:s',
-    'port:i',
     'fields',
-    'no-refresh',
     'help|h',
     'manual|m',
 );
@@ -51,45 +40,17 @@ pod2usage(-exitval => 0, -verbose => 2) if $OPT{manual};
 # App Config
 my %CONFIG = (
     size         => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
-    base         => (exists $OPT{base} && length $OPT{base} ? $OPT{base} : 'logstash'),
-    days         => (exists $OPT{days} && $OPT{days} > 0 ? int($OPT{days}) : 5),
-    port         => (exists $OPT{port} && $OPT{port} > 0 ? $OPT{port} : 9200),
-    'no-refresh' => exists $OPT{'no-refresh'} ? $OPT{'no-refresh'} : 0,
 );
 
 #------------------------------------------------------------------------#
-# Create the target uri for the ES Cluster
-my $TARGET = exists $OPT{host} && defined $OPT{host} ? $OPT{host} : 'localhost';
-$TARGET .= ":$CONFIG{port}";
-
-debug("Target is: $TARGET");
-debug({color=>"magenta"}, "Configuration");
-debug_var(\%CONFIG);
-
 # Connect to ElasticSearch
-my $ES = Elasticsearch::Compat->new(
-    servers   => $TARGET,
-    transport  => 'http',
-    timeout    => '60s',
-    no_refresh => $OPT{'no-refresh'},
-);
+my $ES = es_connect();
 
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
-my @indices = ();
-if ( exists $OPT{index} && defined $OPT{index} ) {
-    my @chkidx=split /\,/, $OPT{index};
-    push @indices, grep { valid_index($_) } @chkidx;
-}
-if( !@indices ) {
-    my $dt = DateTime->now();
-    my @days = $ORDER eq 'asc' ? reverse(0..$CONFIG{days}) : 0..$CONFIG{days};
-    foreach my $date (@days) {
-        my $index = $CONFIG{base} . '-' . $dt->clone->subtract(days => $date)->ymd('.');
-        push @indices, $index if valid_index($index);
-    }
-}
+my %indices = map { $_ => es_index_days_old($_) } es_indices();
 
+# Which fields to show
 my @SHOW = ();
 if ( exists $OPT{show} && length $OPT{show} ) {
     @SHOW = split /,/, $OPT{show};
@@ -120,7 +81,7 @@ my $TOTAL_HITS = 0;
 my $duration = 0;
 my $displayed = 0;
 my $header=0;
-foreach my $index ( @indices ) {
+foreach my $index ( sort by_index_age keys %indices ) {
     my $result;
     my $start=time();
     eval {
@@ -219,17 +180,10 @@ sub show_fields {
 
     print map { "$_\n" } @keys;
 }
-sub valid_index {
-    my ($index) = @_;
-
-    my $result;
-    eval {
-        $result = $ES->index_exists( index => $index );
-    };
-    if( defined $result && exists $result->{ok} && $result->{ok} ) {
-        return 1;
-    }
-    return 0;
+sub by_index_age {
+    return exists $OPT{asc}
+        ? $indices{$a} <=> $indices{$b}
+        : $indices{$b} <=> $indices{$a};
 }
 
 sub expand_ip_to_range {
@@ -253,20 +207,18 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --verbose           Send additional messages to STDERR
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --index             Search only this index by name!
-    --days              Days back, default 5
-    --base              Index basename, default 'logstash' (try: access, proxy)
     --size              Result size, default is 20
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
     --fields            Display the field list for this index!
-    --host              Cluster node to connect to, defaults to localhost
-    --port              HTTP port to connect to, defaults to 9200
-    --no-refresh        Don't refresh server list, useful for use over SSH Tunnels
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -322,14 +274,6 @@ is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
 =item B<size>
 
 The number of results to show, default is 20.
-
-=item B<host>
-
-Cluster node to connect to, defaults to localhost.
-
-=item B<port>
-
-Transport port, default is 9200
 
 =back
 

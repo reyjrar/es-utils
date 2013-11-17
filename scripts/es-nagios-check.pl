@@ -9,7 +9,7 @@ use Pod::Usage;
 use Getopt::Long;
 
 BEGIN {
-    delete $ENV{$_} for qw{http_proxy};
+    delete $ENV{$_} for qw{http_proxy HTTP_PROXY};
 }
 
 #------------------------------------------------------------------------#
