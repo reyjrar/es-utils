@@ -5,12 +5,11 @@ use strict;
 use warnings;
 use feature qw(state);
 
-use DateTime;
-use JSON;
-use LWP::Simple;
 use Getopt::Long;
 use Pod::Usage;
 use CLI::Helpers qw(:all);
+
+use App::ElasticSearch::Utilities qw(es_connect es_pattern es_nodes es_indices);
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -66,6 +65,7 @@ foreach my $setting (keys %CFG) {
 
 # Connect to ElasticSearch
 my $ES = es_connect();
+my $PATTERN = es_pattern();
 
 # Indices and Nodes
 my @INDICES = es_indices();
@@ -74,12 +74,12 @@ my %NODES = es_nodes();
 # Loop through the indices and take appropriate actions;
 my %indices = ();
 my %nodes = ();
-foreach my $index (sort keys %{ $INDICES }) {
+foreach my $index (@INDICES) {
     verbose({color=>'green'}, "$index - Gathering statistics");
 
     my $result = undef;
     eval {
-        $result = $es->index_status( index => $index );
+        $result = $ES->index_status( index => $index );
     };
     if( my $err = $@ ) {
         output({color=>'magenta',indent=>1}, "+ Unable to fetch index status!");
@@ -122,7 +122,7 @@ foreach my $index (sort keys %{ $INDICES }) {
     $indices{$index}->{shards} = \%shards;
 }
 
-output({color=>'white'}, "Storage data for $CFG{view} from indices matching '$PATTERN'");
+output({color=>'white'}, "Storage data for $CFG{view} from indices matching '$PATTERN->{string}'");
 if( $CFG{view} eq 'index' ) {
     my $displayed = 0;
     foreach my $index (sort indices_by keys %indices) {

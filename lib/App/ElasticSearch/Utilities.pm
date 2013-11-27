@@ -11,11 +11,11 @@ our $_OPTIONS_PARSED;
 
 # Because of the poor decision to upload both ElasticSearch and Elasticsearch,
 # We need to support both libraries due to some production freezes of ElasticSearch.
-BEGIN {
-    if( eval { require Elasticsearch::Compat; } ) {
+{
+    if( eval { require Elasticsearch::Compat; 1;} ) {
         $ES_CLASS = "Elasticsearch::Compat";
     }
-    elsif( eval { require ElasticSearch; } ) {
+    elsif( eval { require ElasticSearch; 1; } ) {
         $ES_CLASS = "ElasticSearch";
     }
     else {
@@ -94,7 +94,7 @@ my %DEF = (
                    exists $opt{'index-basename'} ? lc $opt{'index-basename'} :
                    undef,
     PATTERN     => exists $opt{pattern} ? $opt{pattern} : '*',
-    DAYS        => exists $opt{days} ? $opts{days} : undef,
+    DAYS        => exists $opt{days} ? $opt{days} : undef,
     DATESEP     => exists $opt{datesep} ? $opt{datesep} :
                    exists $opt{'date-separator'} ? lc $opt{'date-separator'} :
                    '.',
@@ -131,10 +131,10 @@ Returns a hashref of the pattern filter used to get the indexes
 
 my %_pattern=(
     re     => $PATTERN,
-    string => $DEF{pattern},
+    string => $DEF{PATTERN},
 );
 sub es_pattern {
-    return wantarray ? %_pattern : { %_pattern };
+    return wantarray ? %_pattern : \%_pattern;
 }
 
 =func es_class
@@ -161,7 +161,7 @@ sub es_connect {
 
     if( defined $_[0] && ref $_[0] eq 'ARRAY' ) {
         return $ES_CLASS->new(
-            servers    => $_[0]
+            servers    => $_[0],
             transport  => 'http',
             timeout    => $DEF{TIMEOUT},
             no_refresh => 1,
@@ -189,21 +189,23 @@ sub es_nodes {
 
     if(!keys %_nodes) {
         my $es = es_connect;
-        my $res;
         eval {
-            $res = $es->cluster_state(
+            my $res = $es->cluster_state(
                 filter_nodes         => 0,
                 filter_routing_table => 1,
-                filter_blocks        => 1,
                 filter_indices       => 1,
+                filter_metadata      => 1,
             );
+            die "undefined result from cluster_state()" unless defined $res;
+            debug_var($res);
+            foreach my $id ( keys %{ $res->{nodes} } ) {
+                $_nodes{$id} = $res->{nodes}{$id}{name};
+            }
         };
-        if ( !defined $res ) {
-            output({stderr=>1,color=>"red"}, "es_nodes(): Unable to locate nodes in status!");
+        if ( my $error = $@ ) {
+            output({color=>"red"}, "es_nodes(): Unable to locate nodes in status!");
+            output({color=>"red"}, $error);
             exit 1;
-        }
-        foreach my $id ( keys %{ $res->{nodes} } ) {
-            $NODES{$id} = $res->{nodes}{$id}{name};
         }
     }
 
@@ -227,9 +229,9 @@ sub es_indices_meta {
                 filter_routing_table => 1,
                 filter_blocks        => 1,
             );
-            $_indices_meta = $d_res->{metadata}{indices};
+            $_indices_meta = $result->{metadata}{indices};
         };
-        if ( !defined $indices ) {
+        if ( !defined $_indices_meta ) {
             output({stderr=>1,color=>"red"}, "es_indices(): Unable to locate indices in status!");
             exit 1;
         }
@@ -274,7 +276,7 @@ sub es_indices {
             else {
                 my $p = es_pattern;
                 debug({indent=>1}, "+ method:patten - $p->{string}");
-                next unless $index =~ /^$re/;
+                next unless $index =~ /^$p->{re}/;
             }
             if( defined $DEF{DAYS} ) {
                 debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
@@ -388,7 +390,7 @@ sub es_index_segments {
         output({stderr=>1,color=>'red'}, "es_index_segments($index) failed to retrieve segment data", $err);
         return undef;
     }
-    my $shard_data = $res->{indices}{$index}{shards};
+    my $shard_data = $result->{indices}{$index}{shards};
     my %segments =  map { $_ => 0 } qw(shards segments);
     foreach my $id (keys %{$shard_data} ){
         $segments{segments} += $shard_data->{$id}[0]{num_search_segments};
