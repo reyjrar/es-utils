@@ -132,7 +132,7 @@ foreach my $index (sort keys %{ $indices }) {
     debug("Basename: $basename");
     debug("Date string: $dateStr");
     my %words = map { $_=>1 } @words;
-    next unless exists $words{$CFG{'index-basename'}};
+    next unless $basename =~ /^$CFG{'index-basename'}/;
 
     my $sep = $CFG{'date-separator'};
     my @parts = split /\Q$sep\E/, $dateStr;
