@@ -15,7 +15,7 @@ use IPC::Run3;
 use LWP::Simple;
 use File::Spec;
 use Term::ANSIColor;
-use Getopt::Long;
+use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 
 #------------------------------------------------------------------------#
