@@ -14,7 +14,7 @@ use DateTime;
 use Elasticsearch::Compat;
 use JSON;
 use LWP::Simple;
-use Getopt::Long;
+use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 use App::ElasticSearch::Utilities qw(:all);
 
