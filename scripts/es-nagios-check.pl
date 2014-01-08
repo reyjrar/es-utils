@@ -6,7 +6,7 @@ use strict;
 use LWP::Simple;
 use JSON;
 use Pod::Usage;
-use Getopt::Long;
+use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 
 BEGIN {
     delete $ENV{$_} for qw{http_proxy};
