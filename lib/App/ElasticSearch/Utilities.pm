@@ -47,6 +47,9 @@ use Sub::Exporter -setup => {
         es_index_valid
         es_index_days_old
         es_index_shard_replicas
+        es_index_segments
+        es_settings
+        es_node_stats
     )],
     groups => {
         default => [qw(es_connect es_indices)],
@@ -285,6 +288,7 @@ Makes use of --datesep to determine where the date is.
 
 =cut
 
+my %_valid_index = ();
 sub es_indices {
     my %args = @_;
     my @indices = ();
@@ -295,8 +299,10 @@ sub es_indices {
     }
     else {
         my %meta = es_indices_meta();
+        debug("Received Index MetaData");
         foreach my $index (keys %meta) {
             debug("Evaluating '$index'");
+            next if $meta{$index}->{state} ne 'open' && !exists $args{_all};
             if( defined $DEF{BASE} ) {
                 debug({indent=>1}, "+ method:base - $DEF{BASE}");
                 my @parts = split /\-/, $index;
@@ -322,7 +328,10 @@ sub es_indices {
         }
     }
 
-    return @indices;
+    # We retrieved these from the cluster, so preserve them here.
+    $_valid_index{$_} = 1 for @indices;
+
+    return wantarray ? @indices : \@indices;
 }
 
 =func es_index_days_old( 'index-name' )
@@ -367,7 +376,6 @@ Checks if the specified index is valid
 
 =cut
 
-my %_valid_index = ();
 sub es_index_valid {
     my ($index) = @_;
 
@@ -390,11 +398,9 @@ sub es_index_valid {
 
 =func es_index_segments( 'index-name' )
 
-Returns the segment data from the index in a hash or hashref:
-    {
-        shards   => 3,
-        segments => 15,
-    }
+Exposes GET /$index/_segments
+
+Returns the segment data from the index in hashref:
 
 =cut
 
@@ -409,10 +415,11 @@ sub es_index_segments {
     my $es = es_connect();
     my $result;
     my $rc = eval {
-        debug("Fetching segment data.");
-        my $json = get( qq{http://$DEF{HOST}:$DEF{PORT}/$index/_segments} );
-        my $result = decode_json( $json );
-        debug_var($json);
+        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/$index/_segments};
+        debug("Fetching segment data: $req");
+        my $json = get( $req );
+        $result = decode_json( $json );
+        debug_var($result);
         1;
     };
     if( !$rc || !defined $result ) {
@@ -420,16 +427,70 @@ sub es_index_segments {
         output({stderr=>1,color=>'red'}, "es_index_segments($index) failed to retrieve segment data", $err);
         return undef;
     }
-    my $shard_data = $result->{indices}{$index}{shards};
-    my %segments =  map { $_ => 0 } qw(shards segments);
-    foreach my $id (keys %{$shard_data} ){
-        $segments{segments} += $shard_data->{$id}[0]{num_search_segments};
-        $segments{shards}++;
-    }
 
-    return wantarray ? %segments : \%segments;
+    return $result;
 
 }
+
+=func es_settings()
+
+Exposes GET /_settings
+
+Returns a hashref
+
+=cut
+
+sub es_settings {
+
+    my $es = es_connect();
+    my $result;
+    my $rc = eval {
+        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/_settings};
+        debug("Fetching segment data: $req");
+        my $json = get( $req );
+        $result = decode_json( $json );
+        debug_var($result);
+        1;
+    };
+    if( !$rc || !defined $result ) {
+        my $err = $@;
+        output({stderr=>1,color=>'red'}, "es_settings() failed to retrieve settings", $err);
+        return undef;
+    }
+
+    return $result;
+
+}
+
+=func es_node_stats()
+
+Exposes GET /_nodes/stats
+
+Returns a hashref
+
+=cut
+
+sub es_node_stats {
+    my $es = es_connect();
+    my $result;
+    my $rc = eval {
+        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/_nodes/stats?all=true};
+        debug("Fetching: $req");
+        my $json = get( $req );
+        $result = decode_json( $json );
+        debug_var($result);
+        1;
+    };
+    if( !$rc || !defined $result ) {
+        my $err = $@;
+        output({stderr=>1,color=>'red'}, "es_node_stats() failed to retrieve settings", $err);
+        return undef;
+    }
+
+    return $result;
+}
+
+
 
 =head1 SYNOPSIS
 

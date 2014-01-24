@@ -95,11 +95,12 @@ sub handle_health {
     }
 }
 sub handle_segments {
-    my $stats = $ES->index_settings(index => 'all');
     output({clear=>1,color=>"cyan"}, "Index Segmentation Check", "-="x20);
 
-    foreach my $index ( sort keys %{ $stats->{indices} } ) {
+    my @indexes = es_indices();
+    foreach my $index ( sort @indexes ) {
         output({color=>"cyan"},"$index:");
+        my $stats = es_index_segments($index);
         my $shards = 0;
         my $segments = 0;
         my $index_size = 0;
@@ -142,7 +143,7 @@ sub handle_segments {
 }
 
 sub handle_node {
-    my $stats = $ES->node_stats(all => 1);
+    my $stats = es_node_stats();
     output({clear=>1,color=>"cyan"}, "Node Status Check", "-="x20);
 
     my $node_id = (keys %{ $stats->{nodes} })[0];
@@ -185,7 +186,7 @@ sub handle_node {
 }
 
 sub handle_settings {
-    my $stats = $ES->cluster_settings;
+    my $stats = es_settings();
     output({clear=>1,color=>"cyan"}, "Index Settings Check", "-="x20);
 
     my $colorize = sub {
