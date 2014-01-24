@@ -4,6 +4,7 @@
 use strict;
 use warnings;
 
+use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(:all);
 use Carp;
 use DateTime;
@@ -48,7 +49,14 @@ my $ES = es_connect();
 
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
+my %by_age = ();
 my %indices = map { $_ => es_index_days_old($_) } es_indices();
+foreach my $index (sort by_index_age keys %indices) {
+    my $age = $indices{$index};
+    $by_age{$age} ||= [];
+    push @{ $by_age{$age} }, $index;
+}
+debug_var(\%by_age);
 
 # Which fields to show
 my @SHOW = ();
@@ -65,14 +73,23 @@ pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless defined 
 # Fix common mistakes
 $search_string =~ s/\s+and\s+/ AND /g;
 $search_string =~ s/\s+or\s+/ OR /g;
+$search_string =~ s/\s+not\s+/ NOT /g;
 
 # Process extra parameters
 my %extra = ();
+my @filters = ();
 if( exists $OPT{exists} ) {
-    $extra{filter} = { exists => { field => $OPT{exists} } };
+    foreach my $field (split /[,:]/, $OPT{exists}) {
+        push @filters, { exists => { field => $OPT{exists} } };
+    }
 }
 if( exists $OPT{missing} ) {
-    $extra{filter} = { missing => { field => $OPT{missing} } };
+    foreach my $field (split /[,:]/, $OPT{missing}) {
+        push @filters, { missing => { field => $OPT{exists} } };
+    }
+}
+if( @filters ) {
+    $extra{filter} = @filters > 1 ? { and => \@filters } : shift @filters;
 }
 
 my $size = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
@@ -81,12 +98,12 @@ my $TOTAL_HITS = 0;
 my $duration = 0;
 my $displayed = 0;
 my $header=0;
-foreach my $index ( sort by_index_age keys %indices ) {
+foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
     my $result;
     my $start=time();
     eval {
         $result = $ES->search(
-            index   => $index,
+            index   => $by_age{$age},
             query   => { query_string => { query => $search_string } } ,
             size    => $size,
             sort   => [ { '@timestamp' => $ORDER } ],
@@ -99,7 +116,7 @@ foreach my $index ( sort by_index_age keys %indices ) {
         croak "ElasticSearch Error -> $error";
     }
     $duration += time() - $start;
-    push @displayed_indices, $index;
+    push @displayed_indices, @{ $by_age{$age} };
     $TOTAL_HITS += $result->{hits}{total};
 
     my @always = qw(@timestamp);
@@ -141,7 +158,7 @@ foreach my $index ( sort by_index_age keys %indices ) {
 output({stderr=>1,color=>'yellow'},
     "# Search string: $search_string",
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
-    sprintf("# Indexes (%d of %d) searched: %s\n", scalar(@displayed_indices), scalar(@indices), join(',', @displayed_indices)),
+    sprintf("# Indexes (%d of %d) searched: %s\n", scalar(@displayed_indices), scalar(keys %indices), join(',', @displayed_indices)),
 );
 
 sub extract_fields {
@@ -165,7 +182,7 @@ sub extract_fields {
 }
 
 sub show_fields {
-    my $index = shift @indices;
+    my $index =  (sort by_index_age keys %indices)[0];
     my $result = undef;
     eval {
         $result = $ES->mapping(index => $index, type => 'syslog');
@@ -182,8 +199,8 @@ sub show_fields {
 }
 sub by_index_age {
     return exists $OPT{asc}
-        ? $indices{$a} <=> $indices{$b}
-        : $indices{$b} <=> $indices{$a};
+        ? $indices{$b} <=> $indices{$a}
+        : $indices{$a} <=> $indices{$b};
 }
 
 sub expand_ip_to_range {

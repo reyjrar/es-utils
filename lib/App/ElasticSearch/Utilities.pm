@@ -32,6 +32,7 @@ our @_CONFIGS = (
 
 use CLI::Helpers qw(:all);
 use DateTime;
+use Time::Local;
 use Getopt::Long qw(:config pass_through);
 use JSON::XS;
 use YAML;
@@ -128,7 +129,8 @@ my %DEF = (
                    exists $opt{'index-basename'} ? lc $opt{'index-basename'} :
                    undef,
     PATTERN     => exists $opt{pattern} ? $opt{pattern} : '*',
-    DAYS        => exists $opt{days} ? $opt{days} : undef,
+    DAYS        => exists $opt{days} ? $opt{days} :
+                   exists $_GLOBALS{days} ? $_GLOBALS{days} : undef,
     DATESEP     => exists $opt{datesep} ? $opt{datesep} :
                    exists $opt{'date-separator'} ? lc $opt{'date-separator'} :
                    '.',
@@ -319,8 +321,12 @@ sub es_indices {
                 debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
 
                 my $days_old = es_index_days_old( $index );
-                unless( defined $days_old && $days_old < $DEF{DAYS} ) {
+                debug("$index is $days_old days old");
+                if( $days_old < 0 ) {
                     debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
+                    next;
+                }
+                elsif( $days_old >= $DEF{DAYS} ) {
                     next;
                 }
             }
@@ -341,19 +347,20 @@ Return the number of days old this index is.
 
 =cut
 
-my $NOW = DateTime->now()->truncate(to => 'day');
+my $NOW = DateTime->now()->truncate(to => 'day')->epoch;
 sub es_index_days_old {
     my ($index) = @_;
 
-    return unless defined $index;
+    return -1 unless defined $index;
 
     if( my ($dateStr) = ($index =~ /($PATTERN_REGEX{DATE})/) ) {
-        my @date = split /\Q$DEF{DATESEP}\E/, $dateStr;
-        my $idx_dt = DateTime->new( year => $date[0], month => $date[1], day => $date[2] );
-        my $duration = $NOW - $idx_dt;
-        return $duration->days;
+        my @date = reverse map { int } split /\Q$DEF{DATESEP}\E/, $dateStr;
+        $date[1]--; # move 1-12 -> 0-11
+        my $idx_time = timelocal( 0,0,0, @date );
+        my $diff = $NOW - $idx_time;
+        return int($diff / 86400);
     }
-    return;
+    return -1;
 }
 
 =func es_index_shard_replicas( 'index-name' )
