@@ -4,8 +4,13 @@
 use strict;
 use warnings;
 
+BEGIN {
+    # We don't want to use the proxies set in our environment
+    delete $ENV{$_} for qw(http_proxy HTTP_PROXY https_proxy HTTPS_PROXY);
+}
+
 use CLI::Helpers qw(:all);
-use App::ElasticSearch::Utilities qw(es_connect);
+use App::ElasticSearch::Utilities qw(es_connect es_node_stats es_index_stats);
 use IO::Socket::INET;
 use Getopt::Long;
 use Pod::Usage;
@@ -55,6 +60,7 @@ my %cfg = (
     'carbon-proto' => 'tcp',
     'carbon-base'  => 'general.es',
     %opt,
+    host => App::ElasticSearch::Utilities::def('HOST')
 );
 
 #------------------------------------------------------------------------#
@@ -101,7 +107,7 @@ my $ES = es_connect();
 my @metrics = ();
 my $stats = undef;
 eval {
-    $stats = $ES->nodes_stats( all => 1 );
+    $stats = es_node_stats();
     debug_var({color=>'yellow'}, $stats);
 };
 if( my $err = $@ ) {
@@ -114,10 +120,7 @@ push @metrics, @{ parse_nodes_stats($stats) };
 if( exists $cfg{'with-indices'} ) {
     my $index_stats = undef;
     eval {
-        $index_stats = $ES->index_stats(
-            index => '_all',
-            all   => 1,
-        );
+        $index_stats = es_index_stats('_all');
         debug_var({color=>'yellow'}, $index_stats);
     };
     push @metrics, @{ parse_index_stats( $index_stats ) };

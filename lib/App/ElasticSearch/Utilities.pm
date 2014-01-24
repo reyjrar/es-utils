@@ -48,6 +48,7 @@ use Sub::Exporter -setup => {
         es_index_days_old
         es_index_shard_replicas
         es_index_segments
+        es_index_stats
         es_settings
         es_node_stats
     )],
@@ -432,6 +433,43 @@ sub es_index_segments {
 
 }
 
+=func es_index_stats( 'index-name' )
+
+Exposes GET /$index/_stats
+
+Returns a hashref
+
+=cut
+
+sub es_index_stats {
+    my ($index) = @_;
+
+    if( !defined $index || !length $index || $index ne '_all' || !es_index_valid($index) ) {
+        output({stderr=>1,color=>'red'}, "es_index_segments('$index'): invalid index");
+        return undef;
+    }
+
+    my $es = es_connect();
+    my $result;
+    my $rc = eval {
+        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/$index/_stats?all=true};
+        debug("Fetching segment data: $req");
+        my $json = get( $req );
+        $result = decode_json( $json );
+        debug_var($result);
+        1;
+    };
+    if( !$rc || !defined $result ) {
+        my $err = $@;
+        output({stderr=>1,color=>'red'}, "es_index_segments($index) failed to retrieve segment data", $err);
+        return undef;
+    }
+
+    return $result;
+
+}
+
+
 =func es_settings()
 
 Exposes GET /_settings
@@ -490,6 +528,17 @@ sub es_node_stats {
     return $result;
 }
 
+=func def('key')
+
+Exposes Definitions grabbed by options parsing
+
+=cut
+
+sub def {
+    my($key)= map { uc }@_;
+
+    return exists $DEF{$key} ? $DEF{$key} : undef;
+}
 
 
 =head1 SYNOPSIS
