@@ -8,6 +8,11 @@ use warnings;
 
 our $ES_CLASS = undef;
 our $_OPTIONS_PARSED;
+our %_GLOBALS = ();
+our @_CONFIGS = (
+    '/etc/es-utils.yaml',
+    "$ENV{HOME}/.es-utils.yaml",
+);
 
 # Because of the poor decision to upload both ElasticSearch and Elasticsearch,
 # We need to support both libraries due to some production freezes of ElasticSearch.
@@ -29,6 +34,7 @@ use CLI::Helpers qw(:all);
 use DateTime;
 use Getopt::Long qw(:config pass_through);
 use JSON::XS;
+use YAML;
 use LWP::Simple;
 use Sub::Exporter -setup => {
     exports => [ qw(
@@ -64,6 +70,15 @@ From App::ElasticSearch::Utilities:
     --pattern       Use a pattern to operate on the indexes
     --days          If using a pattern or base, how many days back to go, default: all
 
+=head2 ARGUMENT GLOBALS
+
+Some options may be specified in the B</etc/es-utils.yaml> or B<$HOME/.es-utils.yaml> file:
+
+    ---
+    host: esproxy.example.com
+    port: 80
+    timeout: 10
+
 =cut
 
 my %opt = ();
@@ -81,13 +96,28 @@ if( !defined $_OPTIONS_PARSED ) {
     );
     $_OPTIONS_PARSED = 1;
 }
+foreach my $config_file (@_CONFIGS) {
+    next unless -f $config_file;
+    debug("Loading options from $config_file");
+    my %from_file = ();
+    eval {
+        my $ref = YAML::LoadFile($config_file);
+        %from_file = %{$ref};
+        debug_var($ref);
+    };
+    debug({color=>"red"}, "[$config_file] $@") if $@;
+    $_GLOBALS{$_} = $from_file{$_} for keys %from_file;
+}
 # Set defaults
 my %DEF = (
     # Connection Options
     HOST        => exists $opt{host} ? $opt{host} :
+                   exists $_GLOBALS{host} ? $_GLOBALS{host} :
                    exists $opt{local} ? 'localhost' : 'localhost',
-    PORT        => exists $opt{port} ? $opt{port} : 9200,
-    TIMEOUT     => exists $opt{timeout} ? $opt{timeout} : 30,
+    PORT        => exists $opt{port} ? $opt{port} :
+                   exists $_GLOBALS{port} ? $_GLOBALS{port} : 9200,
+    TIMEOUT     => exists $opt{timeout} ? $opt{timeout} :
+                   exists $_GLOBALS{timeout} ? $_GLOBALS{timeout} : 30,
     # Index selection options
     INDEX       => exists $opt{index} ? $opt{index} : undef,
     BASE        => exists $opt{base} ? lc $opt{base} :
