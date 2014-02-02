@@ -14,47 +14,36 @@ our @_CONFIGS = (
     "$ENV{HOME}/.es-utils.yaml",
 );
 
-# Because of the poor decision to upload both ElasticSearch and Elasticsearch,
-# We need to support both libraries due to some production freezes of ElasticSearch.
-{
-    if( eval { require Elasticsearch::Compat; 1;} ) {
-        $ES_CLASS = "Elasticsearch::Compat";
-    }
-    elsif( eval { require ElasticSearch; 1; } ) {
-        $ES_CLASS = "ElasticSearch";
-    }
-    else {
-        die "Please install Elasticsearch::Compat";
-    }
-    # Modify the environment
-    delete $ENV{$_} for qw(http_proxy https_proxy HTTP_PROXY);
-}
-
 use CLI::Helpers qw(:all);
-use DateTime;
 use Time::Local;
 use Getopt::Long qw(:config pass_through);
 use JSON::XS;
 use YAML;
-use LWP::Simple;
+use Elastijk;
 use Sub::Exporter -setup => {
     exports => [ qw(
-        es_class
         es_pattern
         es_connect
+        es_request
         es_nodes
         es_indices
         es_indices_meta
         es_index_valid
         es_index_days_old
-        es_index_shard_replicas
+        es_index_shards
         es_index_segments
         es_index_stats
         es_settings
         es_node_stats
+        es_segment_stats
+        es_close_index
+        es_open_index
+        es_delete_index
+        es_optimize_index
+        es_apply_index_settings
     )],
     groups => {
-        default => [qw(es_connect es_indices)],
+        default => [qw(es_connect es_indices es_request)],
         indices => [qw(:default es_indices_meta)],
         index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_shard_replicas)],
     },
@@ -67,7 +56,9 @@ From App::ElasticSearch::Utilities:
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
+    --noop          Any operations other than GET are disabled
     --timeout       Timeout to ElasticSearch, default 30
+    --keep-proxy    Do not remove any proxy settings from %ENV
     --index         Index to run commands against
     --base          For daily indexes, reference only those starting with "logstash"
                      (same as --pattern logstash-* or logstash-DATE)
@@ -93,10 +84,12 @@ if( !defined $_OPTIONS_PARSED ) {
         'host:s',
         'port:i',
         'timeout:i',
+        'keep-proxy',
         'index:s',
         'pattern:s',
         'base|index-basename:s',
         'days:i',
+        'noop',
         'datesep|date-separator:s',
     );
     $_OPTIONS_PARSED = 1;
@@ -123,6 +116,12 @@ my %DEF = (
                    exists $_GLOBALS{port} ? $_GLOBALS{port} : 9200,
     TIMEOUT     => exists $opt{timeout} ? $opt{timeout} :
                    exists $_GLOBALS{timeout} ? $_GLOBALS{timeout} : 30,
+    NOOP        => exists $opt{noop} ? $opt{noop} :
+                   exists $_GLOBALS{noop} ? $_GLOBALS{noop} :
+                   undef,
+    NOPROXY     => exists $opt{'keep-proxy'} ? 0 :
+                   exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'} :
+                   1,
     # Index selection options
     INDEX       => exists $opt{index} ? $opt{index} : undef,
     BASE        => exists $opt{base} ? lc $opt{base} :
@@ -136,6 +135,11 @@ my %DEF = (
                    '.',
 );
 debug_var(\%DEF);
+
+if( $DEF{NOPROXY} ) {
+    debug("Removing any active HTTP Proxies from ENV.");
+    delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
+}
 
 # Regexes for Pattern Expansion
 my %PATTERN_REGEX = (
@@ -173,16 +177,6 @@ sub es_pattern {
     return wantarray ? %_pattern : \%_pattern;
 }
 
-=func es_class
-
-Return the name of the Elasticsearch class implementing our functionality.
-
-=cut
-
-sub es_class {
-    return $ES_CLASS;
-}
-
 =func es_connect
 
 Without options, this connects to the server defined in the args.  If passed
@@ -193,26 +187,100 @@ an array ref, it will use that as the connection definition.
 my $ES = undef;
 
 sub es_connect {
-    no strict 'refs';
+    my ($override_servers) = @_;
 
-    if( defined $_[0] && ref $_[0] eq 'ARRAY' ) {
-        return $ES_CLASS->new(
-            servers    => $_[0],
-            transport  => 'http',
-            timeout    => $DEF{TIMEOUT},
-            no_refresh => 1,
-        );
+    my $server = $DEF{HOST};
+    my $port   = $DEF{PORT};
+
+    # If we're overriding, return a unique handle
+    if(defined $override_servers) {
+        my @overrides = ref $override_servers eq 'ARRAY' ? @$override_servers : $override_servers;
+        my @servers;
+        foreach my $entry ( @overrides ) {
+            my ($s,$p) = split /\:/, $entry;
+            $p ||= $port;
+            push @servers, { host => $s, port => $p };
+        }
+
+        if( @servers > 0 ) {
+            my $pick = @servers > 1 ? $servers[int(rand(@servers))] : $servers[0];
+            return Elastijk->new(%{$pick});
+        }
     }
 
-    $ES ||= $ES_CLASS->new(
-        servers    => [ "$DEF{HOST}:$DEF{PORT}" ],
-        timeout    => $DEF{TIMEOUT},
-        transport  => 'http',
-        no_refresh => 1,
+    # Otherwise, cache our handle
+    $ES ||= Elastijk->new(
+        host => $server,
+        port => $port
     );
 
     return $ES;
 }
+
+=func es_request([$handle],$command,{ method => 'GET', parameters => { a => 1 } }, {})
+
+Retrieve URL from ElasticSearch, returns a hash reference
+
+First hash ref contains options, including:
+
+    uri_param           Query String Parameters
+    index               Index name
+    type                Index type
+    method              Default is GET
+
+=cut
+
+sub es_request {
+    my $instance = ref $_[0] eq 'Elastijk::oo' ? shift @_ : es_connect();
+    my($url,$options,$body) = @_;
+
+    # Pull connection options
+    $options->{$_} = $instance->{$_} for qw(host port);
+
+    $options->{method} ||= 'GET';
+    $options->{body} = $body if defined $body && ref $body eq 'HASH';
+    $options->{command} = $url;
+    my $index = 'NoIndex';
+
+    if( exists $options->{index} ) {
+        my $index_in = delete $options->{index};
+        #
+        # No need to validate _all
+        if( $index_in eq '_all') {
+            $index = $index_in;
+        }
+        else {
+            # Validate each included index
+            my @valid;
+            my @test = ref $index_in eq 'ARRAY' ? @{ $index_in } : split /\,/, $index_in;
+            foreach my $i (@test) {
+                push @valid, $i if es_index_valid($i);
+            }
+            $index = join(',', @valid);
+        }
+    }
+    $options->{index} = $index if $index ne 'NoIndex';
+
+    my ($status,$res);
+    if( $DEF{NOOP} && $options->{method} ne 'GET' ) {
+        output({color=>'cyan'}, "Called es_request($index / $options->{command}), but --noop and method is $options->{method}");
+        return;
+    }
+    eval {
+        debug("calling es_request($index / $options->{command})");
+        ($status,$res) = Elastijk::request($options);
+    };
+    my $err = $@;
+    if( $err || !defined $res ) {
+        output({color=>'red',stderr=>1}, "es_request($index / $options->{command}) failed[$status]: $err");
+    }
+    elsif($status != 200) {
+        verbose({color=>'yellow'},"es_request($index / $options->{command}) returned HTTP Status $status");
+    }
+
+    return $res;
+}
+
 
 =func es_nodes
 
@@ -222,26 +290,22 @@ Returns the hash of index meta data.
 
 my %_nodes;
 sub es_nodes {
-
     if(!keys %_nodes) {
-        my $es = es_connect;
-        eval {
-            my $res = $es->cluster_state(
+        my $res = es_request('_cluster/state', {
+            params => {
                 filter_nodes         => 0,
                 filter_routing_table => 1,
                 filter_indices       => 1,
                 filter_metadata      => 1,
-            );
-            die "undefined result from cluster_state()" unless defined $res;
-            debug_var($res);
-            foreach my $id ( keys %{ $res->{nodes} } ) {
-                $_nodes{$id} = $res->{nodes}{$id}{name};
-            }
-        };
-        if ( my $error = $@ ) {
+            },
+        });
+        if( !defined $res  ) {
             output({color=>"red"}, "es_nodes(): Unable to locate nodes in status!");
-            output({color=>"red"}, $error);
             exit 1;
+        }
+        debug_var($res);
+        foreach my $id ( keys %{ $res->{nodes} } ) {
+            $_nodes{$id} = $res->{nodes}{$id}{name};
         }
     }
 
@@ -258,15 +322,14 @@ my $_indices_meta;
 sub es_indices_meta {
 
     if(!defined $_indices_meta) {
-        my $es = es_connect;
-        eval {
-            my $result = $es->cluster_state(
-                filter_nodes         => 1,
+        my $result = es_request('_cluster/state', {
+            params => {
                 filter_routing_table => 1,
+                filter_nodes         => 1,
                 filter_blocks        => 1,
-            );
-            $_indices_meta = $result->{metadata}{indices};
-        };
+            },
+        });
+        $_indices_meta = $result->{metadata}{indices};
         if ( !defined $_indices_meta ) {
             output({stderr=>1,color=>"red"}, "es_indices(): Unable to locate indices in status!");
             exit 1;
@@ -293,7 +356,12 @@ Makes use of --datesep to determine where the date is.
 
 my %_valid_index = ();
 sub es_indices {
-    my %args = @_;
+    my %args = (
+        state       => 'open',
+        check_state => 1,
+        check_dates => 1,
+        @_
+    );
     my @indices = ();
 
     # Simplest case, single index
@@ -302,33 +370,39 @@ sub es_indices {
     }
     else {
         my %meta = es_indices_meta();
-        debug("Received Index MetaData");
         foreach my $index (keys %meta) {
             debug("Evaluating '$index'");
-            next if $meta{$index}->{state} ne 'open' && !exists $args{_all};
-            if( defined $DEF{BASE} ) {
-                debug({indent=>1}, "+ method:base - $DEF{BASE}");
-                my @parts = split /\-/, $index;
-                my %parts = map { lc($_) => 1 } @parts;
-                next unless exists $parts{$DEF{BASE}};
+            if(!exists $args{_all}) {
+                # State Check Disqualification
+                next if $args{check_state} && $args{state} ne $meta{$index}->{state} && $args{state} ne 'all';
+
+                if( defined $DEF{BASE} ) {
+                    debug({indent=>1}, "+ method:base - $DEF{BASE}");
+                    my @parts = split /\-/, $index;
+                    my %parts = map { lc($_) => 1 } @parts;
+                    next unless exists $parts{$DEF{BASE}};
+                }
+                else {
+                    my $p = es_pattern;
+                    debug({indent=>1}, "+ method:pattern - $p->{string}");
+                    next unless $index =~ /^$p->{re}/;
+                }
+                if( $args{check_dates} && defined $DEF{DAYS} ) {
+                    debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
+
+                    my $days_old = es_index_days_old( $index );
+                    debug("$index is $days_old days old");
+                    if( $days_old < 0 ) {
+                        debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
+                        next;
+                    }
+                    elsif( $DEF{DAYS} >= 0 && $days_old >= $DEF{DAYS} ) {
+                        next;
+                    }
+                }
             }
             else {
-                my $p = es_pattern;
-                debug({indent=>1}, "+ method:patten - $p->{string}");
-                next unless $index =~ /^$p->{re}/;
-            }
-            if( defined $DEF{DAYS} ) {
-                debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
-
-                my $days_old = es_index_days_old( $index );
-                debug("$index is $days_old days old");
-                if( $days_old < 0 ) {
-                    debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
-                    next;
-                }
-                elsif( $days_old >= $DEF{DAYS} ) {
-                    next;
-                }
+                debug({indent=>1}, "Called with _all, all checks skipped.");
             }
             debug({indent=>1,color=>"green"}, "+ match!");
             push @indices, $index;
@@ -347,7 +421,7 @@ Return the number of days old this index is.
 
 =cut
 
-my $NOW = DateTime->now()->truncate(to => 'day')->epoch;
+my $NOW = timelocal(0,0,0,(localtime)[3,4,5]);
 sub es_index_days_old {
     my ($index) = @_;
 
@@ -363,19 +437,24 @@ sub es_index_days_old {
     return -1;
 }
 
+
 =func es_index_shard_replicas( 'index-name' )
 
 Returns the number of replicas for a given index.
 
 =cut
 
-sub es_index_shard_replicas {
+sub es_index_shards {
     my ($index) = @_;
 
-    return unless es_index_valid($index);
+    my %shards = map { $_ => 0 } qw(primaries replicas);
+    my $result = es_request('_settings', {index=>$index});
+    if( defined $result && ref $result eq 'HASH')  {
+        $shards{primaries} = $result->{$index}{settings}{'index.number_of_shards'};
+        $shards{replicas}  = $result->{$index}{settings}{'index.number_of_replicas'};
+    }
 
-    my %meta = es_indices_meta();
-    return exists $meta{$index} ? $meta{$index}->{settings}{'index.number_of_replicas'} : undef;
+    return wantarray ? %shards : \%shards;
 }
 
 =func es_index_valid( 'index-name' )
@@ -395,13 +474,75 @@ sub es_index_valid {
     my $result;
     eval {
         debug("Running index_exists");
-        $result = $es->index_exists( index => $index );
-        debug_var($result);
+        $result = $es->exists( index => $index );
     };
-    if( defined $result && exists $result->{ok} && $result->{ok} ) {
-        return $_valid_index{$index} = 1;
+    return $_valid_index{$index} = $result;
+}
+
+=func es_close_index('index-name')
+
+Closes an index
+
+=cut
+
+sub es_close_index {
+    my($index) = @_;
+
+    return es_request('_close',{ method => 'POST', index => $index });
+}
+
+=func es_open_index('index-name')
+
+Open an index
+
+=cut
+
+sub es_open_index {
+    my($index) = @_;
+
+    return es_request('_open',{ method => 'POST', index => $index });
+}
+
+=func es_delete_index('index-name')
+
+Deletes an index
+
+=cut
+
+sub es_delete_index {
+    my($index) = @_;
+
+    return es_request('',{ method => 'DELETE', index => $index });
+}
+
+=func es_optimize_index('index-name')
+
+Optimize an index to a single segment per shard
+
+=cut
+
+sub es_optimize_index {
+    my($index) = @_;
+
+    return es_request('_optimize',{
+            method    => 'POST',
+            index     => $index,
+            uri_param => {
+                max_num_segments => 1,
+                wait_for_merge   => 0,
+            },
+    });
+}
+
+sub es_apply_index_settings {
+    my($index,$settings) = @_;
+
+    if(ref $settings ne 'HASH') {
+        output({stderr=>1,color=>'red'}, 'usage is es_apply_index_settings($index,$settings_hashref)');
+        return;
     }
-    return $_valid_index{$index} = 0;
+
+    return es_request('_settings',{ method => 'PUT', index => $index },$settings);
 }
 
 =func es_index_segments( 'index-name' )
@@ -420,25 +561,34 @@ sub es_index_segments {
         return undef;
     }
 
-    my $es = es_connect();
-    my $result;
-    my $rc = eval {
-        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/$index/_segments};
-        debug("Fetching segment data: $req");
-        my $json = get( $req );
-        $result = decode_json( $json );
-        debug_var($result);
-        1;
-    };
-    if( !$rc || !defined $result ) {
-        my $err = $@;
-        output({stderr=>1,color=>'red'}, "es_index_segments($index) failed to retrieve segment data", $err);
-        return undef;
-    }
-
-    return $result;
+    return es_request('_segments', {
+        index => $index,
+    });
 
 }
+
+=func es_segment_stats($index)
+
+Return the number of shards and segments in an index as a hashref
+
+=cut
+
+sub es_segment_stats {
+    my ($index) = @_;
+
+    my %segments =  map { $_ => 0 } qw(shards segments);
+    my $result = es_index_segments($index);
+
+    if(defined $result) {
+        my $shard_data = $result->{indices}{$index}{shards};
+        foreach my $id (keys %{$shard_data}) {
+            $segments{segments} += $shard_data->{$id}[0]{num_search_segments};
+            $segments{shards}++;
+        }
+    }
+    return wantarray ? %segments : \%segments;
+}
+
 
 =func es_index_stats( 'index-name' )
 
@@ -451,29 +601,10 @@ Returns a hashref
 sub es_index_stats {
     my ($index) = @_;
 
-    if( !defined $index || !length $index || $index ne '_all' || !es_index_valid($index) ) {
-        output({stderr=>1,color=>'red'}, "es_index_segments('$index'): invalid index");
-        return undef;
-    }
-
-    my $es = es_connect();
-    my $result;
-    my $rc = eval {
-        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/$index/_stats?all=true};
-        debug("Fetching segment data: $req");
-        my $json = get( $req );
-        $result = decode_json( $json );
-        debug_var($result);
-        1;
-    };
-    if( !$rc || !defined $result ) {
-        my $err = $@;
-        output({stderr=>1,color=>'red'}, "es_index_segments($index) failed to retrieve segment data", $err);
-        return undef;
-    }
-
-    return $result;
-
+    return es_request('_stats', {
+        index     => $index,
+        uri_param => { all => 'true' },
+    });
 }
 
 
@@ -486,25 +617,7 @@ Returns a hashref
 =cut
 
 sub es_settings {
-
-    my $es = es_connect();
-    my $result;
-    my $rc = eval {
-        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/_settings};
-        debug("Fetching segment data: $req");
-        my $json = get( $req );
-        $result = decode_json( $json );
-        debug_var($result);
-        1;
-    };
-    if( !$rc || !defined $result ) {
-        my $err = $@;
-        output({stderr=>1,color=>'red'}, "es_settings() failed to retrieve settings", $err);
-        return undef;
-    }
-
-    return $result;
-
+    return es_request('_settings');
 }
 
 =func es_node_stats()
@@ -516,23 +629,13 @@ Returns a hashref
 =cut
 
 sub es_node_stats {
-    my $es = es_connect();
-    my $result;
-    my $rc = eval {
-        my $req = qq{http://$DEF{HOST}:$DEF{PORT}/_nodes/stats?all=true};
-        debug("Fetching: $req");
-        my $json = get( $req );
-        $result = decode_json( $json );
-        debug_var($result);
-        1;
-    };
-    if( !$rc || !defined $result ) {
-        my $err = $@;
-        output({stderr=>1,color=>'red'}, "es_node_stats() failed to retrieve settings", $err);
-        return undef;
-    }
+    my (@nodes) = @_;
 
-    return $result;
+    my @cmd = qw(_nodes);
+    push @cmd, join(',', @nodes) if @nodes;
+    push @cmd, 'stats';
+
+    return es_request(join('/',@cmd), { uri_param => {all => 'true'} });
 }
 
 =func def('key')
@@ -554,16 +657,32 @@ This library contains utilities for unified interfaces in the scripts.
 
 This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
-Included is:
+Included are:
 
-    scripts/es-status.pl - Command line utility for ES Metrics
-    scripts/es-metrics-to-graphite.pl - Send ES Metrics to Graphite or Cacti
+B<SEARCHING>:
+
+    scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
+
+B<MONITORING>:
+
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
-    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
-    scripts/es-copy-index.pl - Copy an index from one cluster to another
-    scripts/es-alias-manager.pl - Manage index aliases automatically
-    scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
+    scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
+    scripts/es-status.pl - Command line utility for ES Metrics
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+
+B<MAINTENANCE>:
+
+    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
+    scripts/es-alias-manager.pl - Manage index aliases automatically
+
+B<MANAGEMENT>:
+
+    scripts/es-copy-index.pl - Copy an index from one cluster to another
+    scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
+
+B<DEPRECATED>:
+
+    scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
 
 The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.
@@ -601,14 +720,8 @@ directory as your Perl executable.
 
 The tools are all wrapped in their own documentation, please see:
 
-    es-status.pl --help
-    es-metric-to-graphite.pl --help
-    es-nagios-check.pl --help
-    es-daily-index-maintenance.pl --help
-    es-copy-index.pl --help
-    es-alias-manager.pl --help
-    es-apply-settings.pl --help
-    es-storage-data.pl --help
+    $UTILITY --help
+    $UTILITY --manual
 
 For individual options and capabilities
 

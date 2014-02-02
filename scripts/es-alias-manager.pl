@@ -28,7 +28,7 @@ pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
 my %CFG = (
-    config             => '/etc/elasticsearch/aliases.yml',
+    config => '/etc/elasticsearch/aliases.yml',
 
 );
 # Extract from our options if we've overridden defaults
@@ -48,7 +48,7 @@ my $es = es_connect();
 
 # Delete Indexes older than a certain point
 my $TODAY = DateTime->now()->truncate( to => 'day' );
-my $indices= $es->get_aliases();
+my $indices = es_request('_aliases');
 
 if ( !defined $indices ) {
     output({color=>"red"}, "Unable to locate indices by get_aliases()!");
@@ -108,10 +108,12 @@ debug_var($ALIAS);
 foreach my $index (sort keys %{ $indices }) {
     debug("$index being evaluated");
     my %current = %{ $indices->{$index}{aliases}};
+    my $managed = 0;
 
     my %desired = ();
     while( my($name,$map) = each %{ $ALIAS }) {
         if ($index =~ /$map->{re}/) {
+            $managed++;
             my $idx_dt = DateTime->new( map { $_ => $+{$_} } qw(year month day) );
             verbose("$index is a $name index.");
 
@@ -136,18 +138,20 @@ foreach my $index (sort keys %{ $indices }) {
     }
     my @updates = ();
     my %checks = map { $_ => 1 } keys(%desired),keys(%current);
-    foreach my $alias (keys %checks) {
-        if( exists $desired{$alias} && exists $current{$alias} ) {
-            next;
+    if( $managed ) {
+        foreach my $alias (keys %checks) {
+            if( exists $desired{$alias} && exists $current{$alias} ) {
+                next;
+            }
+            my $action =  exists $desired{$alias} ? 'add' : 'remove';
+            push @updates, { $action => { index => $index, alias => $alias} };
+            verbose({color=>'cyan'}, "$index: $action alias '$alias'");
         }
-        my $action =  exists $desired{$alias} ? 'add' : 'remove';
-        push @updates, { $action => { index => $index, alias => $alias} };
-        verbose({color=>'cyan'}, "$index: $action alias '$alias'");
     }
     debug({color=>'magenta'}, "Aliases for $index : " . join(',', keys %desired) );
     if( @updates ) {
         eval {
-            $es->aliases( actions => \@updates );
+            es_request('_aliases', { method => 'POST' }, { actions => \@updates });
             output({color=>'green'}, "Updates applied for $index : " . join(',', keys %desired) );
         };
         if( my $err = $@ ){

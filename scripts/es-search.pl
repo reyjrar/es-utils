@@ -9,10 +9,7 @@ use App::ElasticSearch::Utilities qw(:all);
 use Carp;
 use DateTime;
 use Getopt::Long;
-use JSON::XS;
-use MIME::Lite;
 use Pod::Usage;
-use YAML;
 
 #------------------------------------------------------------------------#
 # Argument Parsing
@@ -40,13 +37,10 @@ pod2usage(-exitval => 0, -verbose => 2) if $OPT{manual};
 #--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
-    size         => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
+    size => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
 );
 
 #------------------------------------------------------------------------#
-# Connect to ElasticSearch
-my $ES = es_connect();
-
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
 my %by_age = ();
@@ -99,21 +93,26 @@ my $duration = 0;
 my $displayed = 0;
 my $header=0;
 foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
-    my $result;
     my $start=time();
-    eval {
-        $result = $ES->search(
-            index   => $by_age{$age},
-            query   => { query_string => { query => $search_string } } ,
-            size    => $size,
-            sort   => [ { '@timestamp' => $ORDER } ],
-            scroll  => '10s',
-            timeout => '5s',
+    my $result = es_request('_search',
+        # Search Parameters
+        {
+            index     => $by_age{$age},
+            uri_param => {
+                timeout     => '10s',
+                scroll      => '30s',
+            }
+        },
+        # Search Body
+        {
+            size       => $size,
+            query      => { query_string => { query => $search_string } } ,
+            sort       => [ { '@timestamp' => $ORDER } ],
             %extra,
-        );
-    };
-    if( my $error = $@ ) {
-        croak "ElasticSearch Error -> $error";
+        }
+    );
+    if( !defined $result ) {
+        croak "Unable to search the cluster";
     }
     $duration += time() - $start;
     push @displayed_indices, @{ $by_age{$age} };
@@ -122,6 +121,7 @@ foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
     my @always = qw(@timestamp);
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
     while( $result ) {
+
         my $hits = $result->{hits}{hits};
         last unless @{$hits};
 
@@ -148,10 +148,16 @@ foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
         }
 
         last if $displayed >= $CONFIG{size};
-        $result = $ES->scroll(
-            scroll_id => $result->{_scroll_id},
-            scroll    => '10s',
-        );
+
+        # Scroll forward
+        $start = time;
+        $result = es_request('_search/scroll', {
+            uri_param => {
+                scroll_id => $result->{_scroll_id},
+                scroll    => '30s',
+            }
+        });
+        $duration += time - $start;
     }
     last if $displayed >= $CONFIG{size};
 }
@@ -183,17 +189,18 @@ sub extract_fields {
 
 sub show_fields {
     my $index =  (sort by_index_age keys %indices)[0];
-    my $result = undef;
-    eval {
-        $result = $ES->mapping(index => $index, type => 'syslog');
-    };
-
+    my $result = es_request('_mapping', { index => $index });
     if(! defined $result) {
         die "unable to read mapping for: $index\n";
     }
+    debug_var($result);
 
-    my $prop_root = $result->{syslog}{properties};
-    my @keys = extract_fields($prop_root);
+    my @mappings = grep { $_ ne '_default_' } keys %{ $result->{$index} };
+    my @keys = ();
+    foreach my $mapping (@mappings) {
+        next unless exists $result->{$index}{$mapping}{properties};
+        push @keys, extract_fields($result->{$index}{$mapping}{properties});
+    }
 
     print map { "$_\n" } @keys;
 }

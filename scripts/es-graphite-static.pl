@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# PODNAME: es-metrics-to-graphite.pl
+# PODNAME: es-graphite-static.pl
 # ABSTRACT: Gather performance metrics from an ES node and send them to Graphite
 use strict;
 use warnings;
@@ -99,21 +99,14 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 }
 
 #------------------------------------------------------------------------#
-# Connect to ElasticSearch
-my $ES = es_connect();
-
-#------------------------------------------------------------------------#
 # Collect and Decode the Cluster Statistics
 my @metrics = ();
-my $stats = undef;
-eval {
-    $stats = es_node_stats();
-    debug_var({color=>'yellow'}, $stats);
-};
-if( my $err = $@ ) {
-    output({color=>'red'}, "Error retrieving nodes_stats(): $err");
+my $stats = es_node_stats('_local');
+if( !$stats ) {
+    output({color=>'red'}, "Error retrieving nodes_stats()");
     exit 1;
 }
+debug_var({color=>'yellow'}, $stats);
 push @metrics, @{ parse_nodes_stats($stats) };
 
 # Collect individual indexes names and their own statistics
@@ -145,19 +138,16 @@ foreach my $stat ( @metrics ) {
 sub parse_nodes_stats {
     my $data = shift;
 
+    # We are using _local, so we'll only have our target
+    # nodes data in the results, using the loop to grab
+    # the node_id, which is hashed.
     my $node_id;
-    my @nodes;
     foreach my $id (keys %{ $data->{nodes} }) {
-        if( (exists $opt{local} and $opt{local} ) || $data->{nodes}{$id}{name} eq $cfg{host}  ) {
-            $node_id = $id;
-            $HOSTNAME=$data->{nodes}{$id}{name};
-            last;
-        }
-        else {
-            push @nodes, $data->{nodes}{$id}{name};
-        }
+        $node_id = $id;
+        $HOSTNAME=$data->{nodes}{$id}{name};
+        last;
     }
-    die "no information found for $cfg{host}, nodes found: ", join(', ', @nodes), "\n" unless exists $data->{nodes}{$node_id};
+    verbose("Parsing node_stats for ID:$node_id => $HOSTNAME");
     my $node = $data->{nodes}{$node_id};
 
     my @stats = ();
@@ -337,7 +327,7 @@ __END__
 
 =head1 SYNOPSIS
 
-es-metrics-to-graphite.pl --format=graphite --host [host] [options]
+es-graphite-static.pl --format=graphite --host [host] [options]
 
 Options:
 
@@ -395,7 +385,10 @@ Also grab data at the individual index level
 
 =head1 DESCRIPTION
 
-This is a plugin to poll elasticsearch for performance data and stats it in a relevant
-format for your monitoring infrastructure.
+This script extract monitoring data from ElasticSearch and those statistics to a Graphite
+end point.  It also support cacti, though support for cacti will likely be deprecated.
+
+This script is called "static" as the author will attempt to handle statistics that are renamed
+by ElasticSearch.com so what all versions of ElasticSearch will produce the same output.
 
 =cut

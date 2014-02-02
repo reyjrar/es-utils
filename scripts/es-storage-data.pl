@@ -8,7 +8,6 @@ use feature qw(state);
 use Getopt::Long;
 use Pod::Usage;
 use CLI::Helpers qw(:all);
-
 use App::ElasticSearch::Utilities qw(es_connect es_pattern es_nodes es_indices);
 
 #------------------------------------------------------------------------#
@@ -38,7 +37,6 @@ my %CFG = (
     format    => 'pretty',
     view      => 'node',
     limit     => 0,
-    'dry-run' => 0,
 );
 my %VALID = (
     format => {map { $_ => 1 } qw(pretty raw)},
@@ -77,11 +75,8 @@ my %nodes = ();
 foreach my $index (@INDICES) {
     verbose({color=>'green'}, "$index - Gathering statistics");
 
-    my $result = undef;
-    eval {
-        $result = $ES->index_status( index => $index );
-    };
-    if( my $err = $@ ) {
+    my $result = es_request('_status', { index => $index });
+    if( !defined $result ) {
         output({color=>'magenta',indent=>1}, "+ Unable to fetch index status!");
         next;
     }
@@ -216,18 +211,6 @@ Print this message and exit
 
 Print this message and exit
 
-=item B<local>
-
-Optional, operate on localhost (if not specified, --host required)
-
-=item B<host>
-
-Optional, the host to maintain (if not specified --local required)
-
-=item B<pattern>
-
-Optional: Use this pattern to match indexes, defaults to *
-
 =item B<view>
 
 Default view is by node, but can also be index to see statistics by index
@@ -264,16 +247,5 @@ Usage:
 
     # Show the "newest" logstash index
     $ es-storage-data.pl --local --view index --limit 1
-
-
-=head2 PATTERNS
-
-Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
-regular expressions.  Those patterns are:
-
-    *       expands to match any number of any characters.
-    ?       expands to match any single character.
-    DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
-    ANY     expands to match any number of any characters.
 
 =cut

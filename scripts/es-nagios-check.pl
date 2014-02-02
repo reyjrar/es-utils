@@ -2,23 +2,19 @@
 # PODNAME: es-nagios-check.pl
 # ABSTRACT: ElasticSearch Nagios Checks
 use strict;
+use warnings;
 
-use LWP::Simple;
-use JSON;
+use CLI::Helpers qw(:all);
+use App::ElasticSearch::Utilities qw(es_request es_indices);
 use Pod::Usage;
 use Getopt::Long;
-
-BEGIN {
-    delete $ENV{$_} for qw{http_proxy HTTP_PROXY};
-}
 
 #------------------------------------------------------------------------#
 # Option Parsing
 my %OPT=();
 GetOptions(\%OPT,
-    'host|H:s',
     'nodes|n:i',
-    'index|i:s',
+    'check-indices|c',
     'shard-state',
     'max-segments:i',
     'help|h',
@@ -38,45 +34,32 @@ my %STATUS = (
     CRITICAL => 2,
     UNKNOWN  => 3,
 );
-my $j = JSON->new();
 my %stats = ();
 my %RESULTS = ();
 my $RC = 0;
-# Host defaults to localhost
-$OPT{host} ||= 'localhost';
-
+debug_var(\%OPT);
 my @CHECKS = (
-    { name => 'health',    url => qq{http://$OPT{host}:9200/_cluster/health},     require => [qw(host)] },
-    { name => 'index',     url => qq{http://$OPT{host}:9200/$OPT{index}/_status}, require => [qw(host index)] },
-    { name => 'segments',  url => qq{http://$OPT{host}:9200/_segments},           require => [qw(host index)] },
+    { name => 'health',    url => q{_cluster/health}, index => 0 },
+    { name => 'index',     url => q{_status},         index => 1 },
+    { name => 'segments',  url => q{_segments},       index => 1 },
 );
 
 #------------------------------------------------------------------------#
 # Poll ElasticSearch for Information
 my $checks_performed = 0;
 foreach my $check ( @CHECKS ) {
-    my $run_check = 1;
-    foreach my $field ( @{ $check->{require} } ){
-        unless( exists $OPT{$field} && defined $OPT{$field} && length $OPT{$field} ) {
-            $run_check = 0;
-        }
-    }
-
-    # Skip if we don't have enough information
-    next unless $run_check;
-
+    next if $check->{index} && !$OPT{'check-indices'};
     $checks_performed++;
 
     # Grab the data
-    eval {
-        my $json = get( $check->{url} );
-        die "no content returned" unless defined $json;
-        $stats{$check->{name}} = $j->decode( $json );
-    };
-    if( my $err = $@ ) {
-        nagios_status( $STATUS{CRITICAL}, CONNECT => "ERROR in $check->{name} ($check->{url}): $err" );
+    my $result = es_request($check->{url},
+        $check->{index} ? { index => join(',', es_indices()) } : {}
+    );
+    if( !defined $result ) {
+        nagios_status( $STATUS{CRITICAL}, CONNECT => "ERROR in $check->{name} ($check->{url})" );
     }
     else {
+        $stats{$check->{name}} = $result;
         nagios_status( $STATUS{SUCCESS}, "FETCH_" . uc($check->{name}) => "fetch for $check->{name}" );
     }
 }
@@ -141,36 +124,36 @@ if( exists $OPT{'shard-state'} ) {
 # Index Status Checking
 if( exists $stats{index} && defined $stats{index} ) {
     # Get the actual index name in case this is an alias
-    my $index = (keys %{ $stats{index}->{indices} })[0];
-
-    # Index Status Check
-    if( $stats{index}->{ok} ) {
-        nagios_status( $STATUS{SUCCESS}, INDEX => "index $OPT{index}");
-    }
-    else {
-        nagios_status( $STATUS{CRITICAL}, INDEX => "index $OPT{index} not ok");
-    }
-
-    # Check max segments?
-    if( $OPT{'max-segments'} > 0 ) {
-        my $MAX = $OPT{'max-segments'};
-
-        my %over = ();
-        foreach my $id ( keys %{ $stats{segments}->{indices}{$index}{shards} } ) {
-            my $shard = $stats{segments}->{indices}{$index}{shards}{$id}[0];
-            if( $shard->{num_search_segments} > $MAX ) {
-                $over{$id} = $shard->{num_search_segments};
-            }
-        }
-        if( scalar keys %over ) {
-            nagios_status(
-                $STATUS{WARNING},
-                SEGMENTS => "Max number of segments ($MAX) exceed on shards: "
-                        . join(', ', map { "$_=$over{$_}" } keys %over )
-            );
+    foreach my $index ( keys %{ $stats{index}->{indices} } ) {
+        # Index Status Check
+        if( $stats{index}->{ok} ) {
+            nagios_status( $STATUS{SUCCESS}, INDEX => "$index");
         }
         else {
-            nagios_status( $STATUS{SUCCESS}, SEGMENTS => "all shards have $MAX or fewer segments");
+            nagios_status( $STATUS{CRITICAL}, INDEX => "$index not ok");
+        }
+
+        # Check max segments?
+        if( exists $OPT{'max-segments'} && $OPT{'max-segments'} > 0 ) {
+            my $MAX = $OPT{'max-segments'};
+
+            my %over = ();
+            foreach my $id ( keys %{ $stats{segments}->{indices}{$index}{shards} } ) {
+                my $shard = $stats{segments}->{indices}{$index}{shards}{$id}[0];
+                if( $shard->{num_search_segments} > $MAX ) {
+                    $over{$id} = $shard->{num_search_segments};
+                }
+            }
+            if( scalar keys %over ) {
+                nagios_status(
+                    $STATUS{WARNING},
+                    SEGMENTS => "Max number of segments ($MAX) exceed on shards: "
+                            . join(', ', map { "$_=$over{$_}" } keys %over )
+                );
+            }
+            else {
+                nagios_status( $STATUS{SUCCESS}, SEGMENTS => "all shards have $MAX or fewer segments");
+            }
         }
     }
 }
@@ -188,25 +171,34 @@ nagios_exit_properly();
 sub nagios_status {
     my ($rc,$name,$msg) = @_;
 
+    verbose("# [$rc] $name : $msg");
+
     # First set the status
     $RC = $rc if( $rc > $RC );
 
     # Store the results
-    push @{ $RESULTS{$rc} }, {
-        name => $name,
-        msg  => $msg,
-    };
+    $RESULTS{$rc} ||= {};
+    $RESULTS{$rc}->{$name} ||= { count => 0, msg => [] };
+
+    $RESULTS{$rc}->{$name}{count}++;
+    push @{ $RESULTS{$rc}->{$name}{msg} }, $msg;
+
     # return happiness and joy
     return 1;
 }
 sub nagios_exit_properly {
+    debug("Nagios Exited at line: " . (caller)[2]);
 
     # dump the status of the results
     foreach my $rc ( sort { $b <=> $a } keys %RESULTS ) {
         my $status = $rc ? "not ok" : "ok";
         my @details = ();
-        foreach my $r ( @{ $RESULTS{$rc} } ) {
-            push @details, $rc ? "$r->{name} - $r->{msg}" : $r->{name};
+        foreach my $name ( sort keys %{ $RESULTS{$rc} } ) {
+            my $r = $RESULTS{$rc}->{$name};
+            my $msg = $name;
+            $msg .= "[$r->{count}]" if $r->{count} > 1;
+            $msg .= " - $r->{msg}[0]" if $rc;
+            push @details, $msg;
         }
         print "$status: ", join(", ", @details), "\n";
     }
@@ -227,12 +219,12 @@ es-nagios-check.pl -H [host] [options]
 
 Options:
 
-    --help          print help
-    --host|-H       Host to poll for statistics (default: localhost)
-    --nodes         The number of nodes expected in the cluster, alarm on variance.
-    --shard-state   Check the status of shard allocation
-    --index         Index to check performance statistics (Default: NONE)
-    --max-segments  Max number of segments in each shard
+    --help              print help
+    --manual            Show the full manual
+    --nodes             The number of nodes expected in the cluster, alarm on variance.
+    --shard-state       Check the status of shard allocation
+    --check-indices     Check indices for segmentation and "ok" status
+    --max-segments      Max number of segments in each shard
 
 =head1 OPTIONS
 
@@ -242,10 +234,6 @@ Options:
 
 Print this message and exit
 
-=item B<host>
-
-Optional, the host to check, defaults to localhost
-
 =item B<nodes>
 
 Optional, if specified checks for this exact number of nodes in the cluster.
@@ -254,9 +242,10 @@ Optional, if specified checks for this exact number of nodes in the cluster.
 
 Optional, if specified checks for relocating, initializing, or unassigned shards.
 
-=item B<index>
+=item B<check-indices>
 
-Optional, if specified, state and performance data for this index will be polled.
+Optional, if specified, state and performance data for the indexes selected using
+a combination of --base / --days / --pattern / --index will be polled for ok status.
 
 =item B<max-segments>
 

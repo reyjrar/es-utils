@@ -18,7 +18,7 @@ GetOptions(\%opt,
     'dry-run',
     'delete',
     'delete-days:i',
-    'replicas:i',
+    'replicas',
     'replicas-min:i',
     'replicas-age:s',
     'optimize',
@@ -76,74 +76,72 @@ $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
 my $es = es_connect();
 
 # Ages for replica management
-my @AGES     = grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'};
+my @AGES = grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'};
 
 # Retrieve a list of indexes
-my @indices = es_indices();
+my @indices = es_indices(
+    check_state => 0,
+    check_dates => 0,
+);
 
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort @indices) {
-    verbose("$index being evaluated");
+    verbose({level=>2},"$index being evaluated");
 
     my $days_old = es_index_days_old( $index );
 
     # Delete the Index if it's too old
     if( $CFG{delete} && $CFG{'delete-days'} < $days_old ) {
         output({color=>"red"}, "$index will be deleted.");
-        eval {
-            my $rc = $es->delete_index( index => $index );
-        } unless $CFG{'dry-run'};
+        my $rc = es_delete_index($index);
         next;
     }
 
     # Manage replicas
     if( $CFG{replicas} ) {
-        my $current_replicas = es_index_shard_replicas($index);
-        debug({color=>"cyan"}, " - index is $days_old days old");
-        my $replicas = $CFG{replicas};
+        my %shards = es_index_shards($index);
+        debug({color=>"cyan"}, "$index: index is $days_old days old");
+        # Default for replicas is primaries - 1;
+        my $replicas = $shards{primaries} - 1;
         foreach my $age ( @AGES ) {
             if ( $days_old >= $age ) {
                 $replicas--;
             }
         }
         $replicas = $CFG{'replicas-min'} if $replicas < $CFG{'replicas-min'};
-        if ( defined $current_replicas && $replicas != $current_replicas ) {
-            verbose({color=>'yellow'}, " - should have $replicas replicas, has $current_replicas");
-            eval {
-                $es->update_index_settings(
-                    index => $index,
-                    settings => { number_of_replicas => $replicas},
-                );
-            } unless $CFG{'dry-run'};
-            if (my $err = $@ ) {
-                output({color=>'red'}, "Failed setting replicas to $replicas for $index.", $err);
+        if ( $shards{primaries} > 0 && $shards{replicas} != $replicas ) {
+            verbose({color=>'yellow'}, "$index: should have $replicas replicas, has $shards{replicas}");
+            my $result = es_request('_settings',
+                { index => $index, method => 'PUT' },
+                { index => { number_of_replicas => $replicas} },
+            );
+            if(!defined $result) {
+                output({color=>'red',indent=>1}, "Error encountered.");
+            }
+            else {
+                output({color=>"green"}, "$index: Successfully set replicas to $replicas");
             }
         }
     }
 
     # Run optimize?
     if( $CFG{optimize} ) {
-        my $segdata = es_index_segments( $index );
+        my $segdata = es_segment_stats( $index );
 
         my $segment_ratio = undef;
         if( defined $segdata && $segdata->{shards} > 0 ) {
-            $segment_ratio = sprintf( "%0.2f", $segments / $shards );
+            $segment_ratio = sprintf( "%0.2f", $segdata->{segments} / $segdata->{shards} );
         }
 
         if( $days_old >= $CFG{'optimize-days'} && defined($segment_ratio) && $segment_ratio > 1 ) {
-            my $error = undef;
             verbose({color=>"yellow"}, "$index: required (segment_ratio: $segment_ratio).");
 
-            eval {
-                my $o_res = $es->optimize_index(
-                    index            => $index,
-                    max_num_segments => 1,
-                    wait_for_merge   => 0,
-                );
+            my $o_res = es_optimize_index($index);
+            if( !defined $o_res ) {
+                output({color=>"red"}, "$index: Encountered error during optimize");
+            }
+            else {
                 output({color=>"green"}, "$index: $o_res->{_shards}{successful} of $o_res->{_shards}{total} shards optimized.");
-            } unless $CFG{'dry-run'};
-            if( my $error = $@ ) {
-                output({color=>"red"}, "$index: Encountered error during optimize: $error");
             }
         }
         else {
@@ -167,7 +165,6 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --dry-run           Tell me what you would do, but don't do it.
     --all               Run delete and optimize
     --delete            Run delete indexes older than
     --delete-days       Age of oldest index to keep (default: 90)

@@ -4,11 +4,6 @@
 use strict;
 use warnings;
 
-BEGIN {
-    # We don't want to use the proxies set in our environment
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY https_proxy HTTPS_PROXY);
-}
-
 use Getopt::Long;
 use Pod::Usage;
 use CLI::Helpers qw(:all);
@@ -76,7 +71,7 @@ exit 0;
 #------------------------------------------------------------------------#
 # Query functions
 sub handle_health {
-    my $stats = $ES->cluster_health;
+    my $stats = es_request('_cluster/health');
 
     output({clear=>1,color=>"cyan"}, "Cluster Health Check", "-="x20);
     output({kv=>1,color=>"cyan"}, "name", $stats->{cluster_name});
@@ -167,15 +162,12 @@ sub handle_node {
     verbose({indent=>2,kv=>1}, "heap_committed_bytes", $node->{jvm}{mem}{heap_committed_in_bytes});
     # GC
     output({indent=>1,kv=>1}, "gc", '');
-    output({indent=>2,kv=>1}, "collections", $node->{jvm}{gc}{collection_count});
-    output({indent=>2,kv=>1}, "time", $node->{jvm}{gc}{collection_time});
-    verbose({indent=>2,kv=>1}, "time_ms", $node->{jvm}{gc}{collection_time_in_millis});
     # GC Details
     foreach my $collector ( keys %{ $node->{jvm}{gc}{collectors} } ) {
-        verbose({indent=>2,kv=>1}, $collector, '');
-        verbose({indent=>3,kv=>1}, "collections", $node->{jvm}{gc}{collectors}{$collector}{collection_count} );
-        verbose({indent=>3,kv=>1}, "time", $node->{jvm}{gc}{collectors}{$collector}{collection_time} );
-        verbose({indent=>3,kv=>1}, "time_ms", $node->{jvm}{gc}{collectors}{$collector}{collection_time_in_millis} );
+        output({indent=>2,kv=>1}, $collector, '');
+        output({indent=>3,kv=>1}, "collections", $node->{jvm}{gc}{collectors}{$collector}{collection_count} );
+        output({indent=>3,kv=>1}, "time", $node->{jvm}{gc}{collectors}{$collector}{collection_time} );
+        output({indent=>3,kv=>1}, "time_ms", $node->{jvm}{gc}{collectors}{$collector}{collection_time_in_millis} );
     }
     output({kv=>1}, "requests", $node->{transport}{rx_count});
     output({indent=>1,kv=>1}, "rx", $node->{transport}{rx_size});
