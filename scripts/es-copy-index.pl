@@ -2,25 +2,16 @@
 # PODNAME: es-copy-index.pl
 # ABSTRACT: Copy an index from one cluster to another
 
-BEGIN {
-    delete $ENV{$_} for qw(http_proxy https_proxy HTTP_PROXY);
-}
-
 use strict;
 use warnings;
 
 use Carp;
-use DateTime;
 use Elasticsearch::Compat;
-use File::Basename;
-use File::Spec;
-use FindBin;
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
-use MIME::Lite;
 use Pod::Usage;
-use Sys::Hostname;
-use YAML;
-use App::ElasticSearch::Utilities qw(:all);
+
+use CLI::Helpers qw(:all)
+use App::ElasticSearch::Utilities qw(:default :index);
 
 #------------------------------------------------------------------------#
 # Argument Parsing
@@ -52,14 +43,11 @@ if ( !defined($index) || !exists $OPT{from} || !exists $OPT{to} ) {
 
 # Connect to ElasticSearch
 my %ES = ();
+my $CLASS = es_class();
 foreach my $dir (qw(from to)) {
-    $ES{$dir} = Elasticsearch::Compat->new(
-        servers   => "$OPT{$dir}:9200",
-        transport => 'http',
-        timeout   => 0,
-    );
+    $ES{$dir} = es_connect( [ "$OPT{$dir}:9200" ] );
 }
-croak "Invalid index: $index\n" unless valid_index($index);
+croak "Invalid index: $index\n" unless es_index_valid($index);
 my $RECORDS = 0;
 my $LAST = time;
 
@@ -110,23 +98,6 @@ sub show_counts {
     return $doc;
 }
 
-
-sub valid_index {
-    my ($index) = @_;
-
-    my $result;
-    eval {
-        $result = $ES{from}->index_exists( index => $index );
-        debug("$index", Dump($result));
-    };
-    if( my $error = $@ ) {
-        output({color=>'red',stderr=>1}, $error);
-    }
-    if( defined $result && exists $result->{ok} && $result->{ok} ) {
-        return 1;
-    }
-    return 0;
-}
 __END__
 
 =head1 NAME
@@ -144,7 +115,8 @@ Options:
     --rename            Change the name of the index on the destination
     --help              print help
     --manual            print full manual
-    --verbose           Send additional messages to STDERR
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 

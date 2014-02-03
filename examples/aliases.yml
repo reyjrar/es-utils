@@ -1,0 +1,20 @@
+# Sample Alias Manager Configuration Example
+---
+logstash:
+  pattern: \*-logstash-{{DATE}}
+  daily: logstash-{{DATE}}
+  relative:
+    alias: logstash-{{PERIOD}}
+    periods:
+      today:
+        from:
+          days: 0
+        to:
+          days: 0
+      weekly:
+        from:
+          days: 6
+        to:
+          days: 0
+
+

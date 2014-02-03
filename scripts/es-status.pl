@@ -1,48 +1,28 @@
 #!/usr/bin/env perl
 # PODNAME: es-status.pl
 # ABSTRACT: Simple ElaticSearch Status Checks
-#  - Brad Lhotsky <brad.lhotsky@gmail.com>
 use strict;
 use warnings;
 
-BEGIN {
-    # We don't want to use the proxies set in our environment
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY https_proxy HTTPS_PROXY);
-}
-
-use JSON;
-use IPC::Run3;
-use LWP::Simple;
-use File::Spec;
-use Term::ANSIColor;
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Pod::Usage;
+use CLI::Helpers qw(:all);
+use App::ElasticSearch::Utilities qw(:all);
 
 #------------------------------------------------------------------------#
 # Argument Collection
 my %opt;
 GetOptions(\%opt,
-    # DATA GATHERING
-    'host:s',
-    'index:s',
     # DISPATCH FUNCTIONS
     'all',
     'health',
     'node',
     'segments',
     'settings',
-    # OUTPUT FORMATTING
-    'csv',
-    'color',
-    'nicolai',
+    # DOCS
     'help|h',
     'manual|m',
-    'verbose+',
-    'debug|d',
 );
-#------------------------------------------------------------------------#
-# Globals, No sense in declaring later
-my $JSON = JSON->new->pretty;
 
 #------------------------------------------------------------------------#
 # Dispatch Table
@@ -72,21 +52,10 @@ push @TODO, 'health' unless scalar @TODO;
 # Documentations!
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
-#------------------------------------------------------------------------#
-# Argument Sanitazation
-my %DEF = ();
-$DEF{DEBUG} = $opt{debug} || 0;
-$DEF{VERBOSE} = $opt{verbose} || 0;
-$DEF{COLOR} = $opt{color} || git_color_check();
-$DEF{NICOLAI} = $opt{nicolai} || 0;
-$DEF{CONFIGDIR} = exists $opt{configdir} ? $opt{configdir} : '.';
-$DEF{HOST} = exists $opt{host} ? $opt{host} : 'localhost';
-$DEF{PORT} = exists $opt{port} ? $opt{port} : 9200;
-$DEF{BASE_URL} = "http://$DEF{HOST}:$DEF{PORT}";
-$DEF{KV_FORMAT} = exists $opt{csv} ? ',' : ':';
 
-debug( {level => 2}, "Parsing arguments .. ");
-debug( '### Defintions ###', $JSON->encode(\%DEF) );
+#------------------------------------------------------------------------#
+# Dispatch
+my $ES = es_connect();
 
 #------------------------------------------------------------------------#
 # Dispatch
@@ -102,7 +71,7 @@ exit 0;
 #------------------------------------------------------------------------#
 # Query functions
 sub handle_health {
-    my $stats = get_stats( '_cluster/health' );
+    my $stats = es_request('_cluster/health');
 
     output({clear=>1,color=>"cyan"}, "Cluster Health Check", "-="x20);
     output({kv=>1,color=>"cyan"}, "name", $stats->{cluster_name});
@@ -121,11 +90,12 @@ sub handle_health {
     }
 }
 sub handle_segments {
-    my $stats = get_stats('_segments');
     output({clear=>1,color=>"cyan"}, "Index Segmentation Check", "-="x20);
 
-    foreach my $index ( sort keys %{ $stats->{indices} } ) {
+    my @indexes = es_indices();
+    foreach my $index ( sort @indexes ) {
         output({color=>"cyan"},"$index:");
+        my $stats = es_index_segments($index);
         my $shards = 0;
         my $segments = 0;
         my $index_size = 0;
@@ -168,8 +138,7 @@ sub handle_segments {
 }
 
 sub handle_node {
-    my $qs = join('&', map { "$_=true" } qw(indices jvm process transport http) );
-    my $stats = get_stats( "_cluster/nodes/_local/stats?$qs");
+    my $stats = es_node_stats();
     output({clear=>1,color=>"cyan"}, "Node Status Check", "-="x20);
 
     my $node_id = (keys %{ $stats->{nodes} })[0];
@@ -193,15 +162,12 @@ sub handle_node {
     verbose({indent=>2,kv=>1}, "heap_committed_bytes", $node->{jvm}{mem}{heap_committed_in_bytes});
     # GC
     output({indent=>1,kv=>1}, "gc", '');
-    output({indent=>2,kv=>1}, "collections", $node->{jvm}{gc}{collection_count});
-    output({indent=>2,kv=>1}, "time", $node->{jvm}{gc}{collection_time});
-    verbose({indent=>2,kv=>1}, "time_ms", $node->{jvm}{gc}{collection_time_in_millis});
     # GC Details
     foreach my $collector ( keys %{ $node->{jvm}{gc}{collectors} } ) {
-        verbose({indent=>2,kv=>1}, $collector, '');
-        verbose({indent=>3,kv=>1}, "collections", $node->{jvm}{gc}{collectors}{$collector}{collection_count} );
-        verbose({indent=>3,kv=>1}, "time", $node->{jvm}{gc}{collectors}{$collector}{collection_time} );
-        verbose({indent=>3,kv=>1}, "time_ms", $node->{jvm}{gc}{collectors}{$collector}{collection_time_in_millis} );
+        output({indent=>2,kv=>1}, $collector, '');
+        output({indent=>3,kv=>1}, "collections", $node->{jvm}{gc}{collectors}{$collector}{collection_count} );
+        output({indent=>3,kv=>1}, "time", $node->{jvm}{gc}{collectors}{$collector}{collection_time} );
+        output({indent=>3,kv=>1}, "time_ms", $node->{jvm}{gc}{collectors}{$collector}{collection_time_in_millis} );
     }
     output({kv=>1}, "requests", $node->{transport}{rx_count});
     output({indent=>1,kv=>1}, "rx", $node->{transport}{rx_size});
@@ -212,7 +178,7 @@ sub handle_node {
 }
 
 sub handle_settings {
-    my $stats = get_stats( "_settings");
+    my $stats = es_settings();
     output({clear=>1,color=>"cyan"}, "Index Settings Check", "-="x20);
 
     my $colorize = sub {
@@ -233,122 +199,7 @@ sub handle_settings {
     }
 }
 
-#------------------------------------------------------------------------#
-# Utility Functions
-sub git_color_check {
-    my @cmd = qw(git config --global --get color.ui);
-    my($out,$err);
-    eval {
-        run3(\@cmd, undef, \$out, \$err);
-    };
-    if( $@  || $err ) {
-        debug("git_color_check error: $err ($@)");
-        return 0;
-    }
-    debug("git_color_check out: $out");
-    if( $out =~ /auto/ || $out =~ /true/ ) {
-        return 1;
-    }
-    return 0;
-}
-sub get_stats {
-    my $stat_path = shift;
-
-    my $stats = undef;
-    eval {
-        my $url = "$DEF{BASE_URL}/$stat_path";
-        my $json = get( $url );
-        die "retreival of $url failed to return data" unless $json;
-        $stats =  $JSON->decode($json);
-    };
-    if( my $err = $@ ){
-        output({color=>"red"}, "Encountered error: $err" );
-        exit 1;
-    }
-
-    return $stats;
-}
-sub nicolai_colorize {
-    my $msg = shift;
-    my @_colors = qw( red yellow green blue magenta blue cyan white );
-    my $out='';
-    my @color=();
-    foreach my $char (split //, $msg ){
-        @color = @_colors if scalar @color == 0;
-        $out .= colored( [ shift @color ], $char );
-    }
-    return $out;
-}
-sub colorize {
-    my ($color,$string) = @_;
-
-    if( $DEF{NICOLAI} ) {
-        $string = nicolai_colorize( $string );
-    }
-    elsif( defined $color && $DEF{COLOR} ) {
-        $string=colored([ $color ], $string);
-    }
-    return $string;
-}
-sub output {
-    my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
-
-    # Input/output Arrays
-    my @input = @_;
-    my @output = ();
-
-    # Remove line endings
-    chomp(@input);
-
-    # Determine the color
-    my $color = exists $opts->{color} && defined $opts->{color} ? $opts->{color} : undef;
-
-    # Determine indentation
-    my $indent = exists $opts->{indent} ? " "x(2*$opts->{indent}) : '';
-
-    # Determine if we're doing Key Value Pairs
-    my $DO_KV = (scalar(@input) % 2 == 0 ) && (exists $opts->{kv} && $opts->{kv} == 1) ? 1 : 0;
-
-    if( $DO_KV ) {
-        while( @input ) {
-            my $k = shift @input;
-            # We only colorize the value
-            my $v = colorize($color, shift @input );
-            push @output, join($DEF{KV_FORMAT}, $k, $v);
-        }
-    }
-    else {
-        foreach my $msg ( map { colorize($color, $_); } @input) {
-            push @output, $msg;
-        }
-    }
-    # Do clearing
-    print "\n"x$opts->{clear} if exists $opts->{clear};
-    # Print output
-    print "${indent}$_\n" for @output;
-}
-sub verbose {
-    my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
-    $opts->{level} = 1 unless exists $opts->{level};
-    my @msgs=@_;
-
-    if( !$DEF{DEBUG} ) {
-        return unless $DEF{VERBOSE} >= $opts->{level};
-    }
-    output( $opts, @msgs );
-}
-sub debug {
-    my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
-    my @msgs=@_;
-    return unless $DEF{DEBUG};
-    output( $opts, @msgs );
-}
-
 __END__
-
-=head1 NAME
-
-es-status.pl - Get Information about the ElasticSearch Cluster
 
 =head1 SYNOPSIS
 
@@ -357,7 +208,6 @@ es-status.pl --health --verbose --color
 Options:
     --help              print help
     --manual            print full manual
-    --host              The host to query, default is localhost
 
 Query Modes:
     --health            Display overall cluster health (--verbose shows more detail)
@@ -367,11 +217,9 @@ Query Modes:
 
     --all               Run all handlers!
 
-Output modifiers:
-    --csv               Output key/value pairs using comma as separator (default is a space)
-    --color             Use coloring in the final report
-    --verbose           Send additional messages (incremental, ie -vvv)
-    --debug             Send copious amounts of useless data to STDERR
+=from_other App::ElasticSearch::Utilities / ARGS / ALL
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -415,16 +263,6 @@ Displays the details on index segmentation, use --verbose to get more informatio
 Displays the details on index settings, use --verbose to get more information
 
     ./es-status.pl --settings --verbose
-
-=item B<verbose>
-
-Enable verbose output from run modes
-
-=item B<debug>
-
-I'm the dude writing this script, so show me ALL THE THINGS!
-
-=back
 
 =head1 DESCRIPTION
 

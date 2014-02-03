@@ -5,27 +5,15 @@ use strict;
 use warnings;
 use feature qw(state);
 
-BEGIN {
-    # Clear out any proxy settings
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
-}
-
-use DateTime;
-use Elasticsearch::Compat;
-use JSON;
-use LWP::Simple;
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Pod::Usage;
-use App::ElasticSearch::Utilities qw(:all);
+use CLI::Helpers qw(:all);
+use App::ElasticSearch::Utilities qw(es_connect es_pattern es_nodes es_indices);
 
 #------------------------------------------------------------------------#
 # Argument Collection
 my %opt;
 GetOptions(\%opt,
-    'local',
-    'host:s',
-    'port:i',
-    'pattern:s',
     'sort:s',
     'format:s',
     'view:s',
@@ -43,25 +31,12 @@ GetOptions(\%opt,
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
-#------------------------------------------------------------------------#
-# Host or Local
-pod2usage(1) unless defined $opt{local} or defined $opt{host};
-
-# Regexes for Pattern Expansion
-my %REGEX = (
-    '*'  => qr/.*/,
-    '?'  => qr/.?/,
-    DATE => qr/\d{4}[.\-]?\d{2}[.\-]?\d{2}/,
-    ANY  => qr/.*/,
-);
 # Configuration
 my %CFG = (
-    port      => 9200,
     sort      => 'name',
     format    => 'pretty',
     view      => 'node',
     limit     => 0,
-    'dry-run' => 0,
 );
 my %VALID = (
     format => {map { $_ => 1 } qw(pretty raw)},
@@ -85,56 +60,21 @@ foreach my $setting (keys %CFG) {
         }
     }
 }
-$opt{pattern} = '*' unless exists $opt{pattern};
+# Get the pattern we're using
+my $PATTERN = es_pattern();
 
-my $PATTERN = $opt{pattern};
+# Indices and Nodes
+my @INDICES = es_indices();
+my %NODES = es_nodes();
 
-foreach my $literal ( keys %REGEX ) {
-    $opt{pattern} =~ s/\Q$literal\E/$REGEX{$literal}/g;
-}
-
-# Create the target uri for the ES Cluster
-my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';
-$TARGET .= ":$CFG{port}";
-debug("Target is: $TARGET");
-debug_var(\%CFG);
-
-my $es = Elasticsearch::Compat->new(
-    servers   => [ $TARGET ],
-    transport => 'http',
-    timeout   => 0,     # Do Not Timeout
-);
-
-# Delete Indexes older than a certain point
-my $d_res = $es->cluster_state(
-    filter_routing_table => 1,
-);
-
-my $INDICES = $d_res->{metadata}{indices};
-if ( !defined $INDICES ) {
-    output({color=>"red"}, "Unable to locate indices in status!");
-    exit 1;
-}
-
-# Node names
-my %NODES = ();
-foreach my $id ( keys %{ $d_res->{nodes} } ) {
-    $NODES{$id} = $d_res->{nodes}{$id}{name};
-}
 # Loop through the indices and take appropriate actions;
 my %indices = ();
 my %nodes = ();
-foreach my $index (sort keys %{ $INDICES }) {
-    debug("Checking '$index' against '$PATTERN'");
-
-    next unless $index =~ /^$opt{pattern}/;
+foreach my $index (@INDICES) {
     verbose({color=>'green'}, "$index - Gathering statistics");
 
-    my $result = undef;
-    eval {
-        $result = $es->index_status( index => $index );
-    };
-    if( my $err = $@ ) {
+    my $result = es_request('_status', { index => $index });
+    if( !defined $result ) {
         output({color=>'magenta',indent=>1}, "+ Unable to fetch index status!");
         next;
     }
@@ -175,7 +115,7 @@ foreach my $index (sort keys %{ $INDICES }) {
     $indices{$index}->{shards} = \%shards;
 }
 
-output({color=>'white'}, "Storage data for $CFG{view} from indices matching '$PATTERN'");
+output({color=>'white'}, "Storage data for $CFG{view} from indices matching '$PATTERN->{string}'");
 if( $CFG{view} eq 'index' ) {
     my $displayed = 0;
     foreach my $index (sort indices_by keys %indices) {
@@ -246,18 +186,16 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --local             Poll localhost and use name reported by ES
-    --host|-H           Host to poll for statistics
-    --local             Assume localhost as the host
-    --pattern           Apply to indexes whose name matches this pattern
     --view              Show by node or index, default node
     --format            Output format for numeric data, pretty(default) or raw
     --sort              Sort by, name(default) or size
     --limit             Show only the top N, default no limit
     --asc               Sort ascending
     --desc              Sort descending (default)
-    --quiet             Ideal for running on cron, only outputs errors
-    --verbose           Send additional messages to STDERR
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -270,18 +208,6 @@ Print this message and exit
 =item B<manual>
 
 Print this message and exit
-
-=item B<local>
-
-Optional, operate on localhost (if not specified, --host required)
-
-=item B<host>
-
-Optional, the host to maintain (if not specified --local required)
-
-=item B<pattern>
-
-Optional: Use this pattern to match indexes, defaults to *
 
 =item B<view>
 
@@ -303,11 +229,6 @@ Sort ascending
 
 Sort descending, the default
 
-
-=item B<verbose>
-
-Verbose data, see what's happening
-
 =back
 
 =head1 DESCRIPTION
@@ -324,16 +245,5 @@ Usage:
 
     # Show the "newest" logstash index
     $ es-storage-data.pl --local --view index --limit 1
-
-
-=head2 PATTERNS
-
-Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
-regular expressions.  Those patterns are:
-
-    *       expands to match any number of any characters.
-    ?       expands to match any single character.
-    DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
-    ANY     expands to match any number of any characters.
 
 =cut

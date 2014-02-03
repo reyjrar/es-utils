@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 1.5
+version 2.0
 
 # SYNOPSIS
 
@@ -12,19 +12,168 @@ This library contains utilities for unified interfaces in the scripts.
 
 This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
-Included is:
+Included are:
 
-    scripts/es-status.pl - Command line utility for ES Metrics
-    scripts/es-metrics-to-graphite.pl - Send ES Metrics to Graphite or Cacti
+__SEARCHING__:
+
+    scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
+
+__MONITORING__:
+
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
+    scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
+    scripts/es-status.pl - Command line utility for ES Metrics
+    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+
+__MAINTENANCE__:
+
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
-    scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-alias-manager.pl - Manage index aliases automatically
+
+__MANAGEMENT__:
+
+    scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
 
+__DEPRECATED__:
+
+    scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
+
 The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.
+
+# FUNCTIONS
+
+## es\_pattern
+
+Returns a hashref of the pattern filter used to get the indexes
+    {
+        string => '\*',
+        re     => '.\*',
+    }
+
+## es\_connect
+
+Without options, this connects to the server defined in the args.  If passed
+an array ref, it will use that as the connection definition.
+
+## es\_request(\[$handle\],$command,{ method => 'GET', parameters => { a => 1 } }, {})
+
+Retrieve URL from ElasticSearch, returns a hash reference
+
+First hash ref contains options, including:
+
+    uri_param           Query String Parameters
+    index               Index name
+    type                Index type
+    method              Default is GET
+
+## es\_nodes
+
+Returns the hash of index meta data.
+
+## es\_indices\_meta
+
+Returns the hash of index meta data.
+
+## es\_indices
+
+Returns a list of active indexes matching the filter criteria specified on the command
+line.  Can handle indices named:
+
+    logstash-YYYY.MM.DD
+    dcid-logstash-YYYY.MM.DD
+    logstash-dcid-YYYY.MM.DD
+    logstash-YYYY.MM.DD-dcid
+
+Makes use of --datesep to determine where the date is.
+
+## es\_index\_days\_old( 'index-name' )
+
+Return the number of days old this index is.
+
+## es\_index\_shard\_replicas( 'index-name' )
+
+Returns the number of replicas for a given index.
+
+## es\_index\_valid( 'index-name' )
+
+Checks if the specified index is valid
+
+## es\_close\_index('index-name')
+
+Closes an index
+
+## es\_open\_index('index-name')
+
+Open an index
+
+## es\_delete\_index('index-name')
+
+Deletes an index
+
+## es\_optimize\_index('index-name')
+
+Optimize an index to a single segment per shard
+
+## es\_index\_segments( 'index-name' )
+
+Exposes GET /$index/\_segments
+
+Returns the segment data from the index in hashref:
+
+## es\_segment\_stats($index)
+
+Return the number of shards and segments in an index as a hashref
+
+## es\_index\_stats( 'index-name' )
+
+Exposes GET /$index/\_stats
+
+Returns a hashref
+
+## es\_settings()
+
+Exposes GET /\_settings
+
+Returns a hashref
+
+## es\_node\_stats()
+
+Exposes GET /\_nodes/stats
+
+Returns a hashref
+
+## def('key')
+
+Exposes Definitions grabbed by options parsing
+
+# ARGS
+
+From App::ElasticSearch::Utilities:
+
+    --local         Use localhost as the elasticsearch host
+    --host          ElasticSearch host to connect to
+    --port          HTTP port for your cluster
+    --noop          Any operations other than GET are disabled
+    --timeout       Timeout to ElasticSearch, default 30
+    --keep-proxy    Do not remove any proxy settings from %ENV
+    --index         Index to run commands against
+    --base          For daily indexes, reference only those starting with "logstash"
+                     (same as --pattern logstash-* or logstash-DATE)
+    --datesep       Date separator, default '.' also (--date-separator)
+    --pattern       Use a pattern to operate on the indexes
+    --days          If using a pattern or base, how many days back to go, default: all
+
+## ARGUMENT GLOBALS
+
+Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
+
+    ---
+    host: esproxy.example.com
+    port: 80
+    timeout: 10
 
 # INSTALL
 
@@ -59,16 +208,20 @@ directory as your Perl executable.
 
 The tools are all wrapped in their own documentation, please see:
 
-    es-status.pl --help
-    es-metric-to-graphite.pl --help
-    es-nagios-check.pl --help
-    es-daily-index-maintenance.pl --help
-    es-copy-index.pl --help
-    es-alias-manager.pl --help
-    es-apply-settings.pl --help
-    es-storage-data.pl --help
+    $UTILITY --help
+    $UTILITY --manual
 
 For individual options and capabilities
+
+## PATTERNS
+
+Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
+regular expressions.  Those patterns are:
+
+    *       expands to match any number of any characters.
+    ?       expands to match any single character.
+    DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
+    ANY     expands to match any number of any characters.
 
 ## CONTRIBUTORS
 

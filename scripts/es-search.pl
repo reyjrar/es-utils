@@ -4,19 +4,11 @@
 use strict;
 use warnings;
 
+use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(:all);
 use Carp;
-use DateTime;
-use Elasticsearch::Compat;
-use File::Basename;
-use File::Spec;
-use FindBin;
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
-use JSON::XS;
-use MIME::Lite;
 use Pod::Usage;
-use Sys::Hostname;
-use YAML;
 
 #------------------------------------------------------------------------#
 # Argument Parsing
@@ -27,14 +19,8 @@ GetOptions(\%OPT,
     'exists:s',
     'missing:s',
     'size|n:i',
-    'index:s',
-    'base:s',
     'show:s',
-    'days:i',
-    'host:s',
-    'port:i',
     'fields',
-    'no-refresh',
     'help|h',
     'manual|m',
 );
@@ -50,46 +36,22 @@ pod2usage(-exitval => 0, -verbose => 2) if $OPT{manual};
 #--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
-    size         => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
-    base         => (exists $OPT{base} && length $OPT{base} ? $OPT{base} : 'logstash'),
-    days         => (exists $OPT{days} && $OPT{days} > 0 ? int($OPT{days}) : 5),
-    port         => (exists $OPT{port} && $OPT{port} > 0 ? $OPT{port} : 9200),
-    'no-refresh' => exists $OPT{'no-refresh'} ? $OPT{'no-refresh'} : 0,
+    size => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
 );
 
 #------------------------------------------------------------------------#
-# Create the target uri for the ES Cluster
-my $TARGET = exists $OPT{host} && defined $OPT{host} ? $OPT{host} : 'localhost';
-$TARGET .= ":$CONFIG{port}";
-
-debug("Target is: $TARGET");
-debug({color=>"magenta"}, "Configuration");
-debug_var(\%CONFIG);
-
-# Connect to ElasticSearch
-my $ES = Elasticsearch::Compat->new(
-    servers   => $TARGET,
-    transport  => 'http',
-    timeout    => '60s',
-    no_refresh => $OPT{'no-refresh'},
-);
-
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
-my @indices = ();
-if ( exists $OPT{index} && defined $OPT{index} ) {
-    my @chkidx=split /\,/, $OPT{index};
-    push @indices, grep { valid_index($_) } @chkidx;
+my %by_age = ();
+my %indices = map { $_ => es_index_days_old($_) } es_indices();
+foreach my $index (sort by_index_age keys %indices) {
+    my $age = $indices{$index};
+    $by_age{$age} ||= [];
+    push @{ $by_age{$age} }, $index;
 }
-if( !@indices ) {
-    my $dt = DateTime->now();
-    my @days = $ORDER eq 'asc' ? reverse(0..$CONFIG{days}) : 0..$CONFIG{days};
-    foreach my $date (@days) {
-        my $index = $CONFIG{base} . '-' . $dt->clone->subtract(days => $date)->ymd('.');
-        push @indices, $index if valid_index($index);
-    }
-}
+debug_var(\%by_age);
 
+# Which fields to show
 my @SHOW = ();
 if ( exists $OPT{show} && length $OPT{show} ) {
     @SHOW = split /,/, $OPT{show};
@@ -104,14 +66,23 @@ pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless defined 
 # Fix common mistakes
 $search_string =~ s/\s+and\s+/ AND /g;
 $search_string =~ s/\s+or\s+/ OR /g;
+$search_string =~ s/\s+not\s+/ NOT /g;
 
 # Process extra parameters
 my %extra = ();
+my @filters = ();
 if( exists $OPT{exists} ) {
-    $extra{filter} = { exists => { field => $OPT{exists} } };
+    foreach my $field (split /[,:]/, $OPT{exists}) {
+        push @filters, { exists => { field => $OPT{exists} } };
+    }
 }
 if( exists $OPT{missing} ) {
-    $extra{filter} = { missing => { field => $OPT{missing} } };
+    foreach my $field (split /[,:]/, $OPT{missing}) {
+        push @filters, { missing => { field => $OPT{exists} } };
+    }
+}
+if( @filters ) {
+    $extra{filter} = @filters > 1 ? { and => \@filters } : shift @filters;
 }
 
 my $size = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
@@ -120,30 +91,36 @@ my $TOTAL_HITS = 0;
 my $duration = 0;
 my $displayed = 0;
 my $header=0;
-foreach my $index ( @indices ) {
-    my $result;
+foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
     my $start=time();
-    eval {
-        $result = $ES->search(
-            index   => $index,
-            query   => { query_string => { query => $search_string } } ,
-            size    => $size,
-            sort   => [ { '@timestamp' => $ORDER } ],
-            scroll  => '10s',
-            timeout => '5s',
+    my $result = es_request('_search',
+        # Search Parameters
+        {
+            index     => $by_age{$age},
+            uri_param => {
+                timeout     => '10s',
+                scroll      => '30s',
+            }
+        },
+        # Search Body
+        {
+            size       => $size,
+            query      => { query_string => { query => $search_string } } ,
+            sort       => [ { '@timestamp' => $ORDER } ],
             %extra,
-        );
-    };
-    if( my $error = $@ ) {
-        croak "ElasticSearch Error -> $error";
+        }
+    );
+    if( !defined $result ) {
+        croak "Unable to search the cluster";
     }
     $duration += time() - $start;
-    push @displayed_indices, $index;
+    push @displayed_indices, @{ $by_age{$age} };
     $TOTAL_HITS += $result->{hits}{total};
 
     my @always = qw(@timestamp);
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
     while( $result ) {
+
         my $hits = $result->{hits}{hits};
         last unless @{$hits};
 
@@ -170,17 +147,23 @@ foreach my $index ( @indices ) {
         }
 
         last if $displayed >= $CONFIG{size};
-        $result = $ES->scroll(
-            scroll_id => $result->{_scroll_id},
-            scroll    => '10s',
-        );
+
+        # Scroll forward
+        $start = time;
+        $result = es_request('_search/scroll', {
+            uri_param => {
+                scroll_id => $result->{_scroll_id},
+                scroll    => '30s',
+            }
+        });
+        $duration += time - $start;
     }
     last if $displayed >= $CONFIG{size};
 }
 output({stderr=>1,color=>'yellow'},
     "# Search string: $search_string",
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
-    sprintf("# Indexes (%d of %d) searched: %s\n", scalar(@displayed_indices), scalar(@indices), join(',', @displayed_indices)),
+    sprintf("# Indexes (%d of %d) searched: %s\n", scalar(@displayed_indices), scalar(keys %indices), join(',', @displayed_indices)),
 );
 
 sub extract_fields {
@@ -204,32 +187,26 @@ sub extract_fields {
 }
 
 sub show_fields {
-    my $index = shift @indices;
-    my $result = undef;
-    eval {
-        $result = $ES->mapping(index => $index, type => 'syslog');
-    };
-
+    my $index =  (sort by_index_age keys %indices)[0];
+    my $result = es_request('_mapping', { index => $index });
     if(! defined $result) {
         die "unable to read mapping for: $index\n";
     }
+    debug_var($result);
 
-    my $prop_root = $result->{syslog}{properties};
-    my @keys = extract_fields($prop_root);
+    my @mappings = grep { $_ ne '_default_' } keys %{ $result->{$index} };
+    my @keys = ();
+    foreach my $mapping (@mappings) {
+        next unless exists $result->{$index}{$mapping}{properties};
+        push @keys, extract_fields($result->{$index}{$mapping}{properties});
+    }
 
     print map { "$_\n" } @keys;
 }
-sub valid_index {
-    my ($index) = @_;
-
-    my $result;
-    eval {
-        $result = $ES->index_exists( index => $index );
-    };
-    if( defined $result && exists $result->{ok} && $result->{ok} ) {
-        return 1;
-    }
-    return 0;
+sub by_index_age {
+    return exists $OPT{asc}
+        ? $indices{$b} <=> $indices{$a}
+        : $indices{$a} <=> $indices{$b};
 }
 
 sub expand_ip_to_range {
@@ -253,20 +230,18 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --verbose           Send additional messages to STDERR
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --index             Search only this index by name!
-    --days              Days back, default 5
-    --base              Index basename, default 'logstash' (try: access, proxy)
     --size              Result size, default is 20
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
     --fields            Display the field list for this index!
-    --host              Cluster node to connect to, defaults to localhost
-    --port              HTTP port to connect to, defaults to 9200
-    --no-refresh        Don't refresh server list, useful for use over SSH Tunnels
+
+=from_other App::ElasticSearch::Utilities / ARGS / all
+
+=from_other CLI::Helpers / ARGS / all
 
 =head1 OPTIONS
 
@@ -322,14 +297,6 @@ is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
 =item B<size>
 
 The number of results to show, default is 20.
-
-=item B<host>
-
-Cluster node to connect to, defaults to localhost.
-
-=item B<port>
-
-Transport port, default is 9200
 
 =back
 

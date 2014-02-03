@@ -1,0 +1,5 @@
+# Sample ES Utils Options
+---
+host: searchproxy-01.example.com
+keep-proxy: 1
+days: 7
