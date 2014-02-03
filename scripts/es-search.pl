@@ -7,7 +7,7 @@ use warnings;
 use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(:all);
 use Carp;
-use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
+use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 
 #------------------------------------------------------------------------#

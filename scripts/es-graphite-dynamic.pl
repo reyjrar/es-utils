@@ -4,15 +4,10 @@
 use strict;
 use warnings;
 
-BEGIN {
-    # We don't want to use the proxies set in our environment
-    delete $ENV{$_} for qw(http_proxy HTTP_PROXY https_proxy HTTPS_PROXY);
-}
-
 use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(es_request es_node_stats es_index_stats);
 use IO::Socket::INET;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 
 #------------------------------------------------------------------------#
