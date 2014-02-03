@@ -11,7 +11,9 @@ our $_OPTIONS_PARSED;
 our %_GLOBALS = ();
 our @_CONFIGS = (
     '/etc/es-utils.yaml',
+    '/etc/es-utils.yml',
     "$ENV{HOME}/.es-utils.yaml",
+    "$ENV{HOME}/.es-utils.yml",
 );
 
 use CLI::Helpers qw(:all);
