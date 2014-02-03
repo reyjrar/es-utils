@@ -8,7 +8,7 @@ use feature qw(state);
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 use CLI::Helpers qw(:all);
-use App::ElasticSearch::Utilities qw(es_connect es_pattern es_nodes es_indices);
+use App::ElasticSearch::Utilities qw(es_request es_pattern es_nodes es_indices);
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -106,6 +106,7 @@ foreach my $index (@INDICES) {
                     docs => $instance->{docs}{num_docs},
                 };
             }
+            no warnings;
             $nodes{$node}->{$_} ||= 0 for qw(size shards docs);
             $nodes{$node}->{size} += $instance->{index}{size_in_bytes};
             $nodes{$node}->{shards}++;
