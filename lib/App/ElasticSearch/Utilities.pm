@@ -294,7 +294,7 @@ my %_nodes;
 sub es_nodes {
     if(!keys %_nodes) {
         my $res = es_request('_cluster/state', {
-            params => {
+            uri_param => {
                 filter_nodes         => 0,
                 filter_routing_table => 1,
                 filter_indices       => 1,
@@ -325,7 +325,7 @@ sub es_indices_meta {
 
     if(!defined $_indices_meta) {
         my $result = es_request('_cluster/state', {
-            params => {
+            uri_param => {
                 filter_routing_table => 1,
                 filter_nodes         => 1,
                 filter_blocks        => 1,
