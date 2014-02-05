@@ -72,11 +72,22 @@ exit 0;
 # Query functions
 sub handle_health {
     my $stats = es_request('_cluster/health');
+    my $state = es_request('_cluster/state', {
+        uri_param => {
+            filter_routing_table => 1,
+            filter_metadata => 1,
+            filter_blocks => 1,
+            filter_index => 1,
+        },
+    });
 
     output({clear=>1,color=>"cyan"}, "Cluster Health Check", "-="x20);
+    if( defined $state && exists $state->{master_node} && exists $state->{nodes}{$state->{master_node}}) {
+        output({kv=>1,color=>'cyan'}, master => $state->{nodes}{$state->{master_node}}->{name});
+    }
     output({kv=>1,color=>"cyan"}, "name", $stats->{cluster_name});
     output({kv=>1,color=>$stats->{status}}, "health", $stats->{status});
-    verbose({kv=>1}, "nodes", $stats->{number_of_nodes});
+    output({kv=>1}, "nodes", $stats->{number_of_nodes});
 
     if( $stats->{status} ne "green" ) {
         output({kv=>1,color=>"red"}, "shards_unassigned", $stats->{unassigned_shards});

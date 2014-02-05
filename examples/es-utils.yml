@@ -3,3 +3,11 @@
 host: searchproxy-01.example.com
 keep-proxy: 1
 days: 7
+facet_whitelist:
+  - src_ip
+  - dst_ip
+  - program
+  - method
+  - status
+  - file
+  - filetype
