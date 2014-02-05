@@ -9,6 +9,14 @@ use App::ElasticSearch::Utilities qw(:all);
 use Carp;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
+use Data::Dumper;
+use POSIX qw(strftime);
+use YAML;
+
+# For Elements which are data structures
+local $Data::Dumper::Indent = 0;
+local $Data::Dumper::Terse = 1;
+local $Data::Dumper::Sortkeys = 1;
 
 #------------------------------------------------------------------------#
 # Argument Parsing
@@ -20,6 +28,8 @@ GetOptions(\%OPT,
     'missing:s',
     'size|n:i',
     'show:s',
+    'top:s',
+    'tail',
     'fields',
     'help|h',
     'manual|m',
@@ -42,6 +52,7 @@ my %CONFIG = (
 #------------------------------------------------------------------------#
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
+$ORDER = 'asc' if exists $OPT{tail};
 my %by_age = ();
 my %indices = map { $_ => es_index_days_old($_) } es_indices();
 foreach my $index (sort by_index_age keys %indices) {
@@ -50,11 +61,16 @@ foreach my $index (sort by_index_age keys %indices) {
     push @{ $by_age{$age} }, $index;
 }
 debug_var(\%by_age);
+my @AGES = sort { $ORDER eq 'asc' ? $b <=> $a : $a <=> $b } keys %by_age;
 
 # Which fields to show
 my @SHOW = ();
+my %HASH_FIELDS = ();
 if ( exists $OPT{show} && length $OPT{show} ) {
     @SHOW = split /,/, $OPT{show};
+    # hash will contain '{fieldname.key1.key2.key3}' => { field => 'fieldname', key => [ 'key1', 'key2', 'key3' ] }
+    %HASH_FIELDS = map { my @v = split( /\./, substr( $_, 1, -1 ) ); $_ => { field => shift( @v ), key => \@v  } } grep { /^\{.+\..+\}$/ } @SHOW;
+    debug_var(\%HASH_FIELDS);
 }
 
 if( $OPT{fields} ) {
@@ -62,6 +78,8 @@ if( $OPT{fields} ) {
     exit 0;
 }
 pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless defined $search_string and length $search_string;
+pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --top together'}) if exists $OPT{tail} && $OPT{top};
+pod2usage({-exitval => 1, -msg => 'Please specify --show with --tail'}) if exists $OPT{tail} && !@SHOW;
 
 # Fix common mistakes
 $search_string =~ s/\s+and\s+/ AND /g;
@@ -85,14 +103,56 @@ if( @filters ) {
     $extra{filter} = @filters > 1 ? { and => \@filters } : shift @filters;
 }
 
+my $DONE = 1;
+local $SIG{INT} = sub { $DONE=1 };
+
+my $facet_header = '';
+if( exists $OPT{top} ) {
+    my @facet_fields = grep { length($_) && es_facet_whitelist($_) } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
+    croak("Option --top takes up to two whitelisted fields\n")
+        unless @facet_fields > 0 && @facet_fields < 3;
+
+    my @facet;
+    if ( scalar @facet_fields == 1 ) {
+        @facet = ( field => $facet_fields[0] );
+        $facet_header = "count\t" . $facet_fields[0];
+    } else {
+        #generate a script as
+        #$extra{facets} = { top => { terms => { fields => ['@fields.file', '@fields.src_ip'], size => $CONFIG{size} } } };  #this does not work as intended, d
+        my $script_field = join " + ':' + ", map { "_doc['$_'].value" } @facet_fields;
+        @facet = ( script_field => $script_field );
+        $facet_header = "count\t" . join ':', @facet_fields;
+    }
+    $extra{facets} = { top => { terms => { size => $CONFIG{size}, @facet }, facet_filter => exists $extra{filter} ? $extra{filter} : {} } };
+    if( @AGES > 1 ) {
+        output({color=>'red',stderr=>1},"!! Faceting on multiple days disabled, only faceting for " . join(',', $AGES[0]));
+        @AGES = ($AGES[0]);
+    }
+    $CONFIG{size} = 0;  # and we do not want any results other than the facet data
+}
+elsif(exists $OPT{tail}) {
+    $CONFIG{size} = 10;
+    @AGES = ($AGES[-1]);
+    $DONE = 0;
+}
+
 my $size = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
-my @displayed_indices = ();
+my %displayed_indices = ();
 my $TOTAL_HITS = 0;
+my $last_hit_ts = undef;
 my $duration = 0;
 my $displayed = 0;
 my $header=0;
-foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
+my $age = undef;
+
+while( !$DONE || @AGES ) {
+    $age = @AGES ? shift @AGES : $age;
+    select(undef,undef,undef,1) if exists $OPT{tail} && $last_hit_ts;
     my $start=time();
+    $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start));
+    my $local_search_string = exists $OPT{tail} ? sprintf('%s AND @timestamp:[%s TO *]', $search_string, $last_hit_ts)
+                                                : $search_string;
+    debug({color=>'yellow'},"Search String is $local_search_string");
     my $result = es_request('_search',
         # Search Parameters
         {
@@ -105,33 +165,31 @@ foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
         # Search Body
         {
             size       => $size,
-            query      => { query_string => { query => $search_string } } ,
+            query      => { query_string => { query => $local_search_string } } ,
             sort       => [ { '@timestamp' => $ORDER } ],
             %extra,
         }
     );
-    if( !defined $result ) {
-        croak "Unable to search the cluster";
-    }
     $duration += time() - $start;
-    push @displayed_indices, @{ $by_age{$age} };
+    next unless defined $result;
+
+    $displayed_indices{$_} = 1 for @{ $by_age{$age} };
     $TOTAL_HITS += $result->{hits}{total};
 
     my @always = qw(@timestamp);
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
-    while( $result ) {
-
-        my $hits = $result->{hits}{hits};
-        last unless @{$hits};
-
+    while( $result || !$DONE ) {
+        my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
         foreach my $hit (@{ $hits }) {
+            $last_hit_ts = $hit->{_source}{'@timestamp'};
             my $record = {};
             if( @SHOW ) {
-                foreach my $f (qw(@timestamp)) {
+                foreach my $f (@always) {
                     $record->{$f} = $hit->{_source}{$f};
                 }
                 foreach my $f (@SHOW) {
-                    $record->{$f} = exists $hit->{_source}{$f} ? $hit->{_source}{$f}
+                    $record->{$f} = exists $HASH_FIELDS{$f} ? extract_value( $HASH_FIELDS{$f}{key}, $hit->{_source}{$HASH_FIELDS{$f}{field}}, $hit->{_source}{'@fields'}{$HASH_FIELDS{$f}{field}} )
+                                  : exists $hit->{_source}{$f} ? $hit->{_source}{$f}
                                   : exists $hit->{_source}{'@fields'}{$f} ? $hit->{_source}{'@fields'}{$f}
                                   : undef;
                 }
@@ -139,14 +197,28 @@ foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
             else {
                 $record = $hit->{_source};
             }
-            my $output =  @SHOW ? join("\t", map { exists $record->{$_} && defined $record->{$_} ? $record->{$_} : '-' } @always,@SHOW)
-                       : Dump $record;
+            # Determine how this record is output
+            my $output = undef;
+            if( @SHOW ) {
+                my @cols=();
+                foreach my $f (@always,@SHOW) {
+                    my $v = '-';
+                    if( exists $record->{$f} && defined $record->{$f} ) {
+                        $v = ref $record->{$f} ? Dumper $record->{$f} : $record->{$f};
+                    }
+                    push @cols,$v;
+                }
+                $output = join("\t",@cols);
+            }
+            else {
+                $output = Dump $record;
+            }
+
             output($output);
             $displayed++;
-            last if $displayed >= $CONFIG{size};
+            last if $DONE && $displayed >= $CONFIG{size};
         }
-
-        last if $displayed >= $CONFIG{size};
+        last if $DONE && $displayed >= $CONFIG{size};
 
         # Scroll forward
         $start = time;
@@ -157,14 +229,26 @@ foreach my $age ( sort { $OPT{asc} ? $b <=> $a : $a <=> $b } keys %by_age ) {
             }
         });
         $duration += time - $start;
+        last unless @{ $result->{hits}{hits} } > 0;
     }
-    last if $displayed >= $CONFIG{size};
+    last if $DONE && $displayed >= $CONFIG{size};
 }
 output({stderr=>1,color=>'yellow'},
     "# Search string: $search_string",
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
-    sprintf("# Indexes (%d of %d) searched: %s\n", scalar(@displayed_indices), scalar(keys %indices), join(',', @displayed_indices)),
+    sprintf("# Indexes (%d of %d) searched: %s\n",
+            scalar(keys %displayed_indices),
+            scalar(keys %indices),
+            join(',', sort keys %displayed_indices)
+    ),
 );
+
+sub extract_value {
+    my ($key, $v1, $v2) = @_;
+    my $value = $v1 ? $v1 : $v2;
+    $value = ref($value) eq 'HASH' ? $value->{$_} : ref($value) eq 'ARRAY' ? $value->[$_] : undef for @{ $key };
+    return $value;
+}
 
 sub extract_fields {
     my $ref = shift;
@@ -204,7 +288,7 @@ sub show_fields {
     print map { "$_\n" } @keys;
 }
 sub by_index_age {
-    return exists $OPT{asc}
+    return $ORDER eq 'asc'
         ? $indices{$b} <=> $indices{$a}
         : $indices{$a} <=> $indices{$b};
 }
