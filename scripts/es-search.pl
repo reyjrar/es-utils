@@ -125,7 +125,7 @@ if( exists $OPT{top} ) {
     }
     $extra{facets} = { top => { terms => { size => $CONFIG{size}, @facet }, facet_filter => exists $extra{filter} ? $extra{filter} : {} } };
     if( @AGES > 1 ) {
-        output({color=>'red',stderr=>1},"!! Faceting on multiple days disabled, only faceting for " . join(',', $AGES[0]));
+        output({color=>'red',stderr=>1},"!! Faceting on multiple days disabled, only faceting for " . join(',', @{ $by_age{$AGES[0]} }));
         @AGES = ($AGES[0]);
     }
     $CONFIG{size} = 0;  # and we do not want any results other than the facet data
@@ -180,6 +180,16 @@ while( !$DONE || @AGES ) {
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
     while( $result || !$DONE ) {
         my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
+        my $facets = exists $result->{facets} ? $result->{facets}{top}{terms} : [];
+
+        if( @$facets ) {
+            print "$facet_header\n";
+            for my $facet ( @$facets ) {
+                print "$facet->{count}\t$facet->{term}\n";
+            }
+            last;
+        }
+
         foreach my $hit (@{ $hits }) {
             $last_hit_ts = $hit->{_source}{'@timestamp'};
             my $record = {};
