@@ -144,6 +144,7 @@ my $duration = 0;
 my $displayed = 0;
 my $header=0;
 my $age = undef;
+my %last_batch_id=();
 
 while( !$DONE || @AGES ) {
     $age = @AGES ? shift @AGES : $age;
@@ -180,8 +181,9 @@ while( !$DONE || @AGES ) {
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
     while( $result || !$DONE ) {
         my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
-        my $facets = exists $result->{facets} ? $result->{facets}{top}{terms} : [];
 
+        # Handle Faceting
+        my $facets = exists $result->{facets} ? $result->{facets}{top}{terms} : [];
         if( @$facets ) {
             print "$facet_header\n";
             for my $facet ( @$facets ) {
@@ -190,8 +192,16 @@ while( !$DONE || @AGES ) {
             last;
         }
 
+        # Reset the last batch ID if we have new data
+        %last_batch_id = () if @{$hits} > 0 && $last_hit_ts ne $hits->[-1]->{_source}{'@timestamp'};
+        debug({color=>'magenta'}, "+ ID cache is now empty.") unless keys %last_batch_id;
+
         foreach my $hit (@{ $hits }) {
+            # Skip if we've seen this record
+            next if exists $last_batch_id{$hit->{_id}};
+
             $last_hit_ts = $hit->{_source}{'@timestamp'};
+            $last_batch_id{$hit->{_id}}=1;
             my $record = {};
             if( @SHOW ) {
                 foreach my $f (@always) {
