@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 2.1
+version 2.2
 
 # SYNOPSIS
 
@@ -24,6 +24,7 @@ __MONITORING__:
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
     scripts/es-status.pl - Command line utility for ES Metrics
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    scripts/es-nodes.pl - View node information
 
 __MAINTENANCE__:
 
@@ -144,6 +145,36 @@ Returns a hashref
 Exposes GET /\_nodes/stats
 
 Returns a hashref
+
+## es\_facet\_whitelist('field name')
+
+Returns if the field is whitelisted
+
+Facet whitelists must be set in a configuration file.  Currently, the
+search path for config files is
+
+    /etc/es-utils.yaml
+    /etc/es-utils.yml
+    $ENV{HOME}/.es-utils.yaml
+    $ENV{HOME}/.es-utils.yml
+
+This does mean that users can override the whitelist, but this is by design.  If one of those
+files does not specify a facet\_whitelist element as an array, the whitelist is not restricted.
+
+Examples:
+
+\---
+facet\_whitelist:
+  - src\_ip
+  - src\_ip\_country
+  - dst\_ip
+  - dst\_ip\_country
+  - file
+  - filetype
+  - program
+  - status
+  - method
+  - protocol
 
 ## def('key')
 

@@ -325,9 +325,10 @@ Options:
     --help              print help
     --manual            print full manual
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
+    --tail              Continue the query until CTRL+C is sent
+    --top               Perform a facet on the fields, by a comma separated list of up to 2 items
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
-    --index             Search only this index by name!
     --size              Result size, default is 20
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
@@ -354,6 +355,20 @@ Print detailed help with examples
 Comma separated list of fields to display in the dump of the data
 
     --show src_ip,crit,file,out_bytes
+
+=item B<tail>
+
+Repeats the query every second until CTRL+C is hit, displaying new results.  Due to the implementation,
+this mode enforces that only the most recent indices are searched.  Also, given the output is continuous, you must
+specify --show with this option.
+
+=item B<top>
+
+Comma separated list of fields to facet on.  Given that this uses scripted facets for multi-field facets,
+it is limited to faceting on up to 2 fields.  This option is not available when using --tail
+
+    --top src_ip
+
 
 =item B<exists>
 
@@ -413,6 +428,12 @@ Examples might include:
     # Search for ip subnet client IP 1.2.3.0 to 1.2.3.255 or 1.2.0.0 to 1.2.255.255
     es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.*"
     es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.*"
+
+    # Show the top src_ip for 'www.example.com'
+    es-search.pl --base access dst:www.example.com --top src_ip
+
+    # Tail the access log for www.example.com 404's
+    es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
 
 Helpful in building queries is the --fields options which lists the fields:
 
