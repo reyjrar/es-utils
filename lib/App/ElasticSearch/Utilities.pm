@@ -113,8 +113,8 @@ foreach my $config_file (@_CONFIGS) {
 my %DEF = (
     # Connection Options
     HOST        => exists $opt{host} ? $opt{host} :
-                   exists $_GLOBALS{host} ? $_GLOBALS{host} :
-                   exists $opt{local} ? 'localhost' : 'localhost',
+                   exists $opt{local} ? 'localhost' :
+                   exists $_GLOBALS{host} ? $_GLOBALS{host} : 'localhost',
     PORT        => exists $opt{port} ? $opt{port} :
                    exists $_GLOBALS{port} ? $_GLOBALS{port} : 9200,
     TIMEOUT     => exists $opt{timeout} ? $opt{timeout} :
