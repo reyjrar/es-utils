@@ -264,8 +264,12 @@ sub es_request {
     }
     $options->{index} = $index if $index ne 'NoIndex';
 
+    # Figure out if we're modifying things
+    my $modification = $url eq '_search' && $options->{method} eq 'POST' ? 0
+                     : $options->{method} ne 'GET';
+
     my ($status,$res);
-    if( $DEF{NOOP} && $options->{method} ne 'GET' ) {
+    if( $DEF{NOOP} && $modification) {
         output({color=>'cyan'}, "Called es_request($index / $options->{command}), but --noop and method is $options->{method}");
         return;
     }

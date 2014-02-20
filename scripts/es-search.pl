@@ -161,7 +161,8 @@ while( !$DONE || @AGES ) {
             uri_param => {
                 timeout     => '10s',
                 scroll      => '30s',
-            }
+            },
+            method => 'POST',
         },
         # Search Body
         {
