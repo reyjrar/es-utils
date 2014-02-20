@@ -40,7 +40,7 @@ my %CFG = (
     'delete-days'    => 90,
     'replicas-min'   => 0,
     'dry-run'        => 0,
-    'replicas-age'   => "1,30",
+    'replicas-age'   => 60,
     timezone         => 'Europe/Amsterdam',
     delete           => 0,
     optimize         => 0,
@@ -75,7 +75,7 @@ $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
 my $es = es_connect();
 
 # Ages for replica management
-my @AGES = grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'};
+my $AGE = (grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'})[-1];
 
 # Retrieve a list of indexes
 my @indices = es_indices(
@@ -102,11 +102,15 @@ foreach my $index (sort @indices) {
         debug({color=>"cyan"}, "$index: index is $days_old days old");
         # Default for replicas is primaries - 1;
         my $replicas = $shards{primaries} - 1;
-        foreach my $age ( @AGES ) {
+        my $iter = int(($AGE/$replicas) + 0.5);
+        my @ages = map { my $v = $_ * $iter; $v < 1 ? 1 : $v } 0 .. $replicas - 1;
+        splice @ages, -1, 1, $AGE;
+        foreach my $age ( @ages ) {
             if ( $days_old >= $age ) {
                 $replicas--;
             }
         }
+        debug({indent=>1}, "+ replica aging (P:$shards{primaries} R:$shards{replicas}->$replicas): " . join(',', @ages));
         $replicas = $CFG{'replicas-min'} if $replicas < $CFG{'replicas-min'};
         if ( $shards{primaries} > 0 && $shards{replicas} != $replicas ) {
             verbose({color=>'yellow'}, "$index: should have $replicas replicas, has $shards{replicas}");
@@ -164,14 +168,14 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --all               Run delete and optimize
+    --all               Run delete, optimize, and replicas tools
     --delete            Run delete indexes older than
     --delete-days       Age of oldest index to keep (default: 90)
     --optimize          Run optimize on indexes
     --optimize-days     Age of first index to optimize (default: 1)
-    --replicas          Sets the number of initial replicas, and manages replica aging
-    --replicas-age      CSV list of ages in days to decrement number of replicas
-    --replicas-min      Minimum number of replicas this index may have, default:0
+    --replicas          Run the replic aging hook
+    --replicas-age      Age of the index to reach the minimum replicas (default:60)
+    --replicas-min      Minimum number of replicas this index may have (default:0)
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -199,18 +203,11 @@ Integer, delete indexes older than this number of days
 
 =item B<replicas>
 
-Sets the number of initial replicas for an index type.  This is used to compute the
-expected number of replicas based on the the age of the index.
-
-    --replicas=2
+Run the replicas hook.
 
 =item B<replicas-age>
 
-A comma separated list of the ages at which to decrement to the number of replicas, the default is:
-
-    --replicas-age 1,30
-
-Can be as long as you'd like, but the replica aging will stop at the replicas-min.
+The age at which we reach --replicas-min, default 60
 
 =item B<replicas-min>
 
@@ -227,6 +224,6 @@ routine deletion and optimization of indexes.
 
 Use with cron:
 
-    22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180
+    22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180 --replicas-age=90 --replicas-min=1
 
 =cut
