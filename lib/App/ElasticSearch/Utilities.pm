@@ -6,7 +6,6 @@ package App::ElasticSearch::Utilities;
 use strict;
 use warnings;
 
-our $ES_CLASS = undef;
 our $_OPTIONS_PARSED;
 our %_GLOBALS = ();
 our @_CONFIGS = (
@@ -745,6 +744,8 @@ The App::ElasticSearch::Utilities module simply serves as a wrapper around the s
 distribution.
 
 =head1 INSTALL
+
+B<CURRENTLY ONLY SUPPORTING 0.90.x VERSIONS OF ELASTICSEARCH>
 
 Recommended install with L<CPAN Minus|http://cpanmin.us>:
 

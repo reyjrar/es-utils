@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 2.3
+version 2.4
 
 # SYNOPSIS
 
@@ -207,6 +207,8 @@ Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils
     timeout: 10
 
 # INSTALL
+
+__CURRENTLY ONLY SUPPORTING 0.90.x VERSIONS OF ELASTICSEARCH__
 
 Recommended install with [CPAN Minus](http://cpanmin.us):
 
