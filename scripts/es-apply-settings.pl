@@ -4,6 +4,7 @@
 use strict;
 use warnings;
 
+use JSON;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 use CLI::Helpers qw(:all);
