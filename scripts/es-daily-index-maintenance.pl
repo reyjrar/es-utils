@@ -89,6 +89,11 @@ foreach my $index (sort @indices) {
 
     my $days_old = es_index_days_old( $index );
 
+    if( $days_old < 1 ) {
+        verbose("$index for today, skipping.");
+        next;
+    }
+
     # Delete the Index if it's too old
     if( $CFG{delete} && $CFG{'delete-days'} < $days_old ) {
         output({color=>"red"}, "$index will be deleted.");
