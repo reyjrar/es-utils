@@ -185,6 +185,7 @@ Options:
     --replicas          Run the replic aging hook
     --replicas-age      Age of the index to reach the minimum replicas (default:60)
     --replicas-min      Minimum number of replicas this index may have (default:0)
+    --replicas-max      Maximum number of replicas this index may have (default:100)
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -223,6 +224,13 @@ The age at which we reach --replicas-min, default 60
 The minimum number of replicas to allow replica aging to set.  The default is 0
 
     --replicas-min=1
+
+=item B<replicas-max>
+
+The maximum number of replicas to allow replica aging to set.  The default is 100
+
+    --replicas-max=2
+
 
 =back
 
