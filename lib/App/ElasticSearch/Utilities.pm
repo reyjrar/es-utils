@@ -163,13 +163,6 @@ foreach my $literal ( keys %PATTERN_REGEX ) {
 }
 
 our $CURRENT_VERSION;
-eval {
-    my $result = es_request('/');
-    debug_var($result);
-    $App::ElasticSearch::Utilities::VersionHacks::CURRENT_VERSION = $CURRENT_VERSION =
-            join('.', (split /\./,$result->{version}{number})[0,1]);
-    debug({color=>'magenta'}, "FOUND VERISON $CURRENT_VERSION");
-};
 
 =func es_pattern
 
@@ -188,6 +181,25 @@ my %_pattern=(
 sub es_pattern {
     return wantarray ? %_pattern : \%_pattern;
 }
+
+sub _get_es_version {
+    my $result = es_request('/');
+
+    eval {
+        my ($status,$reponse) = Elastijk::request({
+            host    => $DEF{HOST},
+            port    => $DEF{PORT},
+            method  => 'GET',
+            command => '/',
+        });
+        if( $status eq "200" ) {
+            $CURRENT_VERSION = join('.', (split /\./,$result->{version}{number})[0,1]);
+        }
+    };
+    $CURRENT_VERSION ||= '0.0';
+    debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");
+    debug_var($result);
+};
 
 =func es_connect
 
@@ -244,6 +256,9 @@ First hash ref contains options, including:
 
 sub es_request {
     my $instance = ref $_[0] eq 'Elastijk::oo' ? shift @_ : es_connect();
+
+    $CURRENT_VERSION = _get_es_version() if !defined $CURRENT_VERSION;
+
     my($url,$options,$body) = _fix_version_request(@_);
 
     # Pull connection options

@@ -25,19 +25,19 @@ my %URI = (
     }
 );
 
-our $CURRENT_VERSION;
-
 sub _fix_version_request {
     my ($url,$options,$data) = @_;
 
-    return @_ unless defined $CURRENT_VERSION;
+    my $version = $App::ElasticSearch::Utilities::CURRENT_VERSION;
+
+    return @_ unless defined $version;
 
     if(exists $URI{$url}) {
-        my $version = join(", ", sort keys %{ $URI{$url} });
-        debug("Method changed in API, evaluating rewrite ($version) against $CURRENT_VERSION");
-        if(exists $URI{$url}->{$CURRENT_VERSION}) {
-            debug({indent=>1,color=>'yellow'}, "+ Rewriting $url to $URI{$url}->{$CURRENT_VERSION}");
-            $url = $URI{$url}->{$CURRENT_VERSION};
+        my $versions = join(", ", sort keys %{ $URI{$url} });
+        debug("Method changed in API, evaluating rewrite ($versions) against $version");
+        if(exists $URI{$url}->{$version}) {
+            debug({indent=>1,color=>'yellow'}, "+ Rewriting $url to $URI{$url}->{$version}");
+            $url = $URI{$url}->{$version};
         }
     }
 
