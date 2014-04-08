@@ -50,6 +50,7 @@ use Sub::Exporter -setup => {
         index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_shard_replicas)],
     },
 };
+use App::ElasticSearch::Utilities::VersionHacks qw(_fix_version_request);
 
 =head1 ARGS
 
@@ -161,6 +162,15 @@ foreach my $literal ( keys %PATTERN_REGEX ) {
     $PATTERN =~ s/\Q$literal\E/$PATTERN_REGEX{$literal}/g;
 }
 
+our $CURRENT_VERSION;
+eval {
+    my $result = es_request('/');
+    debug_var($result);
+    $App::ElasticSearch::Utilities::VersionHacks::CURRENT_VERSION = $CURRENT_VERSION =
+            join('.', (split /\./,$result->{version}{number})[0,1]);
+    debug({color=>'magenta'}, "FOUND VERISON $CURRENT_VERSION");
+};
+
 =func es_pattern
 
 Returns a hashref of the pattern filter used to get the indexes
@@ -234,7 +244,7 @@ First hash ref contains options, including:
 
 sub es_request {
     my $instance = ref $_[0] eq 'Elastijk::oo' ? shift @_ : es_connect();
-    my($url,$options,$body) = @_;
+    my($url,$options,$body) = _fix_version_request(@_);
 
     # Pull connection options
     $options->{$_} = $instance->{$_} for qw(host port);
@@ -456,8 +466,10 @@ sub es_index_shards {
     my %shards = map { $_ => 0 } qw(primaries replicas);
     my $result = es_request('_settings', {index=>$index});
     if( defined $result && ref $result eq 'HASH')  {
-        $shards{primaries} = $result->{$index}{settings}{'index.number_of_shards'};
-        $shards{replicas}  = $result->{$index}{settings}{'index.number_of_replicas'};
+        $shards{primaries} = $CURRENT_VERSION < 1.0 ? $result->{$index}{settings}{'index.number_of_shards'}
+                                                    : $result->{$index}{settings}{index}{number_of_shards};
+        $shards{replicas}  = $CURRENT_VERSION < 1.0 ? $result->{$index}{settings}{'index.number_of_replicas'}
+                                                    : $result->{$index}{settings}{index}{number_of_replicas};
     }
 
     return wantarray ? %shards : \%shards;
@@ -641,7 +653,7 @@ sub es_node_stats {
     push @cmd, join(',', @nodes) if @nodes;
     push @cmd, 'stats';
 
-    return es_request(join('/',@cmd), { uri_param => {all => 'true'} });
+    return es_request(join('/',@cmd), { uri_param => {all => 'true', human => 'true'} });
 }
 
 =func es_facet_whitelist('field name')

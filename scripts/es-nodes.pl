@@ -24,7 +24,7 @@ GetOptions(\%OPT,
 pod2usage(1) if $OPT{help};
 pod2usage(-exitval => 0, -verbose => 2) if $OPT{manual};
 
-my $cres = es_request('_cluster/state');
+my $cres = es_request('_cluster/health');
 my $CLUSTER = defined $cres ? $cres->{cluster_name} : 'UNKNOWN';
 
 output({clear=>1,color=>'magenta'}, "Cluster [$CLUSTER] contains $cres->{number_of_nodes} nodes.", '-='x20);
