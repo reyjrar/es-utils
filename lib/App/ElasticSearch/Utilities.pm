@@ -183,10 +183,9 @@ sub es_pattern {
 }
 
 sub _get_es_version {
-    my $result = es_request('/');
-
+    return $CURRENT_VERSION if defined $CURRENT_VERSION;
     eval {
-        my ($status,$reponse) = Elastijk::request({
+        my ($status,$result) = Elastijk::request({
             host    => $DEF{HOST},
             port    => $DEF{PORT},
             method  => 'GET',
@@ -196,9 +195,9 @@ sub _get_es_version {
             $CURRENT_VERSION = join('.', (split /\./,$result->{version}{number})[0,1]);
         }
     };
-    $CURRENT_VERSION ||= '0.0';
+    $CURRENT_VERSION ||= 0;
     debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");
-    debug_var($result);
+    return $CURRENT_VERSION;
 };
 
 =func es_connect
