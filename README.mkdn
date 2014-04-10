@@ -208,7 +208,7 @@ Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils
 
 # INSTALL
 
-__CURRENTLY ONLY SUPPORTING 0.90.x VERSIONS OF ELASTICSEARCH__
+__This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch__.
 
 Recommended install with [CPAN Minus](http://cpanmin.us):
 

@@ -771,7 +771,7 @@ distribution.
 
 =head1 INSTALL
 
-B<CURRENTLY ONLY SUPPORTING 0.90.x VERSIONS OF ELASTICSEARCH>
+B<This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch>.
 
 Recommended install with L<CPAN Minus|http://cpanmin.us>:
 
