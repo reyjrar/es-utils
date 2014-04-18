@@ -138,6 +138,7 @@ my %DEF = (
                    '.',
 );
 debug_var(\%DEF);
+CLI::Helpers::override(verbose => 1) if $DEF{NOOP};
 
 if( $DEF{NOPROXY} ) {
     debug("Removing any active HTTP Proxies from ENV.");
