@@ -201,7 +201,9 @@ Options:
 
     --help              print help
     --manual            print full manual
-    --all               Run delete, optimize, and replicas tools
+    --all               Run close, delete, optimize, and replicas tools
+    --close             Run close for indexes older than
+    --close-days        Age of the oldest index to keep open (default:60)
     --delete            Run delete indexes older than
     --delete-days       Age of oldest index to keep (default: 90)
     --optimize          Run optimize on indexes
@@ -219,13 +221,13 @@ Options:
 
 =over 8
 
-=item B<optimize>
+=item B<close>
 
-Run the optimization hook
+Run the close hook
 
-=item B<optimize-days>
+=item B<close-days>
 
-Integer, optimize indexes older than this number of days
+Integer, close indexes older than this number of days
 
 =item B<delete>
 
@@ -234,6 +236,14 @@ Run the delete hook
 =item B<delete-days>
 
 Integer, delete indexes older than this number of days
+
+=item B<optimize>
+
+Run the optimization hook
+
+=item B<optimize-days>
+
+Integer, optimize indexes older than this number of days
 
 =item B<replicas>
 
