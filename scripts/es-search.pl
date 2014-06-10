@@ -56,19 +56,23 @@ my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
 $ORDER = 'asc' if exists $OPT{tail};
 my %by_age = ();
 my %indices = map { $_ => es_index_days_old($_) } es_indices();
+my %FIELDS = ();
 foreach my $index (sort by_index_age keys %indices) {
     my $age = $indices{$index};
     $by_age{$age} ||= [];
     push @{ $by_age{$age} }, $index;
+    @FIELDS{es_index_fields($index)} = ();
 }
 debug_var(\%by_age);
 my @AGES = sort { $ORDER eq 'asc' ? $b <=> $a : $a <=> $b } keys %by_age;
+debug({color=>"cyan"}, "Fields discovered.");
+debug_var(\%FIELDS);
 
 # Which fields to show
 my @SHOW = ();
 my %HASH_FIELDS = ();
 if ( exists $OPT{show} && length $OPT{show} ) {
-    @SHOW = split /,/, $OPT{show};
+    @SHOW = grep { exists $FIELDS{$_} } split /,/, $OPT{show};
     # hash will contain '{fieldname.key1.key2.key3}' => { field => 'fieldname', key => [ 'key1', 'key2', 'key3' ] }
     %HASH_FIELDS = map { my @v = split( /\./, substr( $_, 1, -1 ) ); $_ => { field => shift( @v ), key => \@v  } } grep { /^\{.+\..+\}$/ } @SHOW;
     debug_var(\%HASH_FIELDS);
@@ -109,8 +113,8 @@ local $SIG{INT} = sub { $DONE=1 };
 
 my $facet_header = '';
 if( exists $OPT{top} ) {
-    my @facet_fields = grep { length($_) && es_facet_whitelist($_) } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
-    croak("Option --top takes up to two whitelisted fields\n")
+    my @facet_fields = grep { length($_) && exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
+    croak(sprintf("Option --top takes up to two fields, found %d fields: %s\n", scalar(@facet_fields),join(',',@facet_fields)))
         unless @facet_fields > 0 && @facet_fields < 3;
 
     my @facet;
@@ -271,46 +275,22 @@ sub extract_value {
     return $value;
 }
 
-sub extract_fields {
-    my $ref = shift;
-    my @keys = @_;
-
-    my @fields = ();
-    foreach my $key ( keys %{$ref} ) {
-        if( exists $ref->{$key}{properties} ) {
-            push @fields, extract_fields( $ref->{$key}{properties}, @keys, $key );
-        }
-        else {
-            my $field = join('.', @keys, $key);
-            if( $field =~ /^\@fields\.(.*)/ ) {
-                $field .= " alias is $1";
-            }
-            push @fields, $field;
-        }
-    }
-    return sort @fields;
-}
-
 sub show_fields {
-    my $index =  (sort by_index_age keys %indices)[0];
-    my $result = es_request('_mapping', { index => $index });
-    if(! defined $result) {
-        die "unable to read mapping for: $index\n";
+    output({color=>'cyan'}, 'Fields available for search:' );
+    my $total = 0;
+    foreach my $field (sort keys %FIELDS) {
+        $total++;
+        output(" - $field");
     }
-    debug_var($result);
-
-    # Support ES .90 and 1.x
-    my $ref = exists $result->{$index}{mappings} ? $result->{$index}{mappings} : $result->{$index};
-
-    my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
-    my @keys = ();
-    foreach my $mapping (@mappings) {
-        next unless exists $ref->{$mapping}{properties};
-        push @keys, extract_fields($ref->{$mapping}{properties});
-    }
-
-    output(map { "$_\n" } @keys);
+    output({color=>"yellow"},
+        sprintf("# Fields: %d from a combined %d indices.\n",
+            $total,
+            scalar(keys %indices),
+        )
+    );
 }
+
+
 sub by_index_age {
     return $ORDER eq 'asc'
         ? $indices{$b} <=> $indices{$a}
