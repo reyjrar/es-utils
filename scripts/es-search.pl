@@ -119,7 +119,6 @@ if( exists $OPT{top} ) {
         $facet_header = "count\t" . $facet_fields[0];
     } else {
         #generate a script as
-        #$extra{facets} = { top => { terms => { fields => ['@fields.file', '@fields.src_ip'], size => $CONFIG{size} } } };  #this does not work as intended, d
         my $script_field = join " + ':' + ", map { "_doc['$_'].value" } @facet_fields;
         @facet = ( script_field => $script_field );
         $facet_header = "count\t" . join ':', @facet_fields;
@@ -137,7 +136,10 @@ elsif(exists $OPT{tail}) {
     $DONE = 0;
 }
 
-my $size = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
+my $size = exists $OPT{top}   ? 0
+         : $CONFIG{size} > 50 ? 50
+         : $CONFIG{size};
+
 my %displayed_indices = ();
 my $TOTAL_HITS = 0;
 my $last_hit_ts = undef;
@@ -173,6 +175,7 @@ while( !$DONE || @AGES ) {
             %extra,
         }
     );
+    debug_var($result);
     $duration += time() - $start;
     next unless defined $result;
 
@@ -190,7 +193,9 @@ while( !$DONE || @AGES ) {
             print "$facet_header\n";
             for my $facet ( @$facets ) {
                 print "$facet->{count}\t$facet->{term}\n";
+                $displayed++;
             }
+            $TOTAL_HITS = $result->{facets}{top}{other} + $displayed;
             last;
         }
 
