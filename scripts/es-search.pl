@@ -124,10 +124,6 @@ if( exists $OPT{top} ) {
         $facet_header = "count\t" . join ':', @facet_fields;
     }
     $extra{facets} = { top => { terms => { size => $CONFIG{size}, @facet }, facet_filter => exists $extra{filter} ? $extra{filter} : {} } };
-    if( @AGES > 1 ) {
-        output({color=>'red',stderr=>1},"!! Faceting on multiple days disabled, only faceting for " . join(',', @{ $by_age{$AGES[0]} }));
-        @AGES = ($AGES[0]);
-    }
     $CONFIG{size} = 0;  # and we do not want any results other than the facet data
 }
 elsif(exists $OPT{tail}) {
@@ -136,10 +132,7 @@ elsif(exists $OPT{tail}) {
     $DONE = 0;
 }
 
-my $size = exists $OPT{top}   ? 0
-         : $CONFIG{size} > 50 ? 50
-         : $CONFIG{size};
-
+my $size = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
 my %displayed_indices = ();
 my $TOTAL_HITS = 0;
 my $last_hit_ts = undef;
@@ -149,7 +142,7 @@ my $header=0;
 my $age = undef;
 my %last_batch_id=();
 
-while( !$DONE || @AGES ) {
+AGES: while( !$DONE || @AGES ) {
     $age = @AGES ? shift @AGES : $age;
     select(undef,undef,undef,1) if exists $OPT{tail} && $last_hit_ts;
     my $start=time();
@@ -157,6 +150,7 @@ while( !$DONE || @AGES ) {
     my $local_search_string = exists $OPT{tail} ? sprintf('%s AND @timestamp:[%s TO *]', $search_string, $last_hit_ts)
                                                 : $search_string;
     debug({color=>'yellow'},"Search String is $local_search_string");
+    output({color=>'yellow'}, "Faceting for on " . join(',', @{ $by_age{$age} })) if $OPT{top};
     my $result = es_request('_search',
         # Search Parameters
         {
@@ -190,13 +184,13 @@ while( !$DONE || @AGES ) {
         # Handle Faceting
         my $facets = exists $result->{facets} ? $result->{facets}{top}{terms} : [];
         if( @$facets ) {
-            print "$facet_header\n";
-            for my $facet ( @$facets ) {
-                print "$facet->{count}\t$facet->{term}\n";
+            output({color=>'cyan'},$facet_header);
+            foreach my $facet ( @$facets ) {
+                output("$facet->{count}\t$facet->{term}");
                 $displayed++;
             }
             $TOTAL_HITS = $result->{facets}{top}{other} + $displayed;
-            last;
+            next AGES;
         }
 
         # Reset the last batch ID if we have new data
@@ -305,14 +299,17 @@ sub show_fields {
     }
     debug_var($result);
 
-    my @mappings = grep { $_ ne '_default_' } keys %{ $result->{$index} };
+    # Support ES .90 and 1.x
+    my $ref = exists $result->{$index}{mappings} ? $result->{$index}{mappings} : $result->{$index};
+
+    my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
     my @keys = ();
     foreach my $mapping (@mappings) {
-        next unless exists $result->{$index}{$mapping}{properties};
-        push @keys, extract_fields($result->{$index}{$mapping}{properties});
+        next unless exists $ref->{$mapping}{properties};
+        push @keys, extract_fields($ref->{$mapping}{properties});
     }
 
-    print map { "$_\n" } @keys;
+    output(map { "$_\n" } @keys);
 }
 sub by_index_age {
     return $ORDER eq 'asc'
