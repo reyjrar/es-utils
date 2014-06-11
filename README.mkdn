@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 2.7
+version 2.8
 
 # SYNOPSIS
 
@@ -102,6 +102,10 @@ Returns the number of replicas for a given index.
 
 Checks if the specified index is valid
 
+## es\_index\_fields('index-name')
+
+Returns a list of the fields in a given index.
+
 ## es\_close\_index('index-name')
 
 Closes an index
@@ -145,36 +149,6 @@ Returns a hashref
 Exposes GET /\_nodes/stats
 
 Returns a hashref
-
-## es\_facet\_whitelist('field name')
-
-Returns if the field is whitelisted
-
-Facet whitelists must be set in a configuration file.  Currently, the
-search path for config files is
-
-    /etc/es-utils.yaml
-    /etc/es-utils.yml
-    $ENV{HOME}/.es-utils.yaml
-    $ENV{HOME}/.es-utils.yml
-
-This does mean that users can override the whitelist, but this is by design.  If one of those
-files does not specify a facet\_whitelist element as an array, the whitelist is not restricted.
-
-Examples:
-
-\---
-facet\_whitelist:
-  - src\_ip
-  - src\_ip\_country
-  - dst\_ip
-  - dst\_ip\_country
-  - file
-  - filetype
-  - program
-  - status
-  - method
-  - protocol
 
 ## def('key')
 
