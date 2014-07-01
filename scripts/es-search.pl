@@ -43,6 +43,8 @@ my $search_string = join(' ', expand_ip_to_range(@ARGV));
 # Documentation
 pod2usage(1) if $OPT{help};
 pod2usage(-exitval => 0, -verbose => 2) if $OPT{manual};
+my $unknown_options = join ', ', grep /^--/, @ARGV;
+pod2usage({-exitval => 1, -msg =>"Unknown option(s): $unknown_options"}) if $unknown_options;
 
 #--------------------------------------------------------------------------#
 # App Config
