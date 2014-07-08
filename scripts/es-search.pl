@@ -32,6 +32,7 @@ GetOptions(\%OPT,
     'top:s',
     'tail',
     'fields',
+    'no-header',
     'help|h',
     'manual|m',
 );
@@ -144,7 +145,7 @@ my $TOTAL_HITS = 0;
 my $last_hit_ts = undef;
 my $duration = 0;
 my $displayed = 0;
-my $header=0;
+my $header = exists $OPT{'no-header'};
 my $age = undef;
 my %last_batch_id=();
 
@@ -328,6 +329,7 @@ Options:
     --size              Result size, default is 20
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
+    --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
