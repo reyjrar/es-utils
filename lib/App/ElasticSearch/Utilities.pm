@@ -772,6 +772,7 @@ B<MAINTENANCE>:
 
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-alias-manager.pl - Manage index aliases automatically
+    scripts/es-open.pl - Open any closed indices matching a index parameters
 
 B<MANAGEMENT>:
 
