@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 2.8
+version 2.9
 
 # SYNOPSIS
 
@@ -30,6 +30,7 @@ __MAINTENANCE__:
 
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-alias-manager.pl - Manage index aliases automatically
+    scripts/es-open.pl - Open any closed indices matching a index parameters
 
 __MANAGEMENT__:
 
@@ -89,6 +90,21 @@ line.  Can handle indices named:
     logstash-YYYY.MM.DD-dcid
 
 Makes use of --datesep to determine where the date is.
+
+Options include:
+
+- __state__
+
+    Default is 'open', can be used to find 'closed' indexes as well.
+
+- __check\_state__
+
+    Default is 1, set to 0 to disable state checks.  The combination of the default
+    with this option and the default for __state__ means only open indices are returned.
+
+- __check\_dates__
+
+    Default is 1, set to 0 to disable checking index age.
 
 ## es\_index\_days\_old( 'index-name' )
 
