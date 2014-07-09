@@ -383,6 +383,25 @@ line.  Can handle indices named:
 
 Makes use of --datesep to determine where the date is.
 
+Options include:
+
+=over 4
+
+=item B<state>
+
+Default is 'open', can be used to find 'closed' indexes as well.
+
+=item B<check_state>
+
+Default is 1, set to 0 to disable state checks.  The combination of the default
+with this option and the default for B<state> means only open indices are returned.
+
+=item B<check_dates>
+
+Default is 1, set to 0 to disable checking index age.
+
+=back
+
 =cut
 
 my %_valid_index = ();
