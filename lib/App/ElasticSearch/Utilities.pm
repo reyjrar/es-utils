@@ -412,6 +412,9 @@ sub es_indices {
         check_dates => 1,
         @_
     );
+    # Seriously, English? Do you speak it motherfucker?
+    $args{state} = 'close' if $args{state} eq 'closed';
+
     my @indices = ();
 
     # Simplest case, single index
@@ -424,7 +427,13 @@ sub es_indices {
             debug("Evaluating '$index'");
             if(!exists $args{_all}) {
                 # State Check Disqualification
-                next if $args{check_state} && $args{state} ne $meta{$index}->{state} && $args{state} ne 'all';
+                if($args{state} ne 'all'  && $args{check_state})  {
+                    my $result = $meta{$index}->{state} eq $args{state};
+                    debug({indent=>1,color=>$result ? 'green' : 'red' },
+                        sprintf('+ method:state=%s, got %s', $args{state}, $meta{$index}->{state})
+                    );
+                    next unless $result;
+                }
 
                 if( defined $DEF{BASE} ) {
                     debug({indent=>1}, "+ method:base - $DEF{BASE}");
@@ -437,6 +446,7 @@ sub es_indices {
                     debug({indent=>1}, "+ method:pattern - $p->{string}");
                     next unless $index =~ /^$p->{re}/;
                 }
+                debug({indent=>2},"= name checks succeeded");
                 if( $args{check_dates} && defined $DEF{DAYS} ) {
                     debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
 
