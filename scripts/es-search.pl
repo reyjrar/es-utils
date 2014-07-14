@@ -32,6 +32,7 @@ GetOptions(\%OPT,
     'top:s',
     'tail',
     'fields',
+    'bases',
     'no-header',
     'help|h',
     'manual|m',
@@ -80,7 +81,10 @@ if ( exists $OPT{show} && length $OPT{show} ) {
     %HASH_FIELDS = map { my @v = split( /\./, substr( $_, 1, -1 ) ); $_ => { field => shift( @v ), key => \@v  } } grep { /^\{.+\..+\}$/ } @SHOW;
     debug_var(\%HASH_FIELDS);
 }
-
+if( $OPT{bases} ) {
+    show_bases();
+    exit 0;
+}
 if( $OPT{fields} ) {
     show_fields();
     exit 0;
@@ -293,6 +297,25 @@ sub show_fields {
     );
 }
 
+sub show_bases {
+    output({color=>'cyan'}, 'Bases available for search:' );
+    my $bases = {};
+    foreach my $index (sort keys \%indices) {
+        foreach my $base (split('-', $index)) {
+            $bases->{$base} = '';
+        }
+    }
+    foreach my $base (sort keys $bases) {
+        output(" - $base");
+    }
+
+    output({color=>"yellow"},
+        sprintf("# Bases: %d from a combined %d indices.\n",
+            scalar(keys $bases),
+            scalar(keys %indices),
+        )
+    );
+}
 
 sub by_index_age {
     return $ORDER eq 'asc'
@@ -331,6 +354,7 @@ Options:
     --desc              Sort by descending timestamp (Default)
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
+    --bases             Display the index base list for this cluster.
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -384,6 +408,10 @@ Filter results to those not containing a valid, not null field
 
 Only show records without a referer field in the document.
 
+=item B<bases>
+
+Display a list of bases that can be used with the --base option.
+
 =item B<fields>
 
 Display a list of searchable fields
@@ -433,8 +461,10 @@ Examples might include:
     # Tail the access log for www.example.com 404's
     es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
 
-Helpful in building queries is the --fields options which lists the fields:
+Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
 
+    es-search.pl --bases
 
     es-search.pl --fields
 
+    es-search.pl --base access --fields
