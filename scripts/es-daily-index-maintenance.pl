@@ -87,6 +87,7 @@ my @indices = es_indices(
 );
 
 # Loop through the indices and take appropriate actions;
+my @alias_changes=();
 foreach my $index (sort @indices) {
     verbose({level=>2},"$index being evaluated");
 
@@ -172,6 +173,12 @@ foreach my $index (sort @indices) {
         my $status = es_request('_status',{index=>$index});
         if( defined $status ) {
             if( $status->{_shards}{total} > 0 ) {
+                # retrieve aliases
+                my $ars = es_request('_alias', {index=>$index});
+                foreach my $alias ( keys %{ $ars->{$index}{aliases} } ) {
+                    debug({indent=>1}, "- Will remove alias $alias from $index");
+                    push @alias_changes, { remove => { index => $index, alias => $alias }};
+                }
                 verbose({indent=>1}," - closing index.");
                 my $result = es_request('_close' => {method=>'POST',index=>$index});
                 if( defined $result && $result->{acknowledged}) {
@@ -189,6 +196,12 @@ foreach my $index (sort @indices) {
             output({color=>'red'},"! Error establishing status of $index");
         }
     }
+}
+# If we closed indexes with aliases, we need to remove those aliases so searches to those aliases don't fail.
+if(@alias_changes) {
+    verbose("+ Indexes closed had aliases, removing those aliases to prevent searches against closed indices.");
+    my $result = es_request('_aliases', {method=>'POST'}, { actions => \@alias_changes });
+    debug_var($result);
 }
 
 __END__
