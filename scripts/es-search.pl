@@ -5,12 +5,12 @@ $|=1;           # Flush STDOUT
 use strict;
 use warnings;
 
-use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(:all);
+use Data::Dumper;
 use Carp;
+use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
-use Data::Dumper;
 use POSIX qw(strftime);
 use YAML;
 
@@ -152,6 +152,7 @@ my $displayed = 0;
 my $header = exists $OPT{'no-header'};
 my $age = undef;
 my %last_batch_id=();
+my %FACET_TOTALS = ();
 
 AGES: while( !$DONE || @AGES ) {
     $age = @AGES ? shift @AGES : $age;
@@ -168,7 +169,7 @@ AGES: while( !$DONE || @AGES ) {
             index     => $by_age{$age},
             uri_param => {
                 timeout     => '10s',
-                scroll      => '30s',
+                scroll      => $OPT{top} ? 0 :'30s',
             },
             method => 'POST',
         },
@@ -197,10 +198,16 @@ AGES: while( !$DONE || @AGES ) {
         if( @$facets ) {
             output({color=>'cyan'},$facet_header);
             foreach my $facet ( @$facets ) {
+                $FACET_TOTALS{$facet->{term}} ||= 0;
+                $FACET_TOTALS{$facet->{term}} += $facet->{count};
                 output("$facet->{count}\t$facet->{term}");
                 $displayed++;
             }
             $TOTAL_HITS = $result->{facets}{top}{other} + $displayed;
+            next AGES;
+        }
+        elsif(exists $result->{facets}{top}) {
+            output({indent=>1,color=>'red'}, "= No results.");
             next AGES;
         }
 
@@ -265,6 +272,7 @@ AGES: while( !$DONE || @AGES ) {
     }
     last if $DONE && $displayed >= $CONFIG{size};
 }
+
 output({stderr=>1,color=>'yellow'},
     "# Search string: $search_string",
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
@@ -274,6 +282,14 @@ output({stderr=>1,color=>'yellow'},
             join(',', sort keys %displayed_indices)
     ),
 );
+
+if(keys %FACET_TOTALS) {
+    output({color=>'yellow'}, '#', '# Totals across batch', '#');
+    output({color=>'cyan'},$facet_header);
+    foreach my $k (sort { $FACET_TOTALS{$b} <=> $FACET_TOTALS{$a} } keys %FACET_TOTALS) {
+        output({color=>'green'},"$FACET_TOTALS{$k}\t$k");
+    }
+}
 
 sub extract_value {
     my ($key, $v1, $v2) = @_;
