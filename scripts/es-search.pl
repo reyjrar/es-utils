@@ -253,7 +253,7 @@ AGES: while( !$DONE || @AGES ) {
                 $output = Dump $record;
             }
 
-            output($output);
+            output({data=>1}, $output);
             $displayed++;
             last if $DONE && $displayed >= $CONFIG{size};
         }
@@ -287,7 +287,7 @@ if(keys %FACET_TOTALS) {
     output({color=>'yellow'}, '#', '# Totals across batch', '#');
     output({color=>'cyan'},$facet_header);
     foreach my $k (sort { $FACET_TOTALS{$b} <=> $FACET_TOTALS{$a} } keys %FACET_TOTALS) {
-        output({color=>'green'},"$FACET_TOTALS{$k}\t$k");
+        output({data=>1,color=>'green'},"$FACET_TOTALS{$k}\t$k");
     }
 }
 
