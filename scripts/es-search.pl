@@ -9,6 +9,7 @@ use App::ElasticSearch::Utilities qw(:all);
 use Data::Dumper;
 use Carp;
 use CLI::Helpers qw(:all);
+use File::Slurp qw(slurp);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 use POSIX qw(strftime);
@@ -33,13 +34,14 @@ GetOptions(\%OPT,
     'tail',
     'fields',
     'bases',
+    'all',
     'no-header',
     'help|h',
     'manual|m',
 );
 
 # Search string is the rest of the argument string
-my $search_string = join(' ', expand_ip_to_range(@ARGV));
+my $search_string = join(' ', format_search_string(@ARGV));
 
 #------------------------------------------------------------------------#
 # Documentation
@@ -93,11 +95,6 @@ pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless defined 
 pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --top together'}) if exists $OPT{tail} && $OPT{top};
 pod2usage({-exitval => 1, -msg => 'Please specify --show with --tail'}) if exists $OPT{tail} && !@SHOW;
 
-# Fix common mistakes
-$search_string =~ s/\s+and\s+/ AND /g;
-$search_string =~ s/\s+or\s+/ OR /g;
-$search_string =~ s/\s+not\s+/ NOT /g;
-
 # Process extra parameters
 my %extra = ();
 my @filters = ();
@@ -134,7 +131,15 @@ if( exists $OPT{top} ) {
         @facet = ( script_field => $script_field );
         $facet_header = "count\t" . join ':', @facet_fields;
     }
-    $extra{facets} = { top => { terms => { size => $CONFIG{size}, @facet }, facet_filter => exists $extra{filter} ? $extra{filter} : {} } };
+    $extra{facets} = { top => { terms => { @facet }, facet_filter => exists $extra{filter} ? $extra{filter} : {} } };
+
+    if( exists $OPT{all} ) {
+        verbose({color=>'cyan'}, "Facets with --all are limited to returning 1,000,000 results.");
+        $extra{facets}->{top}{terms}{size} = 1_000_000;
+    }
+    else {
+        $extra{facets}->{top}{terms}{size} = $CONFIG{size};
+    }
     $CONFIG{size} = 0;  # and we do not want any results other than the facet data
 }
 elsif(exists $OPT{tail}) {
@@ -169,7 +174,7 @@ AGES: while( !$DONE || @AGES ) {
             index     => $by_age{$age},
             uri_param => {
                 timeout     => '10s',
-                scroll      => $OPT{top} ? 0 :'30s',
+                exists $OPT{top} ? () : (scroll => '30s'),
             },
             method => 'POST',
         },
@@ -255,9 +260,9 @@ AGES: while( !$DONE || @AGES ) {
 
             output({data=>1}, $output);
             $displayed++;
-            last if $DONE && $displayed >= $CONFIG{size};
+            last if !exists $OPT{all} && $DONE && $displayed >= $CONFIG{size};
         }
-        last if $DONE && $displayed >= $CONFIG{size};
+        last if !exists $OPT{all} && $DONE && $displayed >= $CONFIG{size};
 
         # Scroll forward
         $start = time;
@@ -270,7 +275,7 @@ AGES: while( !$DONE || @AGES ) {
         $duration += time - $start;
         last unless @{ $result->{hits}{hits} } > 0;
     }
-    last if $DONE && $displayed >= $CONFIG{size};
+    last if !exists $OPT{all} && $DONE && $displayed >= $CONFIG{size};
 }
 
 output({stderr=>1,color=>'yellow'},
@@ -339,12 +344,28 @@ sub by_index_age {
         : $indices{$a} <=> $indices{$b};
 }
 
-sub expand_ip_to_range {
-    for ( @_ ) {
-        s/^([^:]+_ip):(\d+\.\d+)\.\*(?:\.\*)?$/$1:[$2.0.0 $2.255.255]/;
-        s/^([^:]+_ip):(\d+\.\d+\.\d+)\.\*$/$1:[$2.0 $2.255]/;
+my %BareWords;
+sub format_search_string {
+    my @modified = ();
+    %BareWords = map { $_ => uc } qw(and not or);
+    foreach my $part ( @_ ) {
+        if( my ($term,$match) = split /\:/, $part, 2 ) {
+            if( defined $match && $match =~ /\.dat$/ && -f $match ) {
+                my @data = grep { defined && length } slurp($match);
+                if( @data ) {
+                    chomp(@data);
+                    push @modified,"$term:(" . join(' OR ', @data) . ")";
+                    next;
+                }
+            }
+            else {
+                $part =~ s/^([^:]+_ip):(\d+\.\d+)\.\*(?:\.\*)?$/$1:[$2.0.0 $2.255.255]/;
+                $part =~ s/^([^:]+_ip):(\d+\.\d+\.\d+)\.\*$/$1:[$2.0 $2.255]/;
+            }
+        }
+        push @modified, exists $BareWords{lc $part} ? $BareWords{lc $part} : $part;
     }
-    @_;
+    @modified;
 }
 __END__
 
@@ -366,6 +387,7 @@ Options:
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --size              Result size, default is 20
+    --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
     --no-header         Do not show the header with field names in the query results
@@ -449,6 +471,11 @@ is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
 
 The number of results to show, default is 20.
 
+=item B<all>
+
+If specified, ignore the --size parameter and show me everything within the date range I specified.
+In the case of --top, this limits the result set to 1,000,000 results.
+
 =back
 
 =head1 DESCRIPTION
@@ -476,6 +503,36 @@ Examples might include:
 
     # Tail the access log for www.example.com 404's
     es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
+
+=head2 Extended Syntax
+
+The search string is pre-analyzed before being sent to ElasticSearch.  Basic formatting is corrected:
+
+The following barewords are transformed:
+
+    or => OR
+    and => AND
+    not => NOT
+
+If a field is an IP address wild card, it is transformed:
+
+    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
+
+If the match ends in '.dat', then we attempt to read a file with that name and OR the condition:
+
+    $ cat test.dat
+    1.2.3.4
+    1.2.3.5
+    1.2.3.6
+    1.2.3.7
+
+We can source that file:
+
+    src_ip:test.dat => src_ip:(1.2.3.4 OR 1.2.3.5 OR 1.2.3.6 OR 1.2.3.7)
+
+This make it simple to use the --data-file output options and build queries based off previous queries.
+
+=head2 Meta-Queries
 
 Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
 
