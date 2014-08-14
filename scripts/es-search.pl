@@ -189,9 +189,16 @@ AGES: while( !$DONE || @AGES ) {
     debug_var($result);
     $duration += time() - $start;
     next unless defined $result;
-
+    if ( $result->{error} ) {
+        my ($simple_error) = $result->{error} =~ m/(QueryParsingException\[\[[^\]]+\][^\]]+\]\]);/;
+        $simple_error ||= '';
+        output({stderr=>1,color=>'red'},
+            "# Received an error from the cluster. $simple_error"
+        );
+        next;
+    }
     $displayed_indices{$_} = 1 for @{ $by_age{$age} };
-    $TOTAL_HITS += $result->{hits}{total};
+    $TOTAL_HITS += $result->{hits}{total} if $result->{hits}{total};
 
     my @always = qw(@timestamp);
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
