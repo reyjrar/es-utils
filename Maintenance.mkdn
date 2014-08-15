@@ -1,0 +1,126 @@
+# NAME
+
+es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
+
+# VERSION
+
+version 3.2
+
+# SYNOPSIS
+
+es-daily-index-maintenance.pl --all --local
+
+Options:
+
+    --help              print help
+    --manual            print full manual
+    --all               Run close, delete, optimize, and replicas tools
+    --close             Run close for indexes older than
+    --close-days        Age of the oldest index to keep open (default:60)
+    --delete            Run delete indexes older than
+    --delete-days       Age of oldest index to keep (default: 90)
+    --optimize          Run optimize on indexes
+    --optimize-days     Age of first index to optimize (default: 1)
+    --replicas          Run the replic aging hook
+    --replicas-age      Age of the index to reach the minimum replicas (default:60)
+    --replicas-min      Minimum number of replicas this index may have (default:0)
+    --replicas-max      Maximum number of replicas this index may have (default:100)
+
+From App::ElasticSearch::Utilities:
+
+    --local         Use localhost as the elasticsearch host
+    --host          ElasticSearch host to connect to
+    --port          HTTP port for your cluster
+    --noop          Any operations other than GET are disabled
+    --timeout       Timeout to ElasticSearch, default 30
+    --keep-proxy    Do not remove any proxy settings from %ENV
+    --index         Index to run commands against
+    --base          For daily indexes, reference only those starting with "logstash"
+                     (same as --pattern logstash-* or logstash-DATE)
+    --datesep       Date separator, default '.' also (--date-separator)
+    --pattern       Use a pattern to operate on the indexes
+    --days          If using a pattern or base, how many days back to go, default: all
+
+## ARGUMENT GLOBALS
+
+Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
+
+    ---
+    host: esproxy.example.com
+    port: 80
+    timeout: 10
+
+From CLI::Helpers:
+
+    --data-file         Path to a file to write lines tagged with 'data => 1'
+    --color             Boolean, enable/disable color, default use git settings
+    --verbose           Incremental, increase verbosity
+    --debug             Show developer output
+    --quiet             Show no output (for cron)
+
+# DESCRIPTION
+
+This script assists in maintaining the indexes for logging clusters through
+routine deletion and optimization of indexes.
+
+Use with cron:
+
+    22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180 --replicas-age=90 --replicas-min=1
+
+# OPTIONS
+
+- __close__
+
+    Run the close hook
+
+- __close-days__
+
+    Integer, close indexes older than this number of days
+
+- __delete__
+
+    Run the delete hook
+
+- __delete-days__
+
+    Integer, delete indexes older than this number of days
+
+- __optimize__
+
+    Run the optimization hook
+
+- __optimize-days__
+
+    Integer, optimize indexes older than this number of days
+
+- __replicas__
+
+    Run the replicas hook.
+
+- __replicas-age__
+
+    The age at which we reach --replicas-min, default 60
+
+- __replicas-min__
+
+    The minimum number of replicas to allow replica aging to set.  The default is 0
+
+        --replicas-min=1
+
+- __replicas-max__
+
+    The maximum number of replicas to allow replica aging to set.  The default is 100
+
+        --replicas-max=2
+
+# AUTHOR
+
+Brad Lhotsky <brad@divisionbyzero.net>
+
+# COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by Brad Lhotsky.
+
+This is free software, licensed under:
+
+    The (three-clause) BSD License

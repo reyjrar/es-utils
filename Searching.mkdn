@@ -1,0 +1,215 @@
+# NAME
+
+es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily indexes
+
+# VERSION
+
+version 3.2
+
+# SYNOPSIS
+
+es-search.pl \[search string\]
+
+Options:
+
+    --help              print help
+    --manual            print full manual
+    --show              Comma separated list of fields to display, default is ALL, switches to tab output
+    --tail              Continue the query until CTRL+C is sent
+    --top               Perform a facet on the fields, by a comma separated list of up to 2 items
+    --exists            Field which must be present in the document
+    --missing           Field which must not be present in the document
+    --size              Result size, default is 20
+    --all               Don't consider result size, just give me *everything*
+    --asc               Sort by ascending timestamp
+    --desc              Sort by descending timestamp (Default)
+    --no-header         Do not show the header with field names in the query results
+    --fields            Display the field list for this index!
+    --bases             Display the index base list for this cluster.
+
+From App::ElasticSearch::Utilities:
+
+    --local         Use localhost as the elasticsearch host
+    --host          ElasticSearch host to connect to
+    --port          HTTP port for your cluster
+    --noop          Any operations other than GET are disabled
+    --timeout       Timeout to ElasticSearch, default 30
+    --keep-proxy    Do not remove any proxy settings from %ENV
+    --index         Index to run commands against
+    --base          For daily indexes, reference only those starting with "logstash"
+                     (same as --pattern logstash-* or logstash-DATE)
+    --datesep       Date separator, default '.' also (--date-separator)
+    --pattern       Use a pattern to operate on the indexes
+    --days          If using a pattern or base, how many days back to go, default: all
+
+## ARGUMENT GLOBALS
+
+Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
+
+    ---
+    host: esproxy.example.com
+    port: 80
+    timeout: 10
+
+From CLI::Helpers:
+
+    --data-file         Path to a file to write lines tagged with 'data => 1'
+    --color             Boolean, enable/disable color, default use git settings
+    --verbose           Incremental, increase verbosity
+    --debug             Show developer output
+    --quiet             Show no output (for cron)
+
+# DESCRIPTION
+
+This tool takes a search string parameter to search the cluster.  It is in the format of the Lucene
+[query string](http://lucene.apache.org/core/2_9_4/queryparsersyntax.html)
+
+Examples might include:
+
+    # Search for past 10 days vhost admin.example.com and client IP 1.2.3.4
+    es-search.pl --days=10 --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.4"
+
+    # Search for all apache logs past 5 days with status 500
+    es-search.pl program:"apache" AND crit:500
+
+    # Search for all apache logs past 5 days with status 500 show only file and out_bytes
+    es-search.pl program:"apache" AND crit:500 --show file,out_bytes
+
+    # Search for ip subnet client IP 1.2.3.0 to 1.2.3.255 or 1.2.0.0 to 1.2.255.255
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.*"
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.*"
+
+    # Show the top src_ip for 'www.example.com'
+    es-search.pl --base access dst:www.example.com --top src_ip
+
+    # Tail the access log for www.example.com 404's
+    es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
+
+## Extended Syntax
+
+The search string is pre-analyzed before being sent to ElasticSearch.  Basic formatting is corrected:
+
+The following barewords are transformed:
+
+    or => OR
+    and => AND
+    not => NOT
+
+If a field is an IP address wild card, it is transformed:
+
+    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
+
+If the match ends in '.dat', then we attempt to read a file with that name and OR the condition:
+
+    $ cat test.dat
+    1.2.3.4
+    1.2.3.5
+    1.2.3.6
+    1.2.3.7
+
+We can source that file:
+
+    src_ip:test.dat => src_ip:(1.2.3.4 OR 1.2.3.5 OR 1.2.3.6 OR 1.2.3.7)
+
+This make it simple to use the --data-file output options and build queries based off previous queries.
+
+## Meta-Queries
+
+Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
+
+    es-search.pl --bases
+
+    es-search.pl --fields
+
+    es-search.pl --base access --fields
+
+# NAME
+
+es-search.pl - Search a logging cluster for information
+
+# OPTIONS
+
+- __help__
+
+    Print this message and exit
+
+- __manual__
+
+    Print detailed help with examples
+
+- __show__
+
+    Comma separated list of fields to display in the dump of the data
+
+        --show src_ip,crit,file,out_bytes
+
+- __tail__
+
+    Repeats the query every second until CTRL+C is hit, displaying new results.  Due to the implementation,
+    this mode enforces that only the most recent indices are searched.  Also, given the output is continuous, you must
+    specify --show with this option.
+
+- __top__
+
+    Comma separated list of fields to facet on.  Given that this uses scripted facets for multi-field facets,
+    it is limited to faceting on up to 2 fields.  This option is not available when using --tail
+
+        --top src_ip
+
+- __exists__
+
+    Filter results to those containing a valid, not null field
+
+        --exists referer
+
+    Only show records with a referer field in the document.
+
+- __missing__
+
+    Filter results to those not containing a valid, not null field
+
+        --missing referer
+
+    Only show records without a referer field in the document.
+
+- __bases__
+
+    Display a list of bases that can be used with the --base option.
+
+- __fields__
+
+    Display a list of searchable fields
+
+- __index__
+
+    Search only this index for data, may also be a comma separated list
+
+- __days__
+
+    The number of days back to search, the default is 5
+
+- __base__
+
+    Index base name, will be expanded using the days back parameter.  The default
+    is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
+
+- __size__
+
+    The number of results to show, default is 20.
+
+- __all__
+
+    If specified, ignore the --size parameter and show me everything within the date range I specified.
+    In the case of --top, this limits the result set to 1,000,000 results.
+
+# AUTHOR
+
+Brad Lhotsky <brad@divisionbyzero.net>
+
+# COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by Brad Lhotsky.
+
+This is free software, licensed under:
+
+    The (three-clause) BSD License
