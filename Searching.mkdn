@@ -17,6 +17,7 @@ Options:
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --tail              Continue the query until CTRL+C is sent
     --top               Perform a facet on the fields, by a comma separated list of up to 2 items
+    --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --size              Result size, default is 20
@@ -102,16 +103,25 @@ If a field is an IP address wild card, it is transformed:
 If the match ends in '.dat', then we attempt to read a file with that name and OR the condition:
 
     $ cat test.dat
-    1.2.3.4
-    1.2.3.5
-    1.2.3.6
-    1.2.3.7
+    50 1.2.3.4
+    40 1.2.3.5
+    30 1.2.3.6
+    20 1.2.3.7
 
 We can source that file:
 
     src_ip:test.dat => src_ip:(1.2.3.4 OR 1.2.3.5 OR 1.2.3.6 OR 1.2.3.7)
 
 This make it simple to use the --data-file output options and build queries based off previous queries.
+
+You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
+__zero-based__ indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
+as:
+
+    src_ip:test.dat[1]
+
+or:
+    src\_ip:test.dat\[-1\]
 
 ## Meta-Queries
 
@@ -151,10 +161,28 @@ es-search.pl - Search a logging cluster for information
 
 - __top__
 
-    Comma separated list of fields to facet on.  Given that this uses scripted facets for multi-field facets,
-    it is limited to faceting on up to 2 fields.  This option is not available when using --tail
+    Perform an aggregation or facet returning the top field.  Limited to a single field at this time.
+    This option is not available when using --tail.
 
         --top src_ip
+
+- __by__
+
+    Perform a sub aggregation on the top terms aggregation and order by the result of this aggregation.
+    Aggregation syntax is as follows:
+
+        --by <type>:<field>
+
+    A full example might look like this:
+
+        $ es-search.pl --base access dst:www.example.com --top src_ip --by cardinality:@fields.acct
+
+    This will show the top source IP's ordered by the cardinality (count of the distinct values) of accounts logging
+    in as each source IP, instead of the source IP with the most records.
+
+    Supported sub agggregations and formats:
+
+        cardinality:<field>
 
 - __exists__
 
