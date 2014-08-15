@@ -31,6 +31,7 @@ GetOptions(\%OPT,
     'size|n:i',
     'show:s',
     'top:s',
+    'by:s',
     'tail',
     'fields',
     'bases',
@@ -115,30 +116,58 @@ if( @filters ) {
 my $DONE = 1;
 local $SIG{INT} = sub { $DONE=1 };
 
+my $top_type = exists $OPT{by} ? "aggregations" : "facets";
+my %TOPKEYS = (
+    aggregations => {
+        base  => "buckets",
+        key   => "key",
+        count => "doc_count",
+    },
+    facets => {
+        base  => "terms",
+        key   => "term",
+        count => "count",
+    },
+);
+my %SUPPORTED_AGGREGATIONS = map {$_=>1} qw(cardinality);
+my $SUBAGG = undef;
 my $facet_header = '';
 if( exists $OPT{top} ) {
     my @facet_fields = grep { length($_) && exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
-    croak(sprintf("Option --top takes up to two fields, found %d fields: %s\n", scalar(@facet_fields),join(',',@facet_fields)))
-        unless @facet_fields > 0 && @facet_fields < 3;
+    croak(sprintf("Option --top takes a field, found %d fields: %s\n", scalar(@facet_fields),join(',',@facet_fields)))
+        unless @facet_fields == 1;
 
-    my @facet;
-    if ( scalar @facet_fields == 1 ) {
-        @facet = ( field => $facet_fields[0] );
-        $facet_header = "count\t" . $facet_fields[0];
-    } else {
-        #generate a script as
-        my $script_field = join " + ':' + ", map { "_doc['$_'].value" } @facet_fields;
-        @facet = ( script_field => $script_field );
-        $facet_header = "count\t" . join ':', @facet_fields;
+    my %sub_agg = ();
+    if(exists $OPT{by}) {
+        my ($type,$field) = split /\:/, $OPT{by};
+        if( exists $SUPPORTED_AGGREGATIONS{$type} ) {
+            $SUBAGG = $type;
+            $sub_agg{by} = { $type => {field => $field} };
+        }
+        else {
+            output({color=>'red'}, "Aggregation '$type' is not currently supported, ignoring.");
+        }
     }
-    $extra{facets} = { top => { terms => { @facet }, facet_filter => exists $extra{filter} ? $extra{filter} : {} } };
+
+    my $facet = shift @facet_fields;
+    $facet_header = "count\t" . $facet;
+    $extra{$top_type} = { top => { terms => { field => $facet } } };
+
+    if( $top_type eq 'facets' && exists $extra{filter} ) {
+        $extra{$top_type}->{top}{facet_filter} = $extra{filter};
+    }
+    elsif( $top_type eq 'aggregations' && keys %sub_agg ) {
+        $facet_header = "$OPT{by}\t" . $facet_header;
+        $extra{$top_type}->{top}{terms}{order} = { by => $ORDER };
+        $extra{$top_type}->{top}{aggregations} = \%sub_agg;
+    }
 
     if( exists $OPT{all} ) {
         verbose({color=>'cyan'}, "Facets with --all are limited to returning 1,000,000 results.");
-        $extra{facets}->{top}{terms}{size} = 1_000_000;
+        $extra{$top_type}->{top}{terms}{size} = 1_000_000;
     }
     else {
-        $extra{facets}->{top}{terms}{size} = $CONFIG{size};
+        $extra{$top_type}->{top}{terms}{size} = $CONFIG{size};
     }
     $CONFIG{size} = 0;  # and we do not want any results other than the facet data
 }
@@ -206,19 +235,28 @@ AGES: while( !$DONE || @AGES ) {
         my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
 
         # Handle Faceting
-        my $facets = exists $result->{facets} ? $result->{facets}{top}{terms} : [];
+        my $facets = exists $result->{$top_type} ? $result->{$top_type}{top}{$TOPKEYS{$top_type}->{base}} : [];
         if( @$facets ) {
             output({color=>'cyan'},$facet_header);
             foreach my $facet ( @$facets ) {
-                $FACET_TOTALS{$facet->{term}} ||= 0;
-                $FACET_TOTALS{$facet->{term}} += $facet->{count};
-                output("$facet->{count}\t$facet->{term}");
+                $FACET_TOTALS{$facet->{$TOPKEYS{$top_type}->{key}}} ||= 0;
+                $FACET_TOTALS{$facet->{$TOPKEYS{$top_type}->{key}}} += $facet->{$TOPKEYS{$top_type}->{count}};
+                my @out = (
+                    $facet->{$TOPKEYS{$top_type}->{count}},
+                    $facet->{$TOPKEYS{$top_type}->{key}},
+                );
+                if(exists $facet->{by} ) {
+                    if( $SUBAGG eq 'cardinality' ) {
+                        unshift @out, $facet->{by}{value};
+                    }
+                }
+                output(join("\t",@out));
                 $displayed++;
             }
-            $TOTAL_HITS = $result->{facets}{top}{other} + $displayed;
+            $TOTAL_HITS = exists $result->{$top_type}{top}{other} ? $result->{$top_type}{top}{other} + $displayed : $TOTAL_HITS;
             next AGES;
         }
-        elsif(exists $result->{facets}{top}) {
+        elsif(exists $result->{$top_type}{top}) {
             output({indent=>1,color=>'red'}, "= No results.");
             next AGES;
         }
@@ -399,6 +437,7 @@ Options:
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --tail              Continue the query until CTRL+C is sent
     --top               Perform a facet on the fields, by a comma separated list of up to 2 items
+    --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --size              Result size, default is 20
@@ -439,10 +478,28 @@ specify --show with this option.
 
 =item B<top>
 
-Comma separated list of fields to facet on.  Given that this uses scripted facets for multi-field facets,
-it is limited to faceting on up to 2 fields.  This option is not available when using --tail
+Perform an aggregation or facet returning the top field.  Limited to a single field at this time.
+This option is not available when using --tail.
 
     --top src_ip
+
+=item B<by>
+
+Perform a sub aggregation on the top terms aggregation and order by the result of this aggregation.
+Aggregation syntax is as follows:
+
+    --by <type>:<field>
+
+A full example might look like this:
+
+    $ es-search.pl --base access dst:www.example.com --top src_ip --by cardinality:@fields.acct
+
+This will show the top source IP's ordered by the cardinality (count of the distinct values) of accounts logging
+in as each source IP, instead of the source IP with the most records.
+
+Supported sub agggregations and formats:
+
+    cardinality:<field>
 
 
 =item B<exists>
