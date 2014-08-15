@@ -129,7 +129,7 @@ my %TOPKEYS = (
         count => "count",
     },
 );
-my %SUPPORTED_AGGREGATIONS = map {$_=>1} qw(cardinality);
+my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max avg);
 my $SUBAGG = undef;
 my $facet_header = '';
 if( exists $OPT{top} ) {
@@ -246,11 +246,11 @@ AGES: while( !$DONE || @AGES ) {
                     $facet->{$TOPKEYS{$top_type}->{key}},
                 );
                 if(exists $facet->{by} ) {
-                    if( $SUBAGG eq 'cardinality' ) {
+                    if( exists $facet->{by}{value} ) {
                         unshift @out, $facet->{by}{value};
                     }
                 }
-                output(join("\t",@out));
+                output(exists $OPT{by} ? {data=>1} : {}, join("\t",@out));
                 $displayed++;
             }
             $TOTAL_HITS = exists $result->{$top_type}{top}{other} ? $result->{$top_type}{top}{other} + $displayed : $TOTAL_HITS;
@@ -333,7 +333,7 @@ output({stderr=>1,color=>'yellow'},
     ),
 );
 
-if(keys %FACET_TOTALS) {
+if(!exists $OPT{by} && keys %FACET_TOTALS) {
     output({color=>'yellow'}, '#', '# Totals across batch', '#');
     output({color=>'cyan'},$facet_header);
     foreach my $k (sort { $FACET_TOTALS{$b} <=> $FACET_TOTALS{$a} } keys %FACET_TOTALS) {
