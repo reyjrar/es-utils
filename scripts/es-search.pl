@@ -357,12 +357,20 @@ sub format_search_string {
     %BareWords = map { $_ => uc } qw(and not or);
     foreach my $part ( @_ ) {
         if( my ($term,$match) = split /\:/, $part, 2 ) {
-            if( defined $match && $match =~ /\.dat$/ && -f $match ) {
-                my @data = grep { defined && length } slurp($match);
-                if( @data ) {
-                    chomp(@data);
-                    push @modified,"$term:(" . join(' OR ', @data) . ")";
-                    next;
+            if( defined $match && $match =~ /(.*\.dat)(?:\[(-?\d+)\])?$/) {
+                my($file,$offset) = ($1,$2);
+                if( -f $file ) {
+                    my @data = grep { defined && length } slurp($file);
+                    $offset //= -1; # Default to the last column
+                    if( @data ) {
+                        my %data;
+                        for(@data) {
+                            my @cols = split /\s+/;
+                            $data{$cols[$offset]} = 1 if defined $cols[$offset];
+                        }
+                        push @modified,"$term:(" . join(' OR ', sort keys %data) . ")";
+                        next;
+                    }
                 }
             }
             else {
@@ -528,16 +536,26 @@ If a field is an IP address wild card, it is transformed:
 If the match ends in '.dat', then we attempt to read a file with that name and OR the condition:
 
     $ cat test.dat
-    1.2.3.4
-    1.2.3.5
-    1.2.3.6
-    1.2.3.7
+    50 1.2.3.4
+    40 1.2.3.5
+    30 1.2.3.6
+    20 1.2.3.7
 
 We can source that file:
 
     src_ip:test.dat => src_ip:(1.2.3.4 OR 1.2.3.5 OR 1.2.3.6 OR 1.2.3.7)
 
 This make it simple to use the --data-file output options and build queries based off previous queries.
+
+You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
+B<zero-based> indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
+as:
+
+    src_ip:test.dat[1]
+
+or:
+    src_ip:test.dat[-1]
+
 
 =head2 Meta-Queries
 
