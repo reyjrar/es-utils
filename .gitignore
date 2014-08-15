@@ -1,3 +1,4 @@
 .build
 App-ElasticSearch-Utilities-*
 !/releases/*
+*.dat
