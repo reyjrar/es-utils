@@ -490,14 +490,6 @@ Aggregation syntax is as follows:
 
     --by <type>:<field>
 
-Aggregations supported include:
-
-    cardinality
-    min
-    max
-    avg
-    sum
-
 A full example might look like this:
 
     $ es-search.pl --base access dst:www.example.com --top src_ip --by cardinality:@fields.acct
@@ -508,6 +500,10 @@ in as each source IP, instead of the source IP with the most records.
 Supported sub agggregations and formats:
 
     cardinality:<field>
+    min:<field>
+    max:<field>
+    avg:<field>
+    sum:<field>
 
 
 =item B<exists>
