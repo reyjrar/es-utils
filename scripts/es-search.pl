@@ -11,6 +11,7 @@ use Carp;
 use CLI::Helpers qw(:all);
 use File::Slurp qw(slurp);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
+use JSON;
 use Pod::Usage;
 use POSIX qw(strftime);
 use YAML;
@@ -26,8 +27,10 @@ my %OPT;
 GetOptions(\%OPT,
     'asc',
     'desc',
+    'match-all',
     'exists:s',
     'missing:s',
+    'prefix:s@',
     'size|n:i',
     'show:s',
     'top:s',
@@ -43,6 +46,20 @@ GetOptions(\%OPT,
 
 # Search string is the rest of the argument string
 my $search_string = join(' ', format_search_string(@ARGV));
+my @query   = ();
+if( defined $search_string && length $search_string ) {
+    push @query, { query_string => { query => $search_string } };
+}
+elsif(exists $OPT{'match-all'} && $OPT{'match-all'}){
+    push @query, {match_all =>{} };
+}
+if( exists $OPT{prefix} ){
+    foreach my $prefix (@{ $OPT{prefix} }) {
+        my ($f,$v) = split /:/, $prefix, 2;
+        next unless $f && $v;
+        push @query, { prefix => { $f => $v } };
+    }
+}
 
 #------------------------------------------------------------------------#
 # Documentation
@@ -92,7 +109,7 @@ if( $OPT{fields} ) {
     show_fields();
     exit 0;
 }
-pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless defined $search_string and length $search_string;
+pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless @query;
 pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --top together'}) if exists $OPT{tail} && $OPT{top};
 pod2usage({-exitval => 1, -msg => 'Please specify --show with --tail'}) if exists $OPT{tail} && !@SHOW;
 
@@ -193,10 +210,9 @@ AGES: while( !$DONE || @AGES ) {
     select(undef,undef,undef,1) if exists $OPT{tail} && $last_hit_ts;
     my $start=time();
     $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start));
-    my $local_search_string = exists $OPT{tail} ? sprintf('%s AND @timestamp:[%s TO *]', $search_string, $last_hit_ts)
-                                                : $search_string;
-    debug({color=>'yellow'},"Search String is $local_search_string");
-    output({color=>'yellow'}, "Faceting for on " . join(',', @{ $by_age{$age} })) if $OPT{top};
+
+    # If we're tailing, bump the @query with a timestamp range
+    push @query, {range => {'@timestamp' => {gte => $last_hit_ts}}}  if exists $OPT{tail};
     my $result = es_request('_search',
         # Search Parameters
         {
@@ -210,20 +226,31 @@ AGES: while( !$DONE || @AGES ) {
         # Search Body
         {
             size       => $size,
-            query      => { query_string => { query => $local_search_string } } ,
+            query      => {
+                bool => {
+                    must => \@query,
+                },
+            },
             sort       => [ { '@timestamp' => $ORDER } ],
             %extra,
         }
     );
     debug_var($result);
     $duration += time() - $start;
+
+    # Remove the last searched date from the @query
+    pop @query if exists $OPT{tail};
+
+    # Advance if we don't have a result
     next unless defined $result;
+
     if ( $result->{error} ) {
         my ($simple_error) = $result->{error} =~ m/(QueryParsingException\[\[[^\]]+\][^\]]+\]\]);/;
         $simple_error ||= '';
         output({stderr=>1,color=>'red'},
             "# Received an error from the cluster. $simple_error"
         );
+        last if $DONE;
         next;
     }
     $displayed_indices{$_} = 1 for @{ $by_age{$age} };
@@ -324,7 +351,8 @@ AGES: while( !$DONE || @AGES ) {
 }
 
 output({stderr=>1,color=>'yellow'},
-    "# Search string: $search_string",
+    "# Search Parameters:",
+    (map { "#    " . to_json($_,{allow_nonref=>1}) } @query),
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
     sprintf("# Indexes (%d of %d) searched: %s\n",
             scalar(keys %displayed_indices),
@@ -395,18 +423,35 @@ sub format_search_string {
     %BareWords = map { $_ => uc } qw(and not or);
     foreach my $part ( @_ ) {
         if( my ($term,$match) = split /\:/, $part, 2 ) {
-            if( defined $match && $match =~ /(.*\.dat)(?:\[(-?\d+)\])?$/) {
-                my($file,$offset) = ($1,$2);
+            if( defined $match && $match =~ /(.*\.(?:dat|csv|txt))(?:\[(-?\d+)(?:,(\d+))?\])?$/) {
+                my($file,$col,$row) = ($1,$2,$3);
                 if( -f $file ) {
-                    my @data = grep { defined && length } slurp($file);
-                    $offset //= -1; # Default to the last column
-                    if( @data ) {
-                        my %data;
-                        for(@data) {
-                            my @cols = split /\s+/;
-                            $data{$cols[$offset]} = 1 if defined $cols[$offset];
+                    my @rows = grep { defined && length } slurp($file);
+                    $col //= -1; # Default to the last column
+                    $row ||=  0; # Default to the first row
+                    my $id = sprintf("FILE=%s:%s[%d,%d]", $term, $file, $col, $row);
+                    if( $row > @rows ) {
+                        verbose({color=>'yellow'}, "$id ROW $row is out-of-range, resetting to 0.");
+                        $row = 0;
+                    }
+                    my @set = splice @rows, $row, 500;
+                    if(@rows) {
+                        verbose({color=>'yellow'}, sprintf '%s More than 500 rows, truncated, call with %s:%s[%d,%d] on next run.',
+                            $id, $term, $file, $col, $row + 500
+                        );
+                    }
+                    if( @set ) {
+                        my %uniq=();
+                        my @data=();
+                        for(@set) {
+                            my @cols = split /[\s,;]+/;
+                            my $value = $cols[$col];
+                            if(defined $value && !exists $uniq{$value}) {
+                                push @data, $value;
+                                $uniq{$value} = 1;
+                            }
                         }
-                        push @modified,"$term:(" . join(' OR ', sort keys %data) . ")";
+                        push @modified,"$term:(" . join(' ', @data) . ")";
                         next;
                     }
                 }
@@ -438,6 +483,8 @@ Options:
     --tail              Continue the query until CTRL+C is sent
     --top               Perform a facet on the fields, by a comma separated list of up to 2 items
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
+    --match-all         Enables the ElasticSearch match_all operator
+    --prefix            Takes "field:string" and enables the Lucene prefix query for that field
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --size              Result size, default is 20
@@ -505,6 +552,24 @@ Supported sub agggregations and formats:
     avg:<field>
     sum:<field>
 
+
+=item B<match-all>
+
+Apply the ElasticSearch "match_all" search operator to query on all documents in the index.
+
+=item B<prefix>
+
+Takes a "field:string" combination and you can use multiple --prefix options will be "AND"'d
+
+Example:
+
+    --prefix useragent:'Go '
+
+Will search for documents where the useragent field matches a prefix search on the string 'Go '
+
+JSON Equivalent is:
+
+    { "prefix": { "useragent": "Go " } }
 
 =item B<exists>
 
@@ -594,7 +659,7 @@ If a field is an IP address wild card, it is transformed:
 
     src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
 
-If the match ends in '.dat', then we attempt to read a file with that name and OR the condition:
+If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
 
     $ cat test.dat
     50 1.2.3.4
@@ -602,9 +667,25 @@ If the match ends in '.dat', then we attempt to read a file with that name and O
     30 1.2.3.6
     20 1.2.3.7
 
+Or
+
+    $ cat test.csv
+    50,1.2.3.4
+    40,1.2.3.5
+    30,1.2.3.6
+    20,1.2.3.7
+
+Or
+
+    $ cat test.txt
+    1.2.3.4
+    1.2.3.5
+    1.2.3.6
+    1.2.3.7
+
 We can source that file:
 
-    src_ip:test.dat => src_ip:(1.2.3.4 OR 1.2.3.5 OR 1.2.3.6 OR 1.2.3.7)
+    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
 
 This make it simple to use the --data-file output options and build queries based off previous queries.
 
@@ -617,6 +698,15 @@ as:
 or:
     src_ip:test.dat[-1]
 
+It is also possible to use a B<zero-based> row offset in the specification.  For example:
+
+    src_ip:test.dat[-1,2]
+
+Yields a search string of
+
+    src_ip:test.dat => src_ip:(1.2.3.6 1.2.3.7)
+
+This option only supports 500 elements in a list.
 
 =head2 Meta-Queries
 
