@@ -18,6 +18,8 @@ Options:
     --tail              Continue the query until CTRL+C is sent
     --top               Perform a facet on the fields, by a comma separated list of up to 2 items
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
+    --match-all         Enables the ElasticSearch match_all operator
+    --prefix            Takes "field:string" and enables the Lucene prefix query for that field
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --size              Result size, default is 20
@@ -100,7 +102,7 @@ If a field is an IP address wild card, it is transformed:
 
     src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
 
-If the match ends in '.dat', then we attempt to read a file with that name and OR the condition:
+If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
 
     $ cat test.dat
     50 1.2.3.4
@@ -108,9 +110,25 @@ If the match ends in '.dat', then we attempt to read a file with that name and O
     30 1.2.3.6
     20 1.2.3.7
 
+Or
+
+    $ cat test.csv
+    50,1.2.3.4
+    40,1.2.3.5
+    30,1.2.3.6
+    20,1.2.3.7
+
+Or
+
+    $ cat test.txt
+    1.2.3.4
+    1.2.3.5
+    1.2.3.6
+    1.2.3.7
+
 We can source that file:
 
-    src_ip:test.dat => src_ip:(1.2.3.4 OR 1.2.3.5 OR 1.2.3.6 OR 1.2.3.7)
+    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
 
 This make it simple to use the --data-file output options and build queries based off previous queries.
 
@@ -122,6 +140,16 @@ as:
 
 or:
     src\_ip:test.dat\[-1\]
+
+It is also possible to use a __zero-based__ row offset in the specification.  For example:
+
+    src_ip:test.dat[-1,2]
+
+Yields a search string of
+
+    src_ip:test.dat => src_ip:(1.2.3.6 1.2.3.7)
+
+This option only supports 500 elements in a list.
 
 ## Meta-Queries
 
@@ -187,6 +215,24 @@ es-search.pl - Search a logging cluster for information
         max:<field>
         avg:<field>
         sum:<field>
+
+- __match-all__
+
+    Apply the ElasticSearch "match\_all" search operator to query on all documents in the index.
+
+- __prefix__
+
+    Takes a "field:string" combination and you can use multiple --prefix options will be "AND"'d
+
+    Example:
+
+        --prefix useragent:'Go '
+
+    Will search for documents where the useragent field matches a prefix search on the string 'Go '
+
+    JSON Equivalent is:
+
+        { "prefix": { "useragent": "Go " } }
 
 - __exists__
 
