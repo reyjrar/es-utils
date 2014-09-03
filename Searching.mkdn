@@ -26,6 +26,7 @@ Options:
     --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
+    --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
@@ -180,6 +181,12 @@ es-search.pl - Search a logging cluster for information
     Comma separated list of fields to display in the dump of the data
 
         --show src_ip,crit,file,out_bytes
+
+- __format__
+
+    Output format to use when the full record is dumped.  The default is 'yaml', but 'json' is also supported.
+
+        --format json
 
 - __tail__
 

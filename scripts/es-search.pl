@@ -6,7 +6,6 @@ use strict;
 use warnings;
 
 use App::ElasticSearch::Utilities qw(:all);
-use Data::Dumper;
 use Carp;
 use CLI::Helpers qw(:all);
 use File::Slurp qw(slurp);
@@ -15,11 +14,6 @@ use JSON;
 use Pod::Usage;
 use POSIX qw(strftime);
 use YAML;
-
-# For Elements which are data structures
-local $Data::Dumper::Indent = 0;
-local $Data::Dumper::Terse = 1;
-local $Data::Dumper::Sortkeys = 1;
 
 #------------------------------------------------------------------------#
 # Argument Parsing
@@ -39,6 +33,7 @@ GetOptions(\%OPT,
     'fields',
     'bases',
     'all',
+    'format:s',
     'no-header',
     'help|h',
     'manual|m',
@@ -71,7 +66,8 @@ pod2usage({-exitval => 1, -msg =>"Unknown option(s): $unknown_options"}) if $unk
 #--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
-    size => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
+    size   => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
+    format => (exists $OPT{format} && length $OPT{format} ? lc $OPT{format} : 'yaml'),
 );
 
 #------------------------------------------------------------------------#
@@ -315,14 +311,15 @@ AGES: while( !$DONE || @AGES ) {
                 foreach my $f (@always,@SHOW) {
                     my $v = '-';
                     if( exists $record->{$f} && defined $record->{$f} ) {
-                        $v = ref $record->{$f} ? Dumper $record->{$f} : $record->{$f};
+                        $v = ref $record->{$f} ? to_json($record->{$f},{allow_nonref=>1,canonical=>1}) : $record->{$f};
                     }
                     push @cols,$v;
                 }
                 $output = join("\t",@cols);
             }
             else {
-                $output = Dump $record;
+                $output = $CONFIG{format} eq 'json' ? to_json($record,{allow_nonref=>1,canonical=>1,pretty=>1})
+                        : Dump $record;
             }
 
             output({data=>1}, $output);
@@ -479,6 +476,7 @@ Options:
     --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
+    --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
@@ -504,6 +502,12 @@ Print detailed help with examples
 Comma separated list of fields to display in the dump of the data
 
     --show src_ip,crit,file,out_bytes
+
+=item B<format>
+
+Output format to use when the full record is dumped.  The default is 'yaml', but 'json' is also supported.
+
+    --format json
 
 =item B<tail>
 
