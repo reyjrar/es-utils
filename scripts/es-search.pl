@@ -106,16 +106,16 @@ pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --top together'}) if ex
 pod2usage({-exitval => 1, -msg => 'Please specify --show with --tail'}) if exists $OPT{tail} && !@SHOW;
 
 # Process extra parameters
-my %extra = ();
+my %extra   = ();
 my @filters = ();
 if( exists $OPT{exists} ) {
     foreach my $field (split /[,:]/, $OPT{exists}) {
-        push @filters, { exists => { field => $OPT{exists} } };
+        push @filters, { exists => { field => $field } };
     }
 }
 if( exists $OPT{missing} ) {
     foreach my $field (split /[,:]/, $OPT{missing}) {
-        push @filters, { missing => { field => $OPT{exists} } };
+        push @filters, { missing => { field => $field } };
     }
 }
 if( @filters ) {
