@@ -121,8 +121,7 @@ if( exists $OPT{missing} ) {
 if( @filters ) {
     $extra{filter} = @filters > 1 ? { and => \@filters } : shift @filters;
 }
-
-my $DONE = 1;
+my $DONE = 0;
 local $SIG{INT} = sub { $DONE=1 };
 
 my $top_type = exists $OPT{by} ? "aggregations" : "facets";
@@ -181,30 +180,34 @@ if( exists $OPT{top} ) {
     $CONFIG{size} = 0;  # and we do not want any results other than the facet data
 }
 elsif(exists $OPT{tail}) {
-    $CONFIG{size} = 10;
+    $CONFIG{size} = 20;
     @AGES = ($AGES[-1]);
-    $DONE = 0;
 }
 
-my $size = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
+my $size              = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
 my %displayed_indices = ();
-my $TOTAL_HITS = 0;
-my $last_hit_ts = undef;
-my $duration = 0;
-my $displayed = 0;
-my $header = exists $OPT{'no-header'};
-my $age = undef;
-my %last_batch_id=();
-my %FACET_TOTALS = ();
+my $TOTAL_HITS        = 0;
+my $last_hit_ts       = undef;
+my $duration          = 0;
+my $displayed         = 0;
+my $header            = exists $OPT{'no-header'};
+my $age               = undef;
+my %last_batch_id     = ();
+my %FACET_TOTALS      = ();
 
-AGES: while( !$DONE || @AGES ) {
-    $age = @AGES ? shift @AGES : $age;
-    select(undef,undef,undef,1) if exists $OPT{tail} && $last_hit_ts;
+AGES: while( !$DONE && @AGES ) {
+    # With --tail, we don't want to deplete @AGES
+    $age = $OPT{tail} ? $AGES[0] : shift @AGES;
+
+    # Pause for 200ms if we're tailing
+    select(undef,undef,undef,0.2) if exists $OPT{tail} && $last_hit_ts;
+
     my $start=time();
-    $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start));
+    $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start-30));
 
     # If we're tailing, bump the @query with a timestamp range
-    push @query, {range => {'@timestamp' => {gte => $last_hit_ts}}}  if exists $OPT{tail};
+    push @query, {range => {'@timestamp' => {gte => $last_hit_ts}}} if $OPT{tail};
+
     my $result = es_request('_search',
         # Search Parameters
         {
@@ -227,7 +230,6 @@ AGES: while( !$DONE || @AGES ) {
             %extra,
         }
     );
-    debug_var($result);
     $duration += time() - $start;
 
     # Remove the last searched date from the @query
@@ -250,7 +252,7 @@ AGES: while( !$DONE || @AGES ) {
 
     my @always = qw(@timestamp);
     $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
-    while( $result || !$DONE ) {
+    while( $result && !$DONE ) {
         my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
 
         # Handle Faceting
@@ -324,9 +326,9 @@ AGES: while( !$DONE || @AGES ) {
 
             output({data=>1}, $output);
             $displayed++;
-            last if !exists $OPT{all} && $DONE && $displayed >= $CONFIG{size};
+            last if all_records_displayed();
         }
-        last if !exists $OPT{all} && $DONE && $displayed >= $CONFIG{size};
+        last if all_records_displayed();
 
         # Scroll forward
         $start = time;
@@ -339,7 +341,7 @@ AGES: while( !$DONE || @AGES ) {
         $duration += time - $start;
         last unless @{ $result->{hits}{hits} } > 0;
     }
-    last if !exists $OPT{all} && $DONE && $displayed >= $CONFIG{size};
+    last if all_records_displayed();
 }
 
 output({stderr=>1,color=>'yellow'},
@@ -359,6 +361,14 @@ if(!exists $OPT{by} && keys %FACET_TOTALS) {
     foreach my $k (sort { $FACET_TOTALS{$b} <=> $FACET_TOTALS{$a} } keys %FACET_TOTALS) {
         output({data=>1,color=>'green'},"$FACET_TOTALS{$k}\t$k");
     }
+}
+
+sub all_records_displayed {
+    return 1 if $DONE;
+    return 0 if exists $OPT{tail};
+    return 0 if exists $OPT{all};
+    return 1 if $displayed >= $CONFIG{size};
+    return 0;
 }
 
 sub show_fields {
