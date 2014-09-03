@@ -94,12 +94,8 @@ debug_var(\%FIELDS);
 
 # Which fields to show
 my @SHOW = ();
-my %HASH_FIELDS = ();
 if ( exists $OPT{show} && length $OPT{show} ) {
     @SHOW = grep { exists $FIELDS{$_} } split /,/, $OPT{show};
-    # hash will contain '{fieldname.key1.key2.key3}' => { field => 'fieldname', key => [ 'key1', 'key2', 'key3' ] }
-    %HASH_FIELDS = map { my @v = split( /\./, substr( $_, 1, -1 ) ); $_ => { field => shift( @v ), key => \@v  } } grep { /^\{.+\..+\}$/ } @SHOW;
-    debug_var(\%HASH_FIELDS);
 }
 if( $OPT{bases} ) {
     show_bases();
@@ -304,8 +300,7 @@ AGES: while( !$DONE || @AGES ) {
                     $record->{$f} = $hit->{_source}{$f};
                 }
                 foreach my $f (@SHOW) {
-                    $record->{$f} = exists $HASH_FIELDS{$f} ? extract_value( $HASH_FIELDS{$f}{key}, $hit->{_source}{$HASH_FIELDS{$f}{field}}, $hit->{_source}{'@fields'}{$HASH_FIELDS{$f}{field}} )
-                                  : exists $hit->{_source}{$f} ? $hit->{_source}{$f}
+                    $record->{$f} = exists $hit->{_source}{$f} ? $hit->{_source}{$f}
                                   : exists $hit->{_source}{'@fields'}{$f} ? $hit->{_source}{'@fields'}{$f}
                                   : undef;
                 }
@@ -367,13 +362,6 @@ if(!exists $OPT{by} && keys %FACET_TOTALS) {
     foreach my $k (sort { $FACET_TOTALS{$b} <=> $FACET_TOTALS{$a} } keys %FACET_TOTALS) {
         output({data=>1,color=>'green'},"$FACET_TOTALS{$k}\t$k");
     }
-}
-
-sub extract_value {
-    my ($key, $v1, $v2) = @_;
-    my $value = $v1 ? $v1 : $v2;
-    $value = ref($value) eq 'HASH' ? $value->{$_} : ref($value) eq 'ARRAY' ? $value->[$_] : undef for @{ $key };
-    return $value;
 }
 
 sub show_fields {
