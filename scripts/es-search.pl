@@ -426,12 +426,12 @@ sub format_search_string {
                     $row ||=  0; # Default to the first row
                     my $id = sprintf("FILE=%s:%s[%d,%d]", $term, $file, $col, $row);
                     if( $row > @rows ) {
-                        verbose({color=>'yellow'}, "$id ROW $row is out-of-range, resetting to 0.");
+                        verbose({color=>'yellow',sticky=>1}, "$id ROW $row is out-of-range, resetting to 0.");
                         $row = 0;
                     }
                     my @set = splice @rows, $row, 500;
                     if(@rows) {
-                        verbose({color=>'yellow'}, sprintf '%s More than 500 rows, truncated, call with %s:%s[%d,%d] on next run.',
+                        verbose({color=>'yellow',sticky=>1}, sprintf '%s More than 500 rows, truncated, call with %s:%s[%d,%d] on next run.',
                             $id, $term, $file, $col, $row + 500
                         );
                     }
