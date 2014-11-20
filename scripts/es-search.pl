@@ -35,6 +35,7 @@ GetOptions(\%OPT,
     'prefix:s@',
     'show:s',
     'size|n:i',
+    'sort:s',
     'tail',
     'top:s',
 );
@@ -93,6 +94,15 @@ my @SHOW = ();
 if ( exists $OPT{show} && length $OPT{show} ) {
     @SHOW = grep { exists $FIELDS{$_} } split /,/, $OPT{show};
 }
+# How to sort
+my $SORT = [ { '@timestamp' => $ORDER } ];
+if( exists $OPT{sort} && length $OPT{sort} ) {
+    $SORT = [
+        map { /:/ ? +{ split /:/ } : $_ }
+        split /,/,
+        $OPT{sort}
+    ];
+}
 if( $OPT{bases} ) {
     show_bases();
     exit 0;
@@ -103,6 +113,9 @@ if( $OPT{fields} ) {
 }
 pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless @query;
 pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --top together'}) if exists $OPT{tail} && $OPT{top};
+pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --sort together'}) if exists $OPT{tail} && $OPT{sort};
+pod2usage({-exitval => 1, -msg => 'Cannot use --sort along with --asc or --desc'})
+    if $OPT{sort} && ($OPT{asc} || $OPT{desc});
 pod2usage({-exitval => 1, -msg => 'Please specify --show with --tail'}) if exists $OPT{tail} && !@SHOW;
 
 # Process extra parameters
@@ -226,7 +239,7 @@ AGES: while( !$DONE && @AGES ) {
                     must => \@query,
                 },
             },
-            sort       => [ { '@timestamp' => $ORDER } ],
+            sort       => $SORT,
             %extra,
         }
     );
@@ -486,6 +499,7 @@ Options:
     --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
+    --sort              List of fields for custom sorting
     --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
@@ -512,6 +526,18 @@ Print detailed help with examples
 Comma separated list of fields to display in the dump of the data
 
     --show src_ip,crit,file,out_bytes
+
+=item B<sort>
+
+Use this option to sort your documents on fields other than C<@timestamp>. Fields are given as a comma separated list:
+
+    --sort field1,field2
+
+To specify per-field sort direction use:
+
+    --sort field1:asc,field2:desc
+
+Using this option together with C<--asc>, C<--desc> or C<--tail> is not possible.
 
 =item B<format>
 
