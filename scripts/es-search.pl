@@ -11,6 +11,7 @@ use CLI::Helpers qw(:all);
 use File::Slurp qw(slurp);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use JSON;
+use Net::CIDR::Lite;
 use Pod::Usage;
 use POSIX qw(strftime);
 use YAML;
@@ -207,6 +208,7 @@ my $header            = exists $OPT{'no-header'};
 my $age               = undef;
 my %last_batch_id     = ();
 my %FACET_TOTALS      = ();
+my %AGES_SEEN         = ();
 
 AGES: while( !$DONE && @AGES ) {
     # With --tail, we don't want to deplete @AGES
@@ -220,6 +222,12 @@ AGES: while( !$DONE && @AGES ) {
 
     # If we're tailing, bump the @query with a timestamp range
     push @query, {range => {'@timestamp' => {gte => $last_hit_ts}}} if $OPT{tail};
+
+    # Header
+    if( exists $OPT{top} && !exists $AGES_SEEN{$age} ) {
+        output({color=>'yellow'}, "= Querying Indexes: " . join(',', @{ $by_age{$age} })) unless exists $AGES_SEEN{$age};
+        $AGES_SEEN{$age}=1;  # Yes, that's an array ref as a hash key, it works ;)
+    }
 
     my $result = es_request('_search',
         # Search Parameters
@@ -464,9 +472,13 @@ sub format_search_string {
                     }
                 }
             }
-            else {
-                $part =~ s/^([^:]+_ip):(\d+\.\d+)\.\*(?:\.\*)?$/$1:[$2.0.0 $2.255.255]/;
-                $part =~ s/^([^:]+_ip):(\d+\.\d+\.\d+)\.\*$/$1:[$2.0 $2.255]/;
+            if($term =~ /_ip$/ ) {
+                if($match =~ m|^\d{1,3}(\.\d{1,3}){1,3}(/\d+)?$|) {
+                    my $cidr = Net::CIDR::Lite->new();
+                    $cidr->add($match);
+                    my @range = split /-/, ($cidr->list_range)[0];
+                    $part = sprintf("%s_numeric:[%s TO %s]", $term, @range);
+                }
             }
         }
         push @modified, exists $BareWords{lc $part} ? $BareWords{lc $part} : $part;
