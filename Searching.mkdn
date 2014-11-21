@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 3.3
+version 3.4
 
 # SYNOPSIS
 
@@ -26,6 +26,7 @@ Options:
     --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
+    --sort              List of fields for custom sorting
     --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
@@ -181,6 +182,18 @@ es-search.pl - Search a logging cluster for information
     Comma separated list of fields to display in the dump of the data
 
         --show src_ip,crit,file,out_bytes
+
+- __sort__
+
+    Use this option to sort your documents on fields other than `@timestamp`. Fields are given as a comma separated list:
+
+        --sort field1,field2
+
+    To specify per-field sort direction use:
+
+        --sort field1:asc,field2:desc
+
+    Using this option together with `--asc`, `--desc` or `--tail` is not possible.
 
 - __format__
 
