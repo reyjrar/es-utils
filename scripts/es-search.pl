@@ -410,18 +410,18 @@ sub show_fields {
 sub show_bases {
     output({color=>'cyan'}, 'Bases available for search:' );
     my $bases = {};
-    foreach my $index (sort keys \%indices) {
+    foreach my $index (sort keys %indices) {
         foreach my $base (split('-', $index)) {
             $bases->{$base} = '';
         }
     }
-    foreach my $base (sort keys $bases) {
+    foreach my $base (sort keys %$bases) {
         output(" - $base");
     }
 
     output({color=>"yellow"},
         sprintf("# Bases: %d from a combined %d indices.\n",
-            scalar(keys $bases),
+            scalar(keys %$bases),
             scalar(keys %indices),
         )
     );
