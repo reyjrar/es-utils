@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 3.4
+version 3.5
 
 # SYNOPSIS
 
@@ -49,7 +49,7 @@ From App::ElasticSearch::Utilities:
 
 ## ARGUMENT GLOBALS
 
-Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
+Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils.yaml** file:
 
     ---
     host: esproxy.example.com
@@ -60,7 +60,7 @@ From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity
+    --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
     --quiet             Show no output (for cron)
 
@@ -135,7 +135,7 @@ We can source that file:
 This make it simple to use the --data-file output options and build queries based off previous queries.
 
 You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
-__zero-based__ indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
+**zero-based** indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
 as:
 
     src_ip:test.dat[1]
@@ -143,7 +143,7 @@ as:
 or:
     src\_ip:test.dat\[-1\]
 
-It is also possible to use a __zero-based__ row offset in the specification.  For example:
+It is also possible to use a **zero-based** row offset in the specification.  For example:
 
     src_ip:test.dat[-1,2]
 
@@ -169,21 +169,21 @@ es-search.pl - Search a logging cluster for information
 
 # OPTIONS
 
-- __help__
+- **help**
 
     Print this message and exit
 
-- __manual__
+- **manual**
 
     Print detailed help with examples
 
-- __show__
+- **show**
 
     Comma separated list of fields to display in the dump of the data
 
         --show src_ip,crit,file,out_bytes
 
-- __sort__
+- **sort**
 
     Use this option to sort your documents on fields other than `@timestamp`. Fields are given as a comma separated list:
 
@@ -195,26 +195,26 @@ es-search.pl - Search a logging cluster for information
 
     Using this option together with `--asc`, `--desc` or `--tail` is not possible.
 
-- __format__
+- **format**
 
     Output format to use when the full record is dumped.  The default is 'yaml', but 'json' is also supported.
 
         --format json
 
-- __tail__
+- **tail**
 
     Repeats the query every second until CTRL+C is hit, displaying new results.  Due to the implementation,
     this mode enforces that only the most recent indices are searched.  Also, given the output is continuous, you must
     specify --show with this option.
 
-- __top__
+- **top**
 
     Perform an aggregation or facet returning the top field.  Limited to a single field at this time.
     This option is not available when using --tail.
 
         --top src_ip
 
-- __by__
+- **by**
 
     Perform a sub aggregation on the top terms aggregation and order by the result of this aggregation.
     Aggregation syntax is as follows:
@@ -236,11 +236,11 @@ es-search.pl - Search a logging cluster for information
         avg:<field>
         sum:<field>
 
-- __match-all__
+- **match-all**
 
     Apply the ElasticSearch "match\_all" search operator to query on all documents in the index.
 
-- __prefix__
+- **prefix**
 
     Takes a "field:string" combination and you can use multiple --prefix options will be "AND"'d
 
@@ -254,7 +254,7 @@ es-search.pl - Search a logging cluster for information
 
         { "prefix": { "useragent": "Go " } }
 
-- __exists__
+- **exists**
 
     Filter results to those containing a valid, not null field
 
@@ -262,7 +262,7 @@ es-search.pl - Search a logging cluster for information
 
     Only show records with a referer field in the document.
 
-- __missing__
+- **missing**
 
     Filter results to those not containing a valid, not null field
 
@@ -270,32 +270,32 @@ es-search.pl - Search a logging cluster for information
 
     Only show records without a referer field in the document.
 
-- __bases__
+- **bases**
 
     Display a list of bases that can be used with the --base option.
 
-- __fields__
+- **fields**
 
     Display a list of searchable fields
 
-- __index__
+- **index**
 
     Search only this index for data, may also be a comma separated list
 
-- __days__
+- **days**
 
     The number of days back to search, the default is 5
 
-- __base__
+- **base**
 
     Index base name, will be expanded using the days back parameter.  The default
     is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
 
-- __size__
+- **size**
 
     The number of results to show, default is 20.
 
-- __all__
+- **all**
 
     If specified, ignore the --size parameter and show me everything within the date range I specified.
     In the case of --top, this limits the result set to 1,000,000 results.
