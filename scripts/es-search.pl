@@ -42,14 +42,7 @@ GetOptions(\%OPT,
 );
 
 # Search string is the rest of the argument string
-my $search_string = join(' ', format_search_string(@ARGV));
-my @query   = ();
-if( defined $search_string && length $search_string ) {
-    push @query, { query_string => { query => $search_string } };
-}
-elsif(exists $OPT{'match-all'} && $OPT{'match-all'}){
-    push @query, {match_all =>{} };
-}
+my @query =  exists $OPT{'match-all'} && $OPT{'match-all'} ? { match_all=>{} } : transform_search_string(@ARGV);
 if( exists $OPT{prefix} ){
     foreach my $prefix (@{ $OPT{prefix} }) {
         my ($f,$v) = split /:/, $prefix, 2;
@@ -204,7 +197,7 @@ my $TOTAL_HITS        = 0;
 my $last_hit_ts       = undef;
 my $duration          = 0;
 my $displayed         = 0;
-my $header            = exists $OPT{'no-header'};
+my $header            = 0;
 my $age               = undef;
 my %last_batch_id     = ();
 my %FACET_TOTALS      = ();
@@ -224,9 +217,10 @@ AGES: while( !$DONE && @AGES ) {
     push @query, {range => {'@timestamp' => {gte => $last_hit_ts}}} if $OPT{tail};
 
     # Header
-    if( exists $OPT{top} && !exists $AGES_SEEN{$age} ) {
-        output({color=>'yellow'}, "= Querying Indexes: " . join(',', @{ $by_age{$age} })) unless exists $AGES_SEEN{$age};
-        $AGES_SEEN{$age}=1;  # Yes, that's an array ref as a hash key, it works ;)
+    if( !exists $AGES_SEEN{$age} ) {
+        output({color=>'yellow'}, "= Querying Indexes: " . join(',', @{ $by_age{$age} })) unless exists $OPT{'no-header'};
+        $AGES_SEEN{$age}=1;
+        $header=0;
     }
 
     my $result = es_request('_search',
@@ -272,14 +266,18 @@ AGES: while( !$DONE && @AGES ) {
     $TOTAL_HITS += $result->{hits}{total} if $result->{hits}{total};
 
     my @always = qw(@timestamp);
-    $header++ == 0 && @SHOW && output({color=>'cyan'}, join("\t", @always,@SHOW));
+    if(!exists $OPT{'no-header'} && !$header && @SHOW) {
+        output({color=>'cyan'}, join("\t", @always,@SHOW));
+        $header++;
+    }
+
     while( $result && !$DONE ) {
         my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
 
         # Handle Faceting
         my $facets = exists $result->{$top_type} ? $result->{$top_type}{top}{$TOPKEYS{$top_type}->{base}} : [];
         if( @$facets ) {
-            output({color=>'cyan'},$facet_header);
+            output({color=>'cyan'},$facet_header) unless $OPT{'no-header'};
             foreach my $facet ( @$facets ) {
                 $FACET_TOTALS{$facet->{$TOPKEYS{$top_type}->{key}}} ||= 0;
                 $FACET_TOTALS{$facet->{$TOPKEYS{$top_type}->{key}}} += $facet->{$TOPKEYS{$top_type}->{count}};
@@ -433,41 +431,35 @@ sub by_index_age {
         : $indices{$a} <=> $indices{$b};
 }
 
-my %BareWords;
-sub format_search_string {
+sub transform_search_string {
+    my @arguments = @_;
+    my @query = ();
     my @modified = ();
-    %BareWords = map { $_ => uc } qw(and not or);
-    foreach my $part ( @_ ) {
+    my %BareWords = map { $_ => uc } qw(and not or);
+    foreach my $part ( @arguments ) {
         if( my ($term,$match) = split /\:/, $part, 2 ) {
-            if( defined $match && $match =~ /(.*\.(?:dat|csv|txt))(?:\[(-?\d+)(?:,(\d+))?\])?$/) {
-                my($file,$col,$row) = ($1,$2,$3);
+            if( defined $match && $match =~ /(.*\.(?:dat|csv|txt))(?:\[(-?\d+)\])?$/) {
+                my($file,$col) = ($1,$2);
                 if( -f $file ) {
-                    my @rows = grep { defined && length } slurp($file);
                     $col //= -1; # Default to the last column
-                    $row ||=  0; # Default to the first row
-                    my $id = sprintf("FILE=%s:%s[%d,%d]", $term, $file, $col, $row);
-                    if( $row > @rows ) {
-                        verbose({color=>'yellow',sticky=>1}, "$id ROW $row is out-of-range, resetting to 0.");
-                        $row = 0;
-                    }
-                    my @set = splice @rows, $row, 500;
+                    my @rows = grep { defined && length && !/^#/ } slurp($file);
                     if(@rows) {
-                        verbose({color=>'yellow',sticky=>1}, sprintf '%s More than 500 rows, truncated, call with %s:%s[%d,%d] on next run.',
-                            $id, $term, $file, $col, $row + 500
-                        );
-                    }
-                    if( @set ) {
                         my %uniq=();
-                        my @data=();
-                        for(@set) {
-                            my @cols = split /[\s,;]+/;
+                        for(@rows) {
+                            my @cols = split /[\t,;]+/;
                             my $value = $cols[$col];
-                            if(defined $value && !exists $uniq{$value}) {
-                                push @data, $value;
+                            if(defined $value) {
                                 $uniq{$value} = 1;
                             }
                         }
-                        push @modified,"$term:(" . join(' ', @data) . ")";
+                        verbose({color=>'cyan'},
+                            sprintf "FILE:%s[%d] contained %d data rows with %d unique elements.",
+                            $file,
+                            $col,
+                            scalar(@rows),
+                            scalar(keys %uniq),
+                        );
+                        push @query, { terms => { $term => [sort keys %uniq] } };
                         next;
                     }
                 }
@@ -483,7 +475,9 @@ sub format_search_string {
         }
         push @modified, exists $BareWords{lc $part} ? $BareWords{lc $part} : $part;
     }
-    @modified;
+    push @query, { query_string =>{ query =>  join(' ', @modified) } } if @modified;
+
+    return @query;
 }
 __END__
 
@@ -702,10 +696,10 @@ If a field is an IP address wild card, it is transformed:
 If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
 
     $ cat test.dat
-    50 1.2.3.4
-    40 1.2.3.5
-    30 1.2.3.6
-    20 1.2.3.7
+    50  1.2.3.4
+    40  1.2.3.5
+    30  1.2.3.6
+    20  1.2.3.7
 
 Or
 
@@ -727,7 +721,8 @@ We can source that file:
 
     src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
 
-This make it simple to use the --data-file output options and build queries based off previous queries.
+This make it simple to use the --data-file output options and build queries based off previous queries.  The delimiter
+for columns in the file must be either a tab, comma, or a semicolon.
 
 You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
 B<zero-based> indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
@@ -738,15 +733,8 @@ as:
 or:
     src_ip:test.dat[-1]
 
-It is also possible to use a B<zero-based> row offset in the specification.  For example:
-
-    src_ip:test.dat[-1,2]
-
-Yields a search string of
-
-    src_ip:test.dat => src_ip:(1.2.3.6 1.2.3.7)
-
-This option only supports 500 elements in a list.
+This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
+an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html).
 
 =head2 Meta-Queries
 
