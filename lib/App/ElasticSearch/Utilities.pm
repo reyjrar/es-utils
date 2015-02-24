@@ -265,7 +265,7 @@ sub es_request {
     $options->{$_} = $instance->{$_} for qw(host port);
 
     $options->{method} ||= 'GET';
-    $options->{body} = $body if defined $body && ref $body eq 'HASH';
+    $options->{body} = $body if defined $body;
     $options->{command} = $url;
     my $index = 'NoIndex';
 
