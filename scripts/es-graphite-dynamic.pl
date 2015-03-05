@@ -99,7 +99,7 @@ for ( @metrics ) {
         verbose($_);
     }
     else {
-        output($_);
+        output({data=>1},$_);
     }
 }
 
