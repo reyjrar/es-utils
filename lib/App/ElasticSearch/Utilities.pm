@@ -30,6 +30,7 @@ use Sub::Exporter -setup => {
         es_indices
         es_indices_meta
         es_index_valid
+        es_index_strip_date
         es_index_days_old
         es_index_shards
         es_index_segments
@@ -322,7 +323,7 @@ Returns the hash of index meta data.
 my %_nodes;
 sub es_nodes {
     if(!keys %_nodes) {
-        my $res = es_request('_cluster/state', {
+        my $res = es_request('_cat/state', {
             uri_param => {
                 filter_nodes         => 0,
                 filter_routing_table => 1,
@@ -353,13 +354,7 @@ my $_indices_meta;
 sub es_indices_meta {
 
     if(!defined $_indices_meta) {
-        my $result = es_request('_cluster/state', {
-            uri_param => {
-                filter_routing_table => 1,
-                filter_nodes         => 1,
-                filter_blocks        => 1,
-            },
-        });
+        my $result = es_request('_cluster/state/metadata');
         $_indices_meta = $result->{metadata}{indices};
         if ( !defined $_indices_meta ) {
             output({stderr=>1,color=>"red"}, "es_indices(): Unable to locate indices in status!");
@@ -473,6 +468,23 @@ sub es_indices {
     $_valid_index{$_} = 1 for @indices;
 
     return wantarray ? @indices : \@indices;
+}
+
+=func es_index_strip_date( 'index-name' )
+
+Returns the index name with the date removed.
+
+=cut
+
+sub es_index_strip_date {
+    my ($index) = @_;
+
+    return -1 unless defined $index;
+
+    if( my ($indexName) = ($index =~ /^(.*)[-_]$PATTERN_REGEX{DATE}$/) ) {
+        return $indexName;
+    }
+    return undef;
 }
 
 =func es_index_days_old( 'index-name' )

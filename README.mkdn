@@ -106,6 +106,10 @@ Options include:
 
     Default is 1, set to 0 to disable checking index age.
 
+## es\_index\_strip\_date( 'index-name' )
+
+Returns the index name with the date removed.
+
 ## es\_index\_days\_old( 'index-name' )
 
 Return the number of days old this index is.

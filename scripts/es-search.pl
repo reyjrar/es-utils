@@ -70,7 +70,14 @@ my %CONFIG = (
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
 $ORDER = 'asc' if exists $OPT{tail};
 my %by_age = ();
-my %indices = map { $_ => es_index_days_old($_) } es_indices();
+my %indices = ();
+my $attempts = 0;
+until( keys %indices ) {
+    last if $attempts++ == 5;
+    debug("Attempting to retrieve indices, try: $attempts.");
+    %indices = map { $_ => es_index_days_old($_) } es_indices();
+}
+die "Failed to retrieve any indices using your paramaters." unless keys %indices;
 my %FIELDS = ();
 foreach my $index (sort by_index_age keys %indices) {
     my $age = $indices{$index};
@@ -407,19 +414,21 @@ sub show_fields {
 
 sub show_bases {
     output({color=>'cyan'}, 'Bases available for search:' );
-    my $bases = {};
-    foreach my $index (sort keys %indices) {
-        foreach my $base (split('-', $index)) {
-            $bases->{$base} = '';
-        }
+    my %bases = map { es_index_strip_date($_) => 1 } keys %indices;
+
+    foreach my $index (sort keys %bases) {
+        $bases{$index} = 1;
+        my $sub = (split '-', $index, 2)[-1];
+        next unless defined $sub;
+        $bases{$sub} = 1;
     }
-    foreach my $base (sort keys %$bases) {
+    foreach my $base (sort keys %bases) {
         output(" - $base");
     }
 
     output({color=>"yellow"},
         sprintf("# Bases: %d from a combined %d indices.\n",
-            scalar(keys %$bases),
+            scalar(keys %bases),
             scalar(keys %indices),
         )
     );
