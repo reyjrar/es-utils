@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 3.6
+version 3.7
 
 # SYNOPSIS
 
@@ -14,11 +14,11 @@ This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
 Included are:
 
-**SEARCHING**:
+__SEARCHING__:
 
     scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
 
-**MONITORING**:
+__MONITORING__:
 
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
@@ -26,19 +26,19 @@ Included are:
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
     scripts/es-nodes.pl - View node information
 
-**MAINTENANCE**:
+__MAINTENANCE__:
 
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-alias-manager.pl - Manage index aliases automatically
     scripts/es-open.pl - Open any closed indices matching a index parameters
 
-**MANAGEMENT**:
+__MANAGEMENT__:
 
     scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
 
-**DEPRECATED**:
+__DEPRECATED__:
 
     scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
 
@@ -93,16 +93,16 @@ Makes use of --datesep to determine where the date is.
 
 Options include:
 
-- **state**
+- __state__
 
     Default is 'open', can be used to find 'closed' indexes as well.
 
-- **check\_state**
+- __check\_state__
 
     Default is 1, set to 0 to disable state checks.  The combination of the default
-    with this option and the default for **state** means only open indices are returned.
+    with this option and the default for __state__ means only open indices are returned.
 
-- **check\_dates**
+- __check\_dates__
 
     Default is 1, set to 0 to disable checking index age.
 
@@ -193,7 +193,7 @@ From App::ElasticSearch::Utilities:
 
 ## ARGUMENT GLOBALS
 
-Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils.yaml** file:
+Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
 
     ---
     host: esproxy.example.com
@@ -202,7 +202,7 @@ Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils
 
 # INSTALL
 
-**This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch**.
+__This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch__.
 
 Recommended install with [CPAN Minus](http://cpanmin.us):
 
@@ -246,7 +246,6 @@ Patterns are used to match an index to the aliases it should have.  A few symbol
 regular expressions.  Those patterns are:
 
     *       expands to match any number of any characters.
-    ?       expands to match any single character.
     DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
     ANY     expands to match any number of any characters.
 

@@ -4,7 +4,7 @@ es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
 
 # VERSION
 
-version 3.6
+version 3.7
 
 # SYNOPSIS
 
@@ -43,7 +43,7 @@ From App::ElasticSearch::Utilities:
 
 ## ARGUMENT GLOBALS
 
-Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils.yaml** file:
+Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
 
     ---
     host: esproxy.example.com
@@ -54,7 +54,7 @@ From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity (Alias is -v)
+    --verbose           Incremental, increase verbosity
     --debug             Show developer output
     --quiet             Show no output (for cron)
 
@@ -69,45 +69,45 @@ Use with cron:
 
 # OPTIONS
 
-- **close**
+- __close__
 
     Run the close hook
 
-- **close-days**
+- __close-days__
 
     Integer, close indexes older than this number of days
 
-- **delete**
+- __delete__
 
     Run the delete hook
 
-- **delete-days**
+- __delete-days__
 
     Integer, delete indexes older than this number of days
 
-- **optimize**
+- __optimize__
 
     Run the optimization hook
 
-- **optimize-days**
+- __optimize-days__
 
     Integer, optimize indexes older than this number of days
 
-- **replicas**
+- __replicas__
 
     Run the replicas hook.
 
-- **replicas-age**
+- __replicas-age__
 
     The age at which we reach --replicas-min, default 60
 
-- **replicas-min**
+- __replicas-min__
 
     The minimum number of replicas to allow replica aging to set.  The default is 0
 
         --replicas-min=1
 
-- **replicas-max**
+- __replicas-max__
 
     The maximum number of replicas to allow replica aging to set.  The default is 100
 
