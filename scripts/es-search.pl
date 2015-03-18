@@ -14,32 +14,33 @@ use JSON;
 use Net::CIDR::Lite;
 use Pod::Usage;
 use POSIX qw(strftime);
+use Text::CSV_XS;
 use YAML;
 
 #------------------------------------------------------------------------#
 # Argument Parsing
 my %OPT;
-GetOptions(\%OPT,
-    'all',
-    'asc',
-    'bases',
-    'by:s',
-    'desc',
-    'exists:s',
-    'fields',
-    'format:s',
-    'help|h',
-    'manual|m',
-    'match-all',
-    'missing:s',
-    'no-header',
-    'prefix:s@',
-    'show:s',
-    'size|n:i',
-    'sort:s',
-    'tail',
-    'top:s',
-);
+GetOptions(\%OPT, qw(
+    all
+    asc
+    bases
+    by:s
+    desc
+    exists:s
+    fields
+    format:s
+    help|h
+    manual|m
+    match-all
+    missing:s
+    no-header
+    prefix:s@
+    show:s
+    size|n:i
+    sort:s
+    tail
+    top:s
+));
 
 # Search string is the rest of the argument string
 my @query =  exists $OPT{'match-all'} && $OPT{'match-all'} ? { match_all=>{} } : transform_search_string(@ARGV);
@@ -70,14 +71,8 @@ my %CONFIG = (
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
 $ORDER = 'asc' if exists $OPT{tail};
 my %by_age = ();
-my %indices = ();
-my $attempts = 0;
-until( keys %indices ) {
-    last if $attempts++ == 5;
-    debug("Attempting to retrieve indices, try: $attempts.");
-    %indices = map { $_ => es_index_days_old($_) } es_indices();
-}
-die "Failed to retrieve any indices using your paramaters." unless keys %indices;
+my %indices = map { $_ => es_index_days_old($_) } es_indices();
+die "# Failed to retrieve any indices using your paramaters." unless keys %indices;
 my %FIELDS = ();
 foreach my $index (sort by_index_age keys %indices) {
     my $age = $indices{$index};
@@ -185,7 +180,7 @@ if( exists $OPT{top} ) {
     }
 
     if( exists $OPT{all} ) {
-        verbose({color=>'cyan'}, "Facets with --all are limited to returning 1,000,000 results.");
+        verbose({color=>'cyan'}, "# Facets with --all are limited to returning 1,000,000 results.");
         $extra{$top_type}->{top}{terms}{size} = 1_000_000;
     }
     else {
@@ -439,36 +434,37 @@ sub by_index_age {
         ? $indices{$b} <=> $indices{$a}
         : $indices{$a} <=> $indices{$b};
 }
-
 sub transform_search_string {
     my @arguments = @_;
     my @query = ();
     my @modified = ();
     my %BareWords = map { $_ => uc } qw(and not or);
+
+    # File Based Parsers
+    my %parsers = (
+        csv => \&parse_file_csv,
+        dat => \&parse_file_txt,
+        txt => \&parse_file_txt,
+    );
     foreach my $part ( @arguments ) {
         if( my ($term,$match) = split /\:/, $part, 2 ) {
-            if( defined $match && $match =~ /(.*\.(?:dat|csv|txt))(?:\[(-?\d+)\])?$/) {
-                my($file,$col) = ($1,$2);
-                if( -f $file ) {
-                    $col //= -1; # Default to the last column
-                    my @rows = grep { defined && length && !/^#/ } slurp($file);
-                    if(@rows) {
-                        my %uniq=();
-                        for(@rows) {
-                            my @cols = split /[\t,;]+/;
-                            my $value = $cols[$col];
-                            if(defined $value) {
-                                $uniq{$value} = 1;
-                            }
-                        }
+            if( defined $match && $match =~ /(.*\.(\w{3,4}))(?:\[(-?\d+)\])?$/) {
+                my($file,$type,$col) = ($1,$2,$3);
+                $col //= -1;
+                $type = lc $type;
+                verbose({level=>2,color=>'magenta'}, sprintf "# File expansion attempt of %s type, %s[%d]",
+                    $type, $file, $col
+                );
+                if( exists $parsers{$type} && -f $file ) {
+                    my $uniq = $parsers{$type}->($file,$col);
+                    if (defined $uniq && ref $uniq eq 'HASH' && scalar(keys %$uniq)) {
                         verbose({color=>'cyan'},
-                            sprintf "FILE:%s[%d] contained %d data rows with %d unique elements.",
+                            sprintf "# FILE:%s[%d] contained %d unique elements.",
                             $file,
                             $col,
-                            scalar(@rows),
-                            scalar(keys %uniq),
+                            scalar(keys %$uniq),
                         );
-                        push @query, { terms => { $term => [sort keys %uniq] } };
+                        push @query, { terms => { $term => [sort keys %$uniq] } };
                         next;
                     }
                 }
@@ -487,6 +483,36 @@ sub transform_search_string {
     push @query, { query_string =>{ query =>  join(' ', @modified) } } if @modified;
 
     return @query;
+}
+sub parse_file_csv {
+    my ($file,$col) = @_;
+    my $csv = Text::CSV_XS->new({binary=>1,empty_is_undef=>1});
+    open my $fh, "<:encoding(utf8)", $file or die "Unable to read $file: $!";
+    my %uniq = ();
+    while( my $row = $csv->getline($fh) ) {
+        my $val;
+        eval {
+            $val = $row->[$col];
+        };
+        next unless defined $val;
+        $uniq{$val} = 1;
+    }
+    return \%uniq;
+}
+sub parse_file_txt {
+    my ($file,$col) = @_;
+    my %uniq=();
+    my @rows = grep { defined && length && !/^#/ && chomp } slurp($file);
+    if(@rows) {
+        for(@rows) {
+            my @cols = split /[\s,]+/;
+            my $value = $cols[$col];
+            if(defined $value) {
+                $uniq{$value} = 1;
+            }
+        }
+    }
+    return \%uniq;
 }
 __END__
 
@@ -730,8 +756,10 @@ We can source that file:
 
     src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
 
-This make it simple to use the --data-file output options and build queries based off previous queries.  The delimiter
-for columns in the file must be either a tab, comma, or a semicolon.
+This make it simple to use the --data-file output options and build queries
+based off previous queries. For .txt and .dat file, the delimiter for columns
+in the file must be either a tab, comma, or a semicolon.  For files ending in
+.csv, Text::CSV_XS is used to accurate parsing of the file format.
 
 You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
 B<zero-based> indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
@@ -743,7 +771,7 @@ or:
     src_ip:test.dat[-1]
 
 This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
-an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html).
+an appropriate L<terms query|http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html>.
 
 =head2 Meta-Queries
 

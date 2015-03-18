@@ -133,7 +133,7 @@ my %DEF = (
                    undef,
     PATTERN     => exists $opt{pattern} ? $opt{pattern} : '*',
     DAYS        => exists $opt{days} ? $opt{days} :
-                   exists $_GLOBALS{days} ? $_GLOBALS{days} : undef,
+                   exists $_GLOBALS{days} ? $_GLOBALS{days} : 7,
     DATESEP     => exists $opt{datesep} ? $opt{datesep} :
                    exists $opt{'date-separator'} ? lc $opt{'date-separator'} :
                    '.',
@@ -149,10 +149,10 @@ if( $DEF{NOPROXY} ) {
 # Regexes for Pattern Expansion
 my %PATTERN_REGEX = (
     '*'  => qr/.*/,
-    '?'  => qr/.?/,
     DATE => qr/\d{4}(?:\Q$DEF{DATESEP}\E)?\d{2}(?:\Q$DEF{DATESEP}\E)?\d{2}/,
     ANY  => qr/.*/,
 );
+my @ORDERED = qw(* DATE ANY);
 
 if( index($DEF{DATESEP},'-') >= 0 ) {
     output({stderr=>1,color=>'yellow'}, "=== Using a '-' as your date separator may cause problems with other utilities. ===");
@@ -160,7 +160,7 @@ if( index($DEF{DATESEP},'-') >= 0 ) {
 
 # Build the Index Pattern
 my $PATTERN = $DEF{PATTERN};
-foreach my $literal ( keys %PATTERN_REGEX ) {
+foreach my $literal ( @ORDERED ) {
     $PATTERN =~ s/\Q$literal\E/$PATTERN_REGEX{$literal}/g;
 }
 
@@ -352,12 +352,11 @@ Returns the hash of index meta data.
 
 my $_indices_meta;
 sub es_indices_meta {
-
     if(!defined $_indices_meta) {
         my $result = es_request('_cluster/state/metadata');
         $_indices_meta = $result->{metadata}{indices};
         if ( !defined $_indices_meta ) {
-            output({stderr=>1,color=>"red"}, "es_indices(): Unable to locate indices in status!");
+            output({stderr=>1,color=>"red"}, "es_indices_meta(): Unable to locate indices in status!");
             exit 1;
         }
     }
@@ -418,7 +417,7 @@ sub es_indices {
     }
     else {
         my %meta = es_indices_meta();
-        foreach my $index (keys %meta) {
+        foreach my $index (sort keys %meta) {
             debug("Evaluating '$index'");
             if(!exists $args{_all}) {
                 # State Check Disqualification
@@ -438,8 +437,8 @@ sub es_indices {
                 }
                 else {
                     my $p = es_pattern;
-                    debug({indent=>1}, "+ method:pattern - $p->{string}");
-                    next unless $index =~ /^$p->{re}/;
+                    debug({indent=>1}, sprintf "+ method:pattern - %s", encode_json($p));
+                    next unless $index =~ /$p->{re}/;
                 }
                 debug({indent=>2},"= name checks succeeded");
                 if( $args{check_dates} && defined $DEF{DAYS} ) {
@@ -845,7 +844,6 @@ Patterns are used to match an index to the aliases it should have.  A few symbol
 regular expressions.  Those patterns are:
 
     *       expands to match any number of any characters.
-    ?       expands to match any single character.
     DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
     ANY     expands to match any number of any characters.
 
