@@ -8,7 +8,7 @@ use warnings;
 use App::ElasticSearch::Utilities qw(:all);
 use Carp;
 use CLI::Helpers qw(:all);
-use File::Slurp qw(slurp);
+use File::Slurp::Tiny qw(read_lines);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use JSON;
 use Net::CIDR::Lite;
@@ -502,7 +502,7 @@ sub parse_file_csv {
 sub parse_file_txt {
     my ($file,$col) = @_;
     my %uniq=();
-    my @rows = grep { defined && length && !/^#/ && chomp } slurp($file);
+    my @rows = grep { defined && length && !/^#/ && chomp } read_lines($file);
     if(@rows) {
         for(@rows) {
             my @cols = split /[\s,]+/;
