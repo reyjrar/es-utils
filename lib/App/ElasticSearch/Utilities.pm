@@ -48,7 +48,7 @@ use Sub::Exporter -setup => {
     groups => {
         default => [qw(es_connect es_indices es_request)],
         indices => [qw(:default es_indices_meta)],
-        index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_shard_replicas)],
+        index   => [qw(:default es_index_valid es_index_fields es_index_days_old)],
     },
 };
 use App::ElasticSearch::Utilities::VersionHacks qw(_fix_version_request);
