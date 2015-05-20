@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 3.8
+version 3.9
 
 # SYNOPSIS
 
@@ -46,6 +46,10 @@ The App::ElasticSearch::Utilities module simply serves as a wrapper around the s
 distribution.
 
 # FUNCTIONS
+
+## es\_global($key)
+
+Grab the value of the global value from the es-utils.yaml files.
 
 ## es\_pattern
 
@@ -181,7 +185,7 @@ From App::ElasticSearch::Utilities:
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
-    --noop          Any operations other than GET are disabled
+    --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
     --index         Index to run commands against

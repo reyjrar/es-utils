@@ -4,7 +4,7 @@ es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
 
 # VERSION
 
-version 3.8
+version 3.9
 
 # SYNOPSIS
 
@@ -54,9 +54,14 @@ From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity
+    --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
+    --debug-class       Show debug messages originating from a specific package, default: main
     --quiet             Show no output (for cron)
+    --syslog            Generate messages to syslog as well
+    --syslog-facility   Default "local0"
+    --syslog-tag        The program name, default is the script name
+    --syslog-debug      Enable debug messages to syslog if in use, default false
 
 # DESCRIPTION
 

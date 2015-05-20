@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 3.8
+version 3.9
 
 # SYNOPSIS
 
@@ -31,6 +31,7 @@ Options:
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
+    --timestamp         Field to use as the date object, default: @timestamp
 
 From App::ElasticSearch::Utilities:
 
@@ -60,9 +61,14 @@ From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity
+    --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
+    --debug-class       Show debug messages originating from a specific package, default: main
     --quiet             Show no output (for cron)
+    --syslog            Generate messages to syslog as well
+    --syslog-facility   Default "local0"
+    --syslog-tag        The program name, default is the script name
+    --syslog-debug      Enable debug messages to syslog if in use, default false
 
 # DESCRIPTION
 
@@ -286,6 +292,10 @@ es-search.pl - Search a logging cluster for information
 
     Index base name, will be expanded using the days back parameter.  The default
     is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
+
+- __timestamp__
+
+    The field in your documents that we'll treat as a "date" type in our queries.
 
 - __size__
 
