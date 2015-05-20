@@ -23,6 +23,7 @@ use YAML;
 use Elastijk;
 use Sub::Exporter -setup => {
     exports => [ qw(
+        es_globals
         es_pattern
         es_connect
         es_request
@@ -60,7 +61,7 @@ From App::ElasticSearch::Utilities:
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
-    --noop          Any operations other than GET are disabled
+    --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
     --index         Index to run commands against
@@ -93,7 +94,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'pattern:s',
         'base|index-basename:s',
         'days:i',
-        'noop',
+        'noop!',
         'datesep|date-separator:s',
     );
     $_OPTIONS_PARSED = 1;
@@ -113,29 +114,27 @@ foreach my $config_file (@_CONFIGS) {
 # Set defaults
 my %DEF = (
     # Connection Options
-    HOST        => exists $opt{host} ? $opt{host} :
-                   exists $opt{local} ? 'localhost' :
-                   exists $_GLOBALS{host} ? $_GLOBALS{host} : 'localhost',
-    PORT        => exists $opt{port} ? $opt{port} :
-                   exists $_GLOBALS{port} ? $_GLOBALS{port} : 9200,
-    TIMEOUT     => exists $opt{timeout} ? $opt{timeout} :
-                   exists $_GLOBALS{timeout} ? $_GLOBALS{timeout} : 30,
-    NOOP        => exists $opt{noop} ? $opt{noop} :
-                   exists $_GLOBALS{noop} ? $_GLOBALS{noop} :
-                   undef,
-    NOPROXY     => exists $opt{'keep-proxy'} ? 0 :
-                   exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'} :
-                   1,
+    HOST        => exists $opt{host}              ? $opt{host} :
+                   exists $opt{local}             ? 'localhost' :
+                   exists $_GLOBALS{host}         ? $_GLOBALS{host} : 'localhost',
+    PORT        => exists $opt{port}              ? $opt{port} :
+                   exists $_GLOBALS{port}         ? $_GLOBALS{port} : 9200,
+    TIMEOUT     => exists $opt{timeout}           ? $opt{timeout} :
+                   exists $_GLOBALS{timeout}      ? $_GLOBALS{timeout} : 30,
+    NOOP        => exists $opt{noop}              ? $opt{noop} :
+                   exists $_GLOBALS{noop}         ? $_GLOBALS{noop} : undef,
+    NOPROXY     => exists $opt{'keep-proxy'}      ? 0 :
+                   exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'} : 1,
     # Index selection options
-    INDEX       => exists $opt{index} ? $opt{index} : undef,
-    BASE        => exists $opt{base} ? lc $opt{base} :
-                   exists $opt{'index-basename'} ? lc $opt{'index-basename'} :
-                   undef,
-    PATTERN     => exists $opt{pattern} ? $opt{pattern} : '*',
-    DAYS        => exists $opt{days} ? $opt{days} :
+    INDEX       => exists $opt{index}     ? $opt{index} : undef,
+    BASE        => exists $opt{base}      ? lc $opt{base} :
+                   exists $_GLOBALS{base} ? $_GLOBALS{base} : undef,
+    PATTERN     => exists $opt{pattern}   ? $opt{pattern} : '*',
+    DAYS        => exists $opt{days}      ? $opt{days} :
                    exists $_GLOBALS{days} ? $_GLOBALS{days} : 7,
-    DATESEP     => exists $opt{datesep} ? $opt{datesep} :
-                   exists $opt{'date-separator'} ? lc $opt{'date-separator'} :
+    DATESEP     => exists $opt{datesep}               ? $opt{datesep} :
+                   exists $_GLOBALS{datesep}          ? $_GLOBALS{datesep} :
+                   exists $_GLOBALS{"date-separator"} ? $_GLOBALS{"date-separator"} :
                    '.',
 );
 debug_var(\%DEF);
@@ -165,6 +164,19 @@ foreach my $literal ( @ORDERED ) {
 }
 
 our $CURRENT_VERSION;
+
+=func es_global($key)
+
+Grab the value of the global value from the es-utils.yaml files.
+
+=cut
+
+sub es_globals {
+    my ($key) = @_;
+
+    return unless exists $_GLOBALS{$key};
+    return $_GLOBALS{$key};
+}
 
 =func es_pattern
 
@@ -431,7 +443,7 @@ sub es_indices {
 
                 if( defined $DEF{BASE} ) {
                     debug({indent=>1}, "+ method:base - $DEF{BASE}");
-                    my @parts = split /\-/, $index;
+                    my @parts = split /[\-_]/, $index;
                     my %parts = map { lc($_) => 1 } @parts;
                     next unless exists $parts{$DEF{BASE}};
                 }
@@ -499,7 +511,15 @@ sub es_index_days_old {
     return -1 unless defined $index;
 
     if( my ($dateStr) = ($index =~ /($PATTERN_REGEX{DATE})/) ) {
-        my @date = reverse map { int } split /\Q$DEF{DATESEP}\E/, $dateStr;
+        my @date=();
+        if(length $DEF{DATESEP}) {
+           @date = reverse map { int } split /\Q$DEF{DATESEP}\E/, $dateStr;
+        }
+        else {
+            for my $len (qw(4 2 2)) {
+                unshift @date, substr($dateStr,0,$len,'');
+            }
+        }
         $date[1]--; # move 1-12 -> 0-11
         my $idx_time = timelocal( 0,0,0, @date );
         my $diff = $NOW - $idx_time;

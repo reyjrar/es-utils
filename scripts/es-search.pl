@@ -39,6 +39,7 @@ GetOptions(\%OPT, qw(
     size|n:i
     sort:s
     tail
+    timestamp:s
     top:s
 ));
 
@@ -62,8 +63,10 @@ pod2usage({-exitval => 1, -msg =>"Unknown option(s): $unknown_options"}) if $unk
 #--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
-    size   => (exists $OPT{size} && $OPT{size} > 0 ? int($OPT{size}) : 20),
-    format => (exists $OPT{format} && length $OPT{format} ? lc $OPT{format} : 'yaml'),
+    size      => (exists $OPT{size} && $OPT{size} > 0)              ? int($OPT{size})         : 20,
+    format    => (exists $OPT{format} && length $OPT{format})       ? lc $OPT{format}         : 'yaml',
+    timestamp => (exists $OPT{timestamp} && length $OPT{timestamp}) ? $OPT{timestamp}         :
+                 defined es_globals('timestamp')                    ? es_globals('timestamp') : '@timestamp',
 );
 
 #------------------------------------------------------------------------#
@@ -91,7 +94,7 @@ if ( exists $OPT{show} && length $OPT{show} ) {
     @SHOW = grep { exists $FIELDS{$_} } split /,/, $OPT{show};
 }
 # How to sort
-my $SORT = [ { '@timestamp' => $ORDER } ];
+my $SORT = [ { $CONFIG{timestamp} => $ORDER } ];
 if( exists $OPT{sort} && length $OPT{sort} ) {
     $SORT = [
         map { /:/ ? +{ split /:/ } : $_ }
@@ -216,7 +219,7 @@ AGES: while( !$DONE && @AGES ) {
     $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start-30));
 
     # If we're tailing, bump the @query with a timestamp range
-    push @query, {range => {'@timestamp' => {gte => $last_hit_ts}}} if $OPT{tail};
+    push @query, {range => { $CONFIG{timestamp} => {gte => $last_hit_ts}}} if $OPT{tail};
 
     # Header
     if( !exists $AGES_SEEN{$age} ) {
@@ -267,7 +270,7 @@ AGES: while( !$DONE && @AGES ) {
     $displayed_indices{$_} = 1 for @{ $by_age{$age} };
     $TOTAL_HITS += $result->{hits}{total} if $result->{hits}{total};
 
-    my @always = qw(@timestamp);
+    my @always = ($CONFIG{timestamp});
     if(!exists $OPT{'no-header'} && !$header && @SHOW) {
         output({color=>'cyan'}, join("\t", @always,@SHOW));
         $header++;
@@ -304,14 +307,14 @@ AGES: while( !$DONE && @AGES ) {
         }
 
         # Reset the last batch ID if we have new data
-        %last_batch_id = () if @{$hits} > 0 && $last_hit_ts ne $hits->[-1]->{_source}{'@timestamp'};
+        %last_batch_id = () if @{$hits} > 0 && $last_hit_ts ne $hits->[-1]->{_source}{$CONFIG{timestamp}};
         debug({color=>'magenta'}, "+ ID cache is now empty.") unless keys %last_batch_id;
 
         foreach my $hit (@{ $hits }) {
             # Skip if we've seen this record
             next if exists $last_batch_id{$hit->{_id}};
 
-            $last_hit_ts = $hit->{_source}{'@timestamp'};
+            $last_hit_ts = $hit->{_source}{$CONFIG{timestamp}};
             $last_batch_id{$hit->{_id}}=1;
             my $record = {};
             if( @SHOW ) {
@@ -545,6 +548,7 @@ Options:
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
+    --timestamp         Field to use as the date object, default: @timestamp
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -676,6 +680,10 @@ The number of days back to search, the default is 5
 
 Index base name, will be expanded using the days back parameter.  The default
 is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
+
+=item B<timestamp>
+
+The field in your documents that we'll treat as a "date" type in our queries.
 
 =item B<size>
 
