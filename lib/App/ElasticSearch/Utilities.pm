@@ -165,7 +165,7 @@ foreach my $literal ( @ORDERED ) {
 
 our $CURRENT_VERSION;
 
-=func es_global($key)
+=func es_globals($key)
 
 Grab the value of the global value from the es-utils.yaml files.
 
