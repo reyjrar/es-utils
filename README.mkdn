@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 3.9
+version 4.0
 
 # SYNOPSIS
 
@@ -47,7 +47,7 @@ distribution.
 
 # FUNCTIONS
 
-## es\_global($key)
+## es\_globals($key)
 
 Grab the value of the global value from the es-utils.yaml files.
 

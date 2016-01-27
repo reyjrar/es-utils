@@ -1,37 +1,191 @@
 # NAME
 
-es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
+App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 3.9
+version 4.0
 
 # SYNOPSIS
 
-es-daily-index-maintenance.pl --all --local
+This library contains utilities for unified interfaces in the scripts.
 
-Options:
+This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
-    --help              print help
-    --manual            print full manual
-    --all               Run close, delete, optimize, and replicas tools
-    --close             Run close for indexes older than
-    --close-days        Age of the oldest index to keep open (default:60)
-    --delete            Run delete indexes older than
-    --delete-days       Age of oldest index to keep (default: 90)
-    --optimize          Run optimize on indexes
-    --optimize-days     Age of first index to optimize (default: 1)
-    --replicas          Run the replic aging hook
-    --replicas-age      Age of the index to reach the minimum replicas (default:60)
-    --replicas-min      Minimum number of replicas this index may have (default:0)
-    --replicas-max      Maximum number of replicas this index may have (default:100)
+Included are:
+
+__SEARCHING__:
+
+    scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
+
+__MONITORING__:
+
+    scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
+    scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
+    scripts/es-status.pl - Command line utility for ES Metrics
+    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    scripts/es-nodes.pl - View node information
+
+__MAINTENANCE__:
+
+    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
+    scripts/es-alias-manager.pl - Manage index aliases automatically
+    scripts/es-open.pl - Open any closed indices matching a index parameters
+
+__MANAGEMENT__:
+
+    scripts/es-copy-index.pl - Copy an index from one cluster to another
+    scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
+    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+
+__DEPRECATED__:
+
+    scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
+
+The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
+distribution.
+
+# FUNCTIONS
+
+## es\_globals($key)
+
+Grab the value of the global value from the es-utils.yaml files.
+
+## es\_pattern
+
+Returns a hashref of the pattern filter used to get the indexes
+    {
+        string => '\*',
+        re     => '.\*',
+    }
+
+## es\_connect
+
+Without options, this connects to the server defined in the args.  If passed
+an array ref, it will use that as the connection definition.
+
+## es\_request(\[$handle\],$command,{ method => 'GET', parameters => { a => 1 } }, {})
+
+Retrieve URL from ElasticSearch, returns a hash reference
+
+First hash ref contains options, including:
+
+    uri_param           Query String Parameters
+    index               Index name
+    type                Index type
+    method              Default is GET
+
+## es\_nodes
+
+Returns the hash of index meta data.
+
+## es\_indices\_meta
+
+Returns the hash of index meta data.
+
+## es\_indices
+
+Returns a list of active indexes matching the filter criteria specified on the command
+line.  Can handle indices named:
+
+    logstash-YYYY.MM.DD
+    dcid-logstash-YYYY.MM.DD
+    logstash-dcid-YYYY.MM.DD
+    logstash-YYYY.MM.DD-dcid
+
+Makes use of --datesep to determine where the date is.
+
+Options include:
+
+- __state__
+
+    Default is 'open', can be used to find 'closed' indexes as well.
+
+- __check\_state__
+
+    Default is 1, set to 0 to disable state checks.  The combination of the default
+    with this option and the default for __state__ means only open indices are returned.
+
+- __check\_dates__
+
+    Default is 1, set to 0 to disable checking index age.
+
+## es\_index\_strip\_date( 'index-name' )
+
+Returns the index name with the date removed.
+
+## es\_index\_days\_old( 'index-name' )
+
+Return the number of days old this index is.
+
+## es\_index\_shard\_replicas( 'index-name' )
+
+Returns the number of replicas for a given index.
+
+## es\_index\_valid( 'index-name' )
+
+Checks if the specified index is valid
+
+## es\_index\_fields('index-name')
+
+Returns a list of the fields in a given index.
+
+## es\_close\_index('index-name')
+
+Closes an index
+
+## es\_open\_index('index-name')
+
+Open an index
+
+## es\_delete\_index('index-name')
+
+Deletes an index
+
+## es\_optimize\_index('index-name')
+
+Optimize an index to a single segment per shard
+
+## es\_index\_segments( 'index-name' )
+
+Exposes GET /$index/\_segments
+
+Returns the segment data from the index in hashref:
+
+## es\_segment\_stats($index)
+
+Return the number of shards and segments in an index as a hashref
+
+## es\_index\_stats( 'index-name' )
+
+Exposes GET /$index/\_stats
+
+Returns a hashref
+
+## es\_settings()
+
+Exposes GET /\_settings
+
+Returns a hashref
+
+## es\_node\_stats()
+
+Exposes GET /\_nodes/stats
+
+Returns a hashref
+
+## def('key')
+
+Exposes Definitions grabbed by options parsing
+
+# ARGS
 
 From App::ElasticSearch::Utilities:
 
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
-    --noop          Any operations other than GET are disabled
+    --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
     --index         Index to run commands against
@@ -50,73 +204,59 @@ Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils
     port: 80
     timeout: 10
 
-From CLI::Helpers:
+# INSTALL
 
-    --data-file         Path to a file to write lines tagged with 'data => 1'
-    --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity (Alias is -v)
-    --debug             Show developer output
-    --debug-class       Show debug messages originating from a specific package, default: main
-    --quiet             Show no output (for cron)
-    --syslog            Generate messages to syslog as well
-    --syslog-facility   Default "local0"
-    --syslog-tag        The program name, default is the script name
-    --syslog-debug      Enable debug messages to syslog if in use, default false
+__This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch__.
 
-# DESCRIPTION
+Recommended install with [CPAN Minus](http://cpanmin.us):
 
-This script assists in maintaining the indexes for logging clusters through
-routine deletion and optimization of indexes.
+    cpanm App::ElasticSearch::Utilities
 
-Use with cron:
+You can also use CPAN:
 
-    22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180 --replicas-age=90 --replicas-min=1
+    cpan App::ElasticSearch::Utilities
 
-# OPTIONS
+Or if you'd prefer to manually install:
 
-- __close__
+    export RELEASE=<CurrentRelease>
 
-    Run the close hook
+    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true -O es-utils.tgz
 
-- __close-days__
+    tar -zxvf es-utils.tgz
 
-    Integer, close indexes older than this number of days
+    cd App-ElasticSearch-Utilities-$RELEASE
 
-- __delete__
+    perl Makefile.PL
 
-    Run the delete hook
+    make
 
-- __delete-days__
+    make install
 
-    Integer, delete indexes older than this number of days
+This will take care of ensuring all the dependencies are satisfied and will install the scripts into the same
+directory as your Perl executable.
 
-- __optimize__
+## USAGE
 
-    Run the optimization hook
+The tools are all wrapped in their own documentation, please see:
 
-- __optimize-days__
+    $UTILITY --help
+    $UTILITY --manual
 
-    Integer, optimize indexes older than this number of days
+For individual options and capabilities
 
-- __replicas__
+## PATTERNS
 
-    Run the replicas hook.
+Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
+regular expressions.  Those patterns are:
 
-- __replicas-age__
+    *       expands to match any number of any characters.
+    DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
+    ANY     expands to match any number of any characters.
 
-    The age at which we reach --replicas-min, default 60
+## CONTRIBUTORS
 
-- __replicas-min__
-
-    The minimum number of replicas to allow replica aging to set.  The default is 0
-
-        --replicas-min=1
-
-- __replicas-max__
-
-    The maximum number of replicas to allow replica aging to set.  The default is 100
-
-        --replicas-max=2
+    Mihai Oprea <mishu@mishulica.com>
+    Samit Badle
 
 # AUTHOR
 
