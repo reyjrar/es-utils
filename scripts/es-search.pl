@@ -136,26 +136,13 @@ if( @filters ) {
 my $DONE = 0;
 local $SIG{INT} = sub { $DONE=1 };
 
-my $top_type = exists $OPT{by} ? "aggregations" : "facets";
-my %TOPKEYS = (
-    aggregations => {
-        base  => "buckets",
-        key   => "key",
-        count => "doc_count",
-    },
-    facets => {
-        base  => "terms",
-        key   => "term",
-        count => "count",
-    },
-);
 my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max avg);
 my $SUBAGG = undef;
-my $facet_header = '';
+my $agg_header = '';
 if( exists $OPT{top} ) {
-    my @facet_fields = grep { length($_) && exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
-    croak(sprintf("Option --top takes a field, found %d fields: %s\n", scalar(@facet_fields),join(',',@facet_fields)))
-        unless @facet_fields == 1;
+    my @agg_fields = grep { length($_) && exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
+    croak(sprintf("Option --top takes a field, found %d fields: %s\n", scalar(@agg_fields),join(',',@agg_fields)))
+        unless @agg_fields == 1;
 
     my %sub_agg = ();
     if(exists $OPT{by}) {
@@ -169,27 +156,24 @@ if( exists $OPT{top} ) {
         }
     }
 
-    my $facet = shift @facet_fields;
-    $facet_header = "count\t" . $facet;
-    $extra{$top_type} = { top => { terms => { field => $facet } } };
+    my $field = shift @agg_fields;
+    $agg_header = "count\t" . $field;
+    $extra{aggregations} = { top => { terms => { field => $field } } };
 
-    if( $top_type eq 'facets' && exists $extra{filter} ) {
-        $extra{$top_type}->{top}{facet_filter} = $extra{filter};
-    }
-    elsif( $top_type eq 'aggregations' && keys %sub_agg ) {
-        $facet_header = "$OPT{by}\t" . $facet_header;
-        $extra{$top_type}->{top}{terms}{order} = { by => $ORDER };
-        $extra{$top_type}->{top}{aggregations} = \%sub_agg;
+    if( keys %sub_agg ) {
+        $agg_header = "$OPT{by}\t" . $agg_header;
+        $extra{aggregations}->{top}{terms}{order} = { by => $ORDER };
+        $extra{aggregations}->{top}{aggregations} = \%sub_agg;
     }
 
     if( exists $OPT{all} ) {
-        verbose({color=>'cyan'}, "# Facets with --all are limited to returning 1,000,000 results.");
-        $extra{$top_type}->{top}{terms}{size} = 1_000_000;
+        verbose({color=>'cyan'}, "# Aggregations with --all are limited to returning 1,000,000 results.");
+        $extra{aggregations}->{top}{terms}{size} = 1_000_000;
     }
     else {
-        $extra{$top_type}->{top}{terms}{size} = $CONFIG{size};
+        $extra{aggregations}->{top}{terms}{size} = $CONFIG{size};
     }
-    $CONFIG{size} = 0;  # and we do not want any results other than the facet data
+    $CONFIG{size} = 0;  # and we do not want any results other than the aggregation data
 }
 elsif(exists $OPT{tail}) {
     $CONFIG{size} = 20;
@@ -205,7 +189,7 @@ my $displayed         = 0;
 my $header            = 0;
 my $age               = undef;
 my %last_batch_id     = ();
-my %FACET_TOTALS      = ();
+my %AGGS_TOTALS       = ();
 my %AGES_SEEN         = ();
 
 AGES: while( !$DONE && @AGES ) {
@@ -279,29 +263,29 @@ AGES: while( !$DONE && @AGES ) {
     while( $result && !$DONE ) {
         my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
 
-        # Handle Faceting
-        my $facets = exists $result->{$top_type} ? $result->{$top_type}{top}{$TOPKEYS{$top_type}->{base}} : [];
-        if( @$facets ) {
-            output({color=>'cyan'},$facet_header) unless $OPT{'no-header'};
-            foreach my $facet ( @$facets ) {
-                $FACET_TOTALS{$facet->{$TOPKEYS{$top_type}->{key}}} ||= 0;
-                $FACET_TOTALS{$facet->{$TOPKEYS{$top_type}->{key}}} += $facet->{$TOPKEYS{$top_type}->{count}};
+        # Handle Aggregations
+        my $aggs = exists $result->{aggregations} ? $result->{aggregations}{top}{buckets} : [];
+        if( @$aggs ) {
+            output({color=>'cyan'},$agg_header) unless $OPT{'no-header'};
+            foreach my $agg ( @$aggs ) {
+                $AGGS_TOTALS{$agg->{key}} ||= 0;
+                $AGGS_TOTALS{$agg->{key}} += $agg->{doc_count};
                 my @out = (
-                    $facet->{$TOPKEYS{$top_type}->{count}},
-                    $facet->{$TOPKEYS{$top_type}->{key}},
+                    $agg->{doc_count},
+                    $agg->{key},
                 );
-                if(exists $facet->{by} ) {
-                    if( exists $facet->{by}{value} ) {
-                        unshift @out, $facet->{by}{value};
+                if(exists $agg->{by} ) {
+                    if( exists $agg->{by}{value} ) {
+                        unshift @out, $agg->{by}{value};
                     }
                 }
                 output(exists $OPT{by} ? {data=>1} : {}, join("\t",@out));
                 $displayed++;
             }
-            $TOTAL_HITS = exists $result->{$top_type}{top}{other} ? $result->{$top_type}{top}{other} + $displayed : $TOTAL_HITS;
+            $TOTAL_HITS = exists $result->{aggegrations}{top}{other} ? $result->{aggregations}{top}{other} + $displayed : $TOTAL_HITS;
             next AGES;
         }
-        elsif(exists $result->{$top_type}{top}) {
+        elsif(exists $result->{aggregations}{top}) {
             output({indent=>1,color=>'red'}, "= No results.");
             next AGES;
         }
@@ -379,11 +363,11 @@ output({stderr=>1,color=>'yellow'},
     ),
 );
 
-if(!exists $OPT{by} && keys %FACET_TOTALS) {
+if(!exists $OPT{by} && keys %AGGS_TOTALS) {
     output({color=>'yellow'}, '#', '# Totals across batch', '#');
-    output({color=>'cyan'},$facet_header);
-    foreach my $k (sort { $FACET_TOTALS{$b} <=> $FACET_TOTALS{$a} } keys %FACET_TOTALS) {
-        output({data=>1,color=>'green'},"$FACET_TOTALS{$k}\t$k");
+    output({color=>'cyan'},$agg_header);
+    foreach my $k (sort { $AGGS_TOTALS{$b} <=> $AGGS_TOTALS{$a} } keys %AGGS_TOTALS) {
+        output({data=>1,color=>'green'},"$AGGS_TOTALS{$k}\t$k");
     }
 }
 
@@ -533,7 +517,7 @@ Options:
     --manual            print full manual
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --tail              Continue the query until CTRL+C is sent
-    --top               Perform a facet on the fields, by a comma separated list of up to 2 items
+    --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
     --match-all         Enables the ElasticSearch match_all operator
     --prefix            Takes "field:string" and enables the Lucene prefix query for that field
@@ -598,7 +582,7 @@ specify --show with this option.
 
 =item B<top>
 
-Perform an aggregation or facet returning the top field.  Limited to a single field at this time.
+Perform an aggregation returning the top field.  Limited to a single field at this time.
 This option is not available when using --tail.
 
     --top src_ip

@@ -5,6 +5,7 @@ package App::ElasticSearch::Utilities::VersionHacks;
 use strict;
 use warnings;
 
+use Const::Fast;
 use CLI::Helpers qw(:all);
 use Sub::Exporter -setup => {
     exports => [ qw(
@@ -12,42 +13,15 @@ use Sub::Exporter -setup => {
     )],
 };
 
-my %SIMPLE = (
-    '_nodes' => {
-        0.17    => '_cluster/nodes',
-        0.18    => '_cluster/nodes',
-        0.19    => '_cluster/nodes',
-        0.90    => '_cluster/nodes',
-    },
+const my $MIN_VERSION => 1.0;
+const my %SIMPLE => (
     '_cluster/nodes' => {
-        1.0     => '_nodes',
-        1.1     => '_nodes',
-        1.2     => '_nodes',
-        1.3     => '_nodes',
-        1.4     => '_nodes',
-        1.5     => '_nodes',
-        1.6     => '_nodes',
-        1.7     => '_nodes',
-        2.0     => '_nodes',
-        2.1     => '_nodes',
+        default => '_nodes',
     }
 );
 my %CALLBACKS = (
     '_cluster/state' => {
-        0.17 => \&_cluster_state_legacy,
-        0.18 => \&_cluster_state_legacy,
-        0.19 => \&_cluster_state_legacy,
-        0.90 => \&_cluster_state_legacy,
-        1.0 => \&_cluster_state_1_0,
-        1.1 => \&_cluster_state_1_0,
-        1.2 => \&_cluster_state_1_0,
-        1.3 => \&_cluster_state_1_0,
-        1.4 => \&_cluster_state_1_0,
-        1.5 => \&_cluster_state_1_0,
-        1.6 => \&_cluster_state_1_0,
-        1.7 => \&_cluster_state_1_0,
-        2.0 => \&_cluster_state_1_0,
-        2.1 => \&_cluster_state_1_0,
+        default => \&_cluster_state_1_0,
     },
 );
 
@@ -64,8 +38,10 @@ sub _fix_version_request {
         if(my $err = $@) {
             output({stderr=>1,color=>'red'}, "Failed version detection!", $@);
         }
-        if ($version < 1.0) {
-            output({stderr=>1,color=>'red',sticky=>1}, "!!! Detected ElasticSearch Version '$version', which is not going to be supported in future releases !!!");
+        if (defined $version < $MIN_VERSION) {
+            output({stderr=>1,color=>'red',sticky=>1},
+                    "!!! Detected ElasticSearch Version '$version', which is < $MIN_VERSION, please upgrade your cluster !!!");
+            exit 1;
         }
     }
 
@@ -77,6 +53,10 @@ sub _fix_version_request {
         if(exists $SIMPLE{$url}->{$version}) {
             debug({indent=>1,color=>'yellow'}, "+ Rewriting $url to $SIMPLE{$url}->{$version}");
             $url = $SIMPLE{$url}->{$version};
+        }
+        elsif(exists $SIMPLE{$url}->{default}) {
+            debug({indent=>1,color=>'yellow'}, "+ Rewriting $url to $SIMPLE{$url}->{default} by default rule");
+            $url = $SIMPLE{$url}->{default};
         }
     }
     else {
@@ -93,43 +73,26 @@ sub _fix_version_request {
                 debug({indent=>1,color=>'yellow'}, "+ Callback dispatched for $url");
                 ($url,$options,$data) = $CALLBACKS{$url}->{$version}->($url,$options,$data);
             }
+            elsif(exists $CALLBACKS{$url}->{default}) {
+                debug({indent=>1,color=>'yellow'}, "+ Callback dispatched for $url by default rule");
+                ($url,$options,$data) = $CALLBACKS{$url}->{default}->($url,$options,$data);
+            }
         }
     }
 
     return ($url,$options,$data);
 }
 
-my %_cluster_state = (
-    nodes         => 0,
-    routing_table => 0,
-    metadata      => 0,
-    indices       => 0,
-    blocks        => 0,
-    version       => 1.0,
-    master_node   => 1.0,
+my %_cluster_state = map { $_ => 1  } qw(
+    nodes
+    routing_table
+    metadata
+    indices
+    blocks
+    version
+    master_node
 );
 
-sub _cluster_state_legacy {
-    my ($url,$options,$data) = @_;
-
-    # Handle the URL
-    my (@parts) = split /\//, $url;
-    $url = '_cluster/state';
-
-    # Legacy doesn't support index names in the URI
-    verbose({color=>"yellow"}, "Warning: _cluster/state doesn't support index names in ES $version")
-        if @parts > 3;
-
-    # Handle the requested metrics on a new fangled cluster
-    if(@parts > 2 && length $parts[2]) {
-        verbose({color=>'yellow'}, "WARNING: Attempting to use post 1.0 API for _cluster/state on ES $version");
-        verbose({level=>2,indent=>1}, "See: http://www.elasticsearch.org/guide/en/reference/$version/cluster-state.html#cluster-state");
-        my %requested = map { $_ => 1 } split /\,/, $parts[2];
-        foreach my $metric (grep { $version >= $_cluster_state{$_} } keys %_cluster_state) {
-            $options->{uri_param}->{"filter_$metric"} = exists $requested{$metric} ? 0 : 1;
-        }
-    }
-}
 sub _cluster_state_1_0 {
     my ($url,$options,$data) = @_;
 
@@ -149,7 +112,7 @@ sub _cluster_state_1_0 {
             # Remove them from the parameters
             delete $options->{uri_param}{"filter_$_"} for keys %filters;
             if(keys %filters) {
-                foreach my $metric (grep { $version >= $_cluster_state{$_} } keys %_cluster_state) {
+                foreach my $metric (keys %_cluster_state) {
                     push @requested, $metric unless exists $filters{$metric};
                 }
             }
