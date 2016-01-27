@@ -307,8 +307,7 @@ AGES: while( !$DONE && @AGES ) {
                 }
                 foreach my $f (@SHOW) {
                     $record->{$f} = exists $hit->{_source}{$f} ? $hit->{_source}{$f}
-                                  : exists $hit->{_source}{'@fields'}{$f} ? $hit->{_source}{'@fields'}{$f}
-                                  : undef;
+                                  : document_lookdown($hit->{_source},$f);
                 }
             }
             else {
@@ -377,6 +376,19 @@ sub all_records_displayed {
     return 0 if exists $OPT{all};
     return 1 if $displayed >= $CONFIG{size};
     return 0;
+}
+
+sub document_lookdown {
+    my ($href,$field) = @_;
+
+    return $href->{$field} if exists $href->{$field};
+
+    foreach my $k (keys %{ $href }) {
+        if( ref $href->{$k} eq 'HASH' ) {
+            return document_lookdown($href->{$k},$field);
+        }
+    }
+    return undef;
 }
 
 sub show_fields {
