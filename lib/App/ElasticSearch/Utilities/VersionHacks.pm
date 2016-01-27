@@ -26,6 +26,10 @@ my %SIMPLE = (
         1.3     => '_nodes',
         1.4     => '_nodes',
         1.5     => '_nodes',
+        1.6     => '_nodes',
+        1.7     => '_nodes',
+        2.0     => '_nodes',
+        2.1     => '_nodes',
     }
 );
 my %CALLBACKS = (
@@ -40,6 +44,10 @@ my %CALLBACKS = (
         1.3 => \&_cluster_state_1_0,
         1.4 => \&_cluster_state_1_0,
         1.5 => \&_cluster_state_1_0,
+        1.6 => \&_cluster_state_1_0,
+        1.7 => \&_cluster_state_1_0,
+        2.0 => \&_cluster_state_1_0,
+        2.1 => \&_cluster_state_1_0,
     },
 );
 

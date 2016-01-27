@@ -29,14 +29,7 @@ my $CLUSTER = defined $cres ? $cres->{cluster_name} : 'UNKNOWN';
 
 output({clear=>1,color=>'magenta'}, "Cluster [$CLUSTER] contains $cres->{number_of_nodes} nodes.", '-='x20);
 # Get a list of nodes
-my $nres = es_request('_cluster/state', {
-    uri_param => {
-        filter_routing_table => 1,
-        filter_metadata => 1,
-        filter_blocks => 1,
-        filter_indices => 1,
-    },
-});
+my $nres = es_request('_cluster/state/master_node,nodes', {});
 if(!defined $nres) {
     output({stderr=>1,color=>'red'}, 'Fetching node status failed.');
     exit 1;

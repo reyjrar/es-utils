@@ -335,14 +335,7 @@ Returns the hash of index meta data.
 my %_nodes;
 sub es_nodes {
     if(!keys %_nodes) {
-        my $res = es_request('_cat/state', {
-            uri_param => {
-                filter_nodes         => 0,
-                filter_routing_table => 1,
-                filter_indices       => 1,
-                filter_metadata      => 1,
-            },
-        });
+        my $res = es_request('_cluster/state/nodes', {});
         if( !defined $res  ) {
             output({color=>"red"}, "es_nodes(): Unable to locate nodes in status!");
             exit 1;
