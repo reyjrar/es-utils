@@ -209,7 +209,10 @@ sub _get_es_version {
             $CURRENT_VERSION = join('.', (split /\./,$result->{version}{number})[0,1]);
         }
     };
-    $CURRENT_VERSION ||= 0;
+    if( !defined $CURRENT_VERSION || $CURRENT_VERSION <= 0 ) {
+        output({color=>'red',stderr=>1}, "Unable to determine Elasticsearch version, something has gone terribly wrong: aborting.");
+        exit 1;
+    }
     debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");
     return $CURRENT_VERSION;
 };
