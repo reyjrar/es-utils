@@ -19,6 +19,7 @@ GetOptions(\%OPT,
     'from:s',
     'to:s',
     'rename:s',
+    'block-size:1000',
     'help|h',
     'manual|m',
 );
@@ -78,7 +79,7 @@ if ($status ne "200") {
 
 $ES{from}->scan_scroll(
     index => $INDEX{from},
-    body => { size => 1000 },
+    body => { size => $OPT{'block-size'} },
     on_response => sub {
         my ($status, $res) = @_;
 

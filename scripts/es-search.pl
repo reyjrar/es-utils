@@ -479,6 +479,8 @@ sub transform_search_string {
         }
         push @modified, exists $BareWords{lc $part} ? $BareWords{lc $part} : $part;
     }
+    # remove trailing AND, NOT, and OR's
+    pop @modified while $modified[-1] =~ /^AND|OR|NOT$/;
     push @query, { query_string =>{ query =>  join(' ', @modified) } } if @modified;
 
     return @query;
