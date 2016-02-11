@@ -1,6 +1,6 @@
 # NAME
 
-App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
+es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily indexes
 
 # VERSION
 
@@ -8,259 +8,277 @@ version 4.0
 
 # SYNOPSIS
 
-This library contains utilities for unified interfaces in the scripts.
+es-search.pl \[search string\]
 
-This a set of utilities to make monitoring ElasticSearch clusters much simpler.
+Options:
 
-Included are:
+    --help              print help
+    --manual            print full manual
+    --show              Comma separated list of fields to display, default is ALL, switches to tab output
+    --tail              Continue the query until CTRL+C is sent
+    --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
+    --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
+    --match-all         Enables the ElasticSearch match_all operator
+    --prefix            Takes "field:string" and enables the Lucene prefix query for that field
+    --exists            Field which must be present in the document
+    --missing           Field which must not be present in the document
+    --size              Result size, default is 20
+    --all               Don't consider result size, just give me *everything*
+    --asc               Sort by ascending timestamp
+    --desc              Sort by descending timestamp (Default)
+    --sort              List of fields for custom sorting
+    --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
+    --no-header         Do not show the header with field names in the query results
+    --fields            Display the field list for this index!
+    --bases             Display the index base list for this cluster.
+    --timestamp         Field to use as the date object, default: @timestamp
 
-__SEARCHING__:
+From CLI::Helpers:
 
-    scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
+    --color             Boolean, enable/disable color, default use git settings
+    --verbose           Incremental, increase verbosity
+    --debug             Show developer output
+    --quiet             Show no output (for cron)
 
-__MONITORING__:
+# DESCRIPTION
 
-    scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
-    scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
-    scripts/es-status.pl - Command line utility for ES Metrics
-    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
-    scripts/es-nodes.pl - View node information
+This tool takes a search string parameter to search the cluster.  It is in the format of the Lucene
+[query string](http://lucene.apache.org/core/2_9_4/queryparsersyntax.html)
 
-__MAINTENANCE__:
+Examples might include:
 
-    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
-    scripts/es-alias-manager.pl - Manage index aliases automatically
-    scripts/es-open.pl - Open any closed indices matching a index parameters
+    # Search for past 10 days vhost admin.example.com and client IP 1.2.3.4
+    es-search.pl --days=10 --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.4"
 
-__MANAGEMENT__:
+    # Search for all apache logs past 5 days with status 500
+    es-search.pl program:"apache" AND crit:500
 
-    scripts/es-copy-index.pl - Copy an index from one cluster to another
-    scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
-    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    # Search for all apache logs past 5 days with status 500 show only file and out_bytes
+    es-search.pl program:"apache" AND crit:500 --show file,out_bytes
 
-__DEPRECATED__:
+    # Search for ip subnet client IP 1.2.3.0 to 1.2.3.255 or 1.2.0.0 to 1.2.255.255
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.*"
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.*"
 
-    scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
+    # Show the top src_ip for 'www.example.com'
+    es-search.pl --base access dst:www.example.com --top src_ip
 
-The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
-distribution.
+    # Tail the access log for www.example.com 404's
+    es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
 
-# FUNCTIONS
+## Extended Syntax
 
-## es\_globals($key)
+The search string is pre-analyzed before being sent to ElasticSearch.  Basic formatting is corrected:
 
-Grab the value of the global value from the es-utils.yaml files.
+The following barewords are transformed:
 
-## es\_pattern
+    or => OR
+    and => AND
+    not => NOT
 
-Returns a hashref of the pattern filter used to get the indexes
-    {
-        string => '\*',
-        re     => '.\*',
-    }
+If a field is an IP address wild card, it is transformed:
 
-## es\_connect
+    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
 
-Without options, this connects to the server defined in the args.  If passed
-an array ref, it will use that as the connection definition.
+If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
 
-## es\_request(\[$handle\],$command,{ method => 'GET', parameters => { a => 1 } }, {})
+    $ cat test.dat
+    50  1.2.3.4
+    40  1.2.3.5
+    30  1.2.3.6
+    20  1.2.3.7
 
-Retrieve URL from ElasticSearch, returns a hash reference
+Or
 
-First hash ref contains options, including:
+    $ cat test.csv
+    50,1.2.3.4
+    40,1.2.3.5
+    30,1.2.3.6
+    20,1.2.3.7
 
-    uri_param           Query String Parameters
-    index               Index name
-    type                Index type
-    method              Default is GET
+Or
 
-## es\_nodes
+    $ cat test.txt
+    1.2.3.4
+    1.2.3.5
+    1.2.3.6
+    1.2.3.7
 
-Returns the hash of index meta data.
+We can source that file:
 
-## es\_indices\_meta
+    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
 
-Returns the hash of index meta data.
+This make it simple to use the --data-file output options and build queries
+based off previous queries. For .txt and .dat file, the delimiter for columns
+in the file must be either a tab, comma, or a semicolon.  For files ending in
+.csv, Text::CSV\_XS is used to accurate parsing of the file format.
 
-## es\_indices
+You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
+**zero-based** indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
+as:
 
-Returns a list of active indexes matching the filter criteria specified on the command
-line.  Can handle indices named:
+    src_ip:test.dat[1]
 
-    logstash-YYYY.MM.DD
-    dcid-logstash-YYYY.MM.DD
-    logstash-dcid-YYYY.MM.DD
-    logstash-YYYY.MM.DD-dcid
+or:
+    src\_ip:test.dat\[-1\]
 
-Makes use of --datesep to determine where the date is.
+This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
+an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html).
 
-Options include:
+## Meta-Queries
 
-- __state__
+Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
 
-    Default is 'open', can be used to find 'closed' indexes as well.
+    es-search.pl --bases
 
-- __check\_state__
+    es-search.pl --fields
 
-    Default is 1, set to 0 to disable state checks.  The combination of the default
-    with this option and the default for __state__ means only open indices are returned.
+    es-search.pl --base access --fields
 
-- __check\_dates__
+# NAME
 
-    Default is 1, set to 0 to disable checking index age.
+es-search.pl - Search a logging cluster for information
 
-## es\_index\_strip\_date( 'index-name' )
+# OPTIONS
 
-Returns the index name with the date removed.
+- **help**
 
-## es\_index\_days\_old( 'index-name' )
+    Print this message and exit
 
-Return the number of days old this index is.
+- **manual**
 
-## es\_index\_shard\_replicas( 'index-name' )
+    Print detailed help with examples
 
-Returns the number of replicas for a given index.
+- **show**
 
-## es\_index\_valid( 'index-name' )
+    Comma separated list of fields to display in the dump of the data
 
-Checks if the specified index is valid
+        --show src_ip,crit,file,out_bytes
 
-## es\_index\_fields('index-name')
+- **sort**
 
-Returns a list of the fields in a given index.
+    Use this option to sort your documents on fields other than `@timestamp`. Fields are given as a comma separated list:
 
-## es\_close\_index('index-name')
+        --sort field1,field2
 
-Closes an index
+    To specify per-field sort direction use:
 
-## es\_open\_index('index-name')
+        --sort field1:asc,field2:desc
 
-Open an index
+    Using this option together with `--asc`, `--desc` or `--tail` is not possible.
 
-## es\_delete\_index('index-name')
+- **format**
 
-Deletes an index
+    Output format to use when the full record is dumped.  The default is 'yaml', but 'json' is also supported.
 
-## es\_optimize\_index('index-name')
+        --format json
 
-Optimize an index to a single segment per shard
+- **tail**
 
-## es\_index\_segments( 'index-name' )
+    Repeats the query every second until CTRL+C is hit, displaying new results.  Due to the implementation,
+    this mode enforces that only the most recent indices are searched.  Also, given the output is continuous, you must
+    specify --show with this option.
 
-Exposes GET /$index/\_segments
+- **top**
 
-Returns the segment data from the index in hashref:
+    Perform an aggregation returning the top field.  Limited to a single field at this time.
+    This option is not available when using --tail.
 
-## es\_segment\_stats($index)
+        --top src_ip
 
-Return the number of shards and segments in an index as a hashref
+- **by**
 
-## es\_index\_stats( 'index-name' )
+    Perform a sub aggregation on the top terms aggregation and order by the result of this aggregation.
+    Aggregation syntax is as follows:
 
-Exposes GET /$index/\_stats
+        --by <type>:<field>
 
-Returns a hashref
+    A full example might look like this:
 
-## es\_settings()
+        $ es-search.pl --base access dst:www.example.com --top src_ip --by cardinality:@fields.acct
 
-Exposes GET /\_settings
+    This will show the top source IP's ordered by the cardinality (count of the distinct values) of accounts logging
+    in as each source IP, instead of the source IP with the most records.
 
-Returns a hashref
+    Supported sub agggregations and formats:
 
-## es\_node\_stats()
+        cardinality:<field>
+        min:<field>
+        max:<field>
+        avg:<field>
+        sum:<field>
 
-Exposes GET /\_nodes/stats
+- **match-all**
 
-Returns a hashref
+    Apply the ElasticSearch "match\_all" search operator to query on all documents in the index.
 
-## def('key')
+- **prefix**
 
-Exposes Definitions grabbed by options parsing
+    Takes a "field:string" combination and you can use multiple --prefix options will be "AND"'d
 
-# ARGS
+    Example:
 
-From App::ElasticSearch::Utilities:
+        --prefix useragent:'Go '
 
-    --local         Use localhost as the elasticsearch host
-    --host          ElasticSearch host to connect to
-    --port          HTTP port for your cluster
-    --noop          Any operations other than GET are disabled, can be negated with --no-noop
-    --timeout       Timeout to ElasticSearch, default 30
-    --keep-proxy    Do not remove any proxy settings from %ENV
-    --index         Index to run commands against
-    --base          For daily indexes, reference only those starting with "logstash"
-                     (same as --pattern logstash-* or logstash-DATE)
-    --datesep       Date separator, default '.' also (--date-separator)
-    --pattern       Use a pattern to operate on the indexes
-    --days          If using a pattern or base, how many days back to go, default: all
+    Will search for documents where the useragent field matches a prefix search on the string 'Go '
 
-## ARGUMENT GLOBALS
+    JSON Equivalent is:
 
-Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
+        { "prefix": { "useragent": "Go " } }
 
-    ---
-    host: esproxy.example.com
-    port: 80
-    timeout: 10
+- **exists**
 
-# INSTALL
+    Filter results to those containing a valid, not null field
 
-__This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch__.
+        --exists referer
 
-Recommended install with [CPAN Minus](http://cpanmin.us):
+    Only show records with a referer field in the document.
 
-    cpanm App::ElasticSearch::Utilities
+- **missing**
 
-You can also use CPAN:
+    Filter results to those not containing a valid, not null field
 
-    cpan App::ElasticSearch::Utilities
+        --missing referer
 
-Or if you'd prefer to manually install:
+    Only show records without a referer field in the document.
 
-    export RELEASE=<CurrentRelease>
+- **bases**
 
-    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true -O es-utils.tgz
+    Display a list of bases that can be used with the --base option.
 
-    tar -zxvf es-utils.tgz
+- **fields**
 
-    cd App-ElasticSearch-Utilities-$RELEASE
+    Display a list of searchable fields
 
-    perl Makefile.PL
+- **index**
 
-    make
+    Search only this index for data, may also be a comma separated list
 
-    make install
+- **days**
 
-This will take care of ensuring all the dependencies are satisfied and will install the scripts into the same
-directory as your Perl executable.
+    The number of days back to search, the default is 5
 
-## USAGE
+- **base**
 
-The tools are all wrapped in their own documentation, please see:
+    Index base name, will be expanded using the days back parameter.  The default
+    is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
 
-    $UTILITY --help
-    $UTILITY --manual
+- **timestamp**
 
-For individual options and capabilities
+    The field in your documents that we'll treat as a "date" type in our queries.
 
-## PATTERNS
+- **size**
 
-Patterns are used to match an index to the aliases it should have.  A few symbols are expanded into
-regular expressions.  Those patterns are:
+    The number of results to show, default is 20.
 
-    *       expands to match any number of any characters.
-    DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
-    ANY     expands to match any number of any characters.
+- **all**
 
-## CONTRIBUTORS
-
-    Mihai Oprea <mishu@mishulica.com>
-    Samit Badle
+    If specified, ignore the --size parameter and show me everything within the date range I specified.
+    In the case of --top, this limits the result set to 1,000,000 results.
 
 # AUTHOR
 
-Brad Lhotsky <brad@divisionbyzero.net>
+Brad Lhotsky &lt;brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 

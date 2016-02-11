@@ -14,11 +14,11 @@ This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
 Included are:
 
-__SEARCHING__:
+**SEARCHING**:
 
     scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
 
-__MONITORING__:
+**MONITORING**:
 
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
@@ -26,19 +26,19 @@ __MONITORING__:
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
     scripts/es-nodes.pl - View node information
 
-__MAINTENANCE__:
+**MAINTENANCE**:
 
     scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-alias-manager.pl - Manage index aliases automatically
     scripts/es-open.pl - Open any closed indices matching a index parameters
 
-__MANAGEMENT__:
+**MANAGEMENT**:
 
     scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
     scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
 
-__DEPRECATED__:
+**DEPRECATED**:
 
     scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
 
@@ -97,16 +97,16 @@ Makes use of --datesep to determine where the date is.
 
 Options include:
 
-- __state__
+- **state**
 
     Default is 'open', can be used to find 'closed' indexes as well.
 
-- __check\_state__
+- **check\_state**
 
     Default is 1, set to 0 to disable state checks.  The combination of the default
-    with this option and the default for __state__ means only open indices are returned.
+    with this option and the default for **state** means only open indices are returned.
 
-- __check\_dates__
+- **check\_dates**
 
     Default is 1, set to 0 to disable checking index age.
 
@@ -197,7 +197,7 @@ From App::ElasticSearch::Utilities:
 
 ## ARGUMENT GLOBALS
 
-Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils.yaml__ file:
+Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils.yaml** file:
 
     ---
     host: esproxy.example.com
@@ -206,7 +206,7 @@ Some options may be specified in the __/etc/es-utils.yaml__ or __$HOME/.es-utils
 
 # INSTALL
 
-__This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch__.
+**This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch**.
 
 Recommended install with [CPAN Minus](http://cpanmin.us):
 
@@ -260,7 +260,7 @@ regular expressions.  Those patterns are:
 
 # AUTHOR
 
-Brad Lhotsky <brad@divisionbyzero.net>
+Brad Lhotsky &lt;brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
