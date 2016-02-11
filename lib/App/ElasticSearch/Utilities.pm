@@ -47,6 +47,7 @@ use Sub::Exporter -setup => {
         es_apply_index_settings
     )],
     groups => {
+        config  => [qw(es_globals)],
         default => [qw(es_connect es_indices es_request)],
         indices => [qw(:default es_indices_meta)],
         index   => [qw(:default es_index_valid es_index_fields es_index_days_old)],
