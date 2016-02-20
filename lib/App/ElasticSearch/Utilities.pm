@@ -74,7 +74,7 @@ From App::ElasticSearch::Utilities:
     --pattern       Use a pattern to operate on the indexes
     --days          If using a pattern or base, how many days back to go, default: all
 
-=head2 ARGUMENT GLOBALS
+=head1 ARGUMENT GLOBALS
 
 Some options may be specified in the B</etc/es-utils.yaml> or B<$HOME/.es-utils.yaml> file:
 

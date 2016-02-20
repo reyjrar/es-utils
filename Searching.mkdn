@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 4.0
+version 4.1
 
 # SYNOPSIS
 
@@ -33,12 +33,33 @@ Options:
     --bases             Display the index base list for this cluster.
     --timestamp         Field to use as the date object, default: @timestamp
 
+From App::ElasticSearch::Utilities:
+
+    --local         Use localhost as the elasticsearch host
+    --host          ElasticSearch host to connect to
+    --port          HTTP port for your cluster
+    --noop          Any operations other than GET are disabled, can be negated with --no-noop
+    --timeout       Timeout to ElasticSearch, default 30
+    --keep-proxy    Do not remove any proxy settings from %ENV
+    --index         Index to run commands against
+    --base          For daily indexes, reference only those starting with "logstash"
+                     (same as --pattern logstash-* or logstash-DATE)
+    --datesep       Date separator, default '.' also (--date-separator)
+    --pattern       Use a pattern to operate on the indexes
+    --days          If using a pattern or base, how many days back to go, default: all
+
 From CLI::Helpers:
 
+    --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity
+    --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
+    --debug-class       Show debug messages originating from a specific package, default: main
     --quiet             Show no output (for cron)
+    --syslog            Generate messages to syslog as well
+    --syslog-facility   Default "local0"
+    --syslog-tag        The program name, default is the script name
+    --syslog-debug      Enable debug messages to syslog if in use, default false
 
 # DESCRIPTION
 
@@ -65,75 +86,6 @@ Examples might include:
 
     # Tail the access log for www.example.com 404's
     es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
-
-## Extended Syntax
-
-The search string is pre-analyzed before being sent to ElasticSearch.  Basic formatting is corrected:
-
-The following barewords are transformed:
-
-    or => OR
-    and => AND
-    not => NOT
-
-If a field is an IP address wild card, it is transformed:
-
-    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
-
-If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
-
-    $ cat test.dat
-    50  1.2.3.4
-    40  1.2.3.5
-    30  1.2.3.6
-    20  1.2.3.7
-
-Or
-
-    $ cat test.csv
-    50,1.2.3.4
-    40,1.2.3.5
-    30,1.2.3.6
-    20,1.2.3.7
-
-Or
-
-    $ cat test.txt
-    1.2.3.4
-    1.2.3.5
-    1.2.3.6
-    1.2.3.7
-
-We can source that file:
-
-    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
-
-This make it simple to use the --data-file output options and build queries
-based off previous queries. For .txt and .dat file, the delimiter for columns
-in the file must be either a tab, comma, or a semicolon.  For files ending in
-.csv, Text::CSV\_XS is used to accurate parsing of the file format.
-
-You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
-**zero-based** indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
-as:
-
-    src_ip:test.dat[1]
-
-or:
-    src\_ip:test.dat\[-1\]
-
-This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
-an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html).
-
-## Meta-Queries
-
-Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
-
-    es-search.pl --bases
-
-    es-search.pl --fields
-
-    es-search.pl --base access --fields
 
 # NAME
 
@@ -275,6 +227,99 @@ es-search.pl - Search a logging cluster for information
 
     If specified, ignore the --size parameter and show me everything within the date range I specified.
     In the case of --top, this limits the result set to 1,000,000 results.
+
+# Extended Syntax
+
+The search string is pre-analyzed before being sent to ElasticSearch.  The following plugins
+work to manipulate the query string and provide richer, more complete syntax for CLI applications.
+
+## App::ElasticSearch::Utilities::Barewords
+
+The following barewords are transformed:
+
+    or => OR
+    and => AND
+    not => NOT
+
+## App::ElasticSearch::Utilities::QueryString::IP
+
+If a field is an IP address wild card, it is transformed:
+
+    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
+
+## App::ElasticSearch::Utilities::Underscored
+
+This plugin translates some special underscore surrounded tokens into
+the Elasticsearch Query DSL.
+
+Implemented:
+
+### \_prefix\_
+
+Example query string:
+
+    _prefix_:useragent:'Go '
+
+Translates into:
+
+    { prefix => { useragent => 'Go ' } }
+
+## App::ElasticSearch::Utilities::QueryString::FileExpansion
+
+If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
+
+    $ cat test.dat
+    50  1.2.3.4
+    40  1.2.3.5
+    30  1.2.3.6
+    20  1.2.3.7
+
+Or
+
+    $ cat test.csv
+    50,1.2.3.4
+    40,1.2.3.5
+    30,1.2.3.6
+    20,1.2.3.7
+
+Or
+
+    $ cat test.txt
+    1.2.3.4
+    1.2.3.5
+    1.2.3.6
+    1.2.3.7
+
+We can source that file:
+
+    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
+
+This make it simple to use the --data-file output options and build queries
+based off previous queries. For .txt and .dat file, the delimiter for columns
+in the file must be either a tab, comma, or a semicolon.  For files ending in
+.csv, Text::CSV\_XS is used to accurate parsing of the file format.
+
+You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
+**zero-based** indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
+as:
+
+    src_ip:test.dat[1]
+
+or:
+    src\_ip:test.dat\[-1\]
+
+This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
+an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html).
+
+# Meta-Queries
+
+Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
+
+    es-search.pl --bases
+
+    es-search.pl --fields
+
+    es-search.pl --base access --fields
 
 # AUTHOR
 

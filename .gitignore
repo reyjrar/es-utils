@@ -2,3 +2,5 @@
 App-ElasticSearch-Utilities-*
 !/releases/*
 *.dat
+*.json
+*.txt

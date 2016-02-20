@@ -6,15 +6,14 @@ use strict;
 use warnings;
 
 use App::ElasticSearch::Utilities qw(:all);
+use App::ElasticSearch::Utilities::Query;
+use App::ElasticSearch::Utilities::QueryString;
 use Carp;
 use CLI::Helpers qw(:all);
-use File::Slurp::Tiny qw(read_lines);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use JSON;
-use Net::CIDR::Lite;
 use Pod::Usage;
 use POSIX qw(strftime);
-use Text::CSV_XS;
 use YAML;
 
 #------------------------------------------------------------------------#
@@ -44,12 +43,19 @@ GetOptions(\%OPT, qw(
 ));
 
 # Search string is the rest of the argument string
-my @query =  exists $OPT{'match-all'} && $OPT{'match-all'} ? { match_all=>{} } : transform_search_string(@ARGV);
+my $qs = App::ElasticSearch::Utilities::QueryString->new();
+my $q = exists $OPT{'match-all'} && $OPT{'match-all'}
+            ? App::ElasticSearch::Utilities::Query->new(must => { match_all => {} })
+            : $qs->expand_query_string(@ARGV);
+
+$q->set_timeout('10s');
+$q->set_scroll('30s');
+
 if( exists $OPT{prefix} ){
     foreach my $prefix (@{ $OPT{prefix} }) {
         my ($f,$v) = split /:/, $prefix, 2;
         next unless $f && $v;
-        push @query, { prefix => { $f => $v } };
+        $q->add_bool( must => { prefix => { $f => $v } } );
     }
 }
 
@@ -102,6 +108,8 @@ if( exists $OPT{sort} && length $OPT{sort} ) {
         $OPT{sort}
     ];
 }
+$q->set_sort($SORT);
+
 if( $OPT{bases} ) {
     show_bases();
     exit 0;
@@ -110,7 +118,7 @@ if( $OPT{fields} ) {
     show_fields();
     exit 0;
 }
-pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless @query;
+pod2usage({-exitval => 1, -msg => 'No search string specified'}) unless keys %{ $q->query->{bool} };
 pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --top together'}) if exists $OPT{tail} && $OPT{top};
 pod2usage({-exitval => 1, -msg => 'Cannot use --tail and --sort together'}) if exists $OPT{tail} && $OPT{sort};
 pod2usage({-exitval => 1, -msg => 'Cannot use --sort along with --asc or --desc'})
@@ -118,20 +126,15 @@ pod2usage({-exitval => 1, -msg => 'Cannot use --sort along with --asc or --desc'
 pod2usage({-exitval => 1, -msg => 'Please specify --show with --tail'}) if exists $OPT{tail} && !@SHOW;
 
 # Process extra parameters
-my %extra   = ();
-my @filters = ();
 if( exists $OPT{exists} ) {
     foreach my $field (split /[,:]/, $OPT{exists}) {
-        push @filters, { exists => { field => $field } };
+        $q->add_bool( must => { exists => { field => $field } } );
     }
 }
 if( exists $OPT{missing} ) {
     foreach my $field (split /[,:]/, $OPT{missing}) {
-        push @filters, { missing => { field => $field } };
+        $q->add_bool( must_not => { exists => { field => $field } } );
     }
-}
-if( @filters ) {
-    $extra{filter} = @filters > 1 ? { and => \@filters } : shift @filters;
 }
 my $DONE = 0;
 local $SIG{INT} = sub { $DONE=1 };
@@ -144,6 +147,7 @@ if( exists $OPT{top} ) {
     croak(sprintf("Option --top takes a field, found %d fields: %s\n", scalar(@agg_fields),join(',',@agg_fields)))
         unless @agg_fields == 1;
 
+    my %agg     = ();
     my %sub_agg = ();
     if(exists $OPT{by}) {
         my ($type,$field) = split /\:/, $OPT{by};
@@ -158,29 +162,31 @@ if( exists $OPT{top} ) {
 
     my $field = shift @agg_fields;
     $agg_header = "count\t" . $field;
-    $extra{aggregations} = { top => { terms => { field => $field } } };
+    $agg{terms} = { field => $field };
 
     if( keys %sub_agg ) {
         $agg_header = "$OPT{by}\t" . $agg_header;
-        $extra{aggregations}->{top}{terms}{order} = { by => $ORDER };
-        $extra{aggregations}->{top}{aggregations} = \%sub_agg;
+        $agg{terms}->{order} = { by => $ORDER };
+        $agg{aggregations} = \%sub_agg;
     }
 
     if( exists $OPT{all} ) {
         verbose({color=>'cyan'}, "# Aggregations with --all are limited to returning 1,000,000 results.");
-        $extra{aggregations}->{top}{terms}{size} = 1_000_000;
+        $agg{terms}->{size} = 1_000_000;
     }
     else {
-        $extra{aggregations}->{top}{terms}{size} = $CONFIG{size};
+        $agg{terms}->{size} = $CONFIG{size};
     }
-    $CONFIG{size} = 0;  # and we do not want any results other than the aggregation data
+    $q->add_aggregations( top => \%agg );
 }
 elsif(exists $OPT{tail}) {
-    $CONFIG{size} = 20;
+    $q->set_size(20);
     @AGES = ($AGES[-1]);
 }
+else {
+    $q->set_size( $CONFIG{size} > 50 ? 50 : $CONFIG{size} );
+}
 
-my $size              = $CONFIG{size} > 50 ? 50 : $CONFIG{size};
 my %displayed_indices = ();
 my $TOTAL_HITS        = 0;
 my $last_hit_ts       = undef;
@@ -203,7 +209,7 @@ AGES: while( !$DONE && @AGES ) {
     $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start-30));
 
     # If we're tailing, bump the @query with a timestamp range
-    push @query, {range => { $CONFIG{timestamp} => {gte => $last_hit_ts}}} if $OPT{tail};
+    $q->stash( must => {range => { $CONFIG{timestamp} => {gte => $last_hit_ts}}} ) if $OPT{tail};
 
     # Header
     if( !exists $AGES_SEEN{$age} ) {
@@ -216,28 +222,13 @@ AGES: while( !$DONE && @AGES ) {
         # Search Parameters
         {
             index     => $by_age{$age},
-            uri_param => {
-                timeout     => '10s',
-                exists $OPT{top} ? () : (scroll => '30s'),
-            },
-            method => 'POST',
+            uri_param => $q->uri_params,
+            method    => 'POST',
         },
         # Search Body
-        {
-            size       => $size,
-            query      => {
-                bool => {
-                    must => \@query,
-                },
-            },
-            sort       => $SORT,
-            %extra,
-        }
+        $q->request_body,
     );
     $duration += time() - $start;
-
-    # Remove the last searched date from the @query
-    pop @query if exists $OPT{tail};
 
     # Advance if we don't have a result
     next unless defined $result;
@@ -342,7 +333,7 @@ AGES: while( !$DONE && @AGES ) {
         $result = es_request('_search/scroll', {
             uri_param => {
                 scroll_id => $result->{_scroll_id},
-                scroll    => '30s',
+                scroll    => $q->scroll,
             }
         });
         $duration += time - $start;
@@ -353,7 +344,7 @@ AGES: while( !$DONE && @AGES ) {
 
 output({stderr=>1,color=>'yellow'},
     "# Search Parameters:",
-    (map { "#    " . to_json($_,{allow_nonref=>1}) } @query),
+    (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>1})),
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
     sprintf("# Indexes (%d of %d) searched: %s\n",
             scalar(keys %displayed_indices),
@@ -432,88 +423,6 @@ sub by_index_age {
     return $ORDER eq 'asc'
         ? $indices{$b} <=> $indices{$a}
         : $indices{$a} <=> $indices{$b};
-}
-sub transform_search_string {
-    my @arguments = @_;
-    my @query = ();
-    my @modified = ();
-    my %BareWords = map { $_ => uc } qw(and not or);
-
-    # File Based Parsers
-    my %parsers = (
-        csv => \&parse_file_csv,
-        dat => \&parse_file_txt,
-        txt => \&parse_file_txt,
-    );
-    foreach my $part ( @arguments ) {
-        if( my ($term,$match) = split /\:/, $part, 2 ) {
-            if( defined $match && $match =~ /(.*\.(\w{3,4}))(?:\[(-?\d+)\])?$/) {
-                my($file,$type,$col) = ($1,$2,$3);
-                $col //= -1;
-                $type = lc $type;
-                verbose({level=>2,color=>'magenta'}, sprintf "# File expansion attempt of %s type, %s[%d]",
-                    $type, $file, $col
-                );
-                if( exists $parsers{$type} && -f $file ) {
-                    my $uniq = $parsers{$type}->($file,$col);
-                    if (defined $uniq && ref $uniq eq 'HASH' && scalar(keys %$uniq)) {
-                        verbose({color=>'cyan'},
-                            sprintf "# FILE:%s[%d] contained %d unique elements.",
-                            $file,
-                            $col,
-                            scalar(keys %$uniq),
-                        );
-                        push @query, { terms => { $term => [sort keys %$uniq] } };
-                        next;
-                    }
-                }
-            }
-            if($term =~ /_ip$/ ) {
-                if($match =~ m|^\d{1,3}(\.\d{1,3}){1,3}(/\d+)$|) {
-                    my $cidr = Net::CIDR::Lite->new();
-                    $cidr->add($match);
-                    my @range = split /-/, ($cidr->list_range)[0];
-                    $part = sprintf("%s_numeric:[%s TO %s]", $term, @range);
-                }
-            }
-        }
-        push @modified, exists $BareWords{lc $part} ? $BareWords{lc $part} : $part;
-    }
-    # remove trailing AND, NOT, and OR's
-    pop @modified while $modified[-1] =~ /^AND|OR|NOT$/;
-    push @query, { query_string =>{ query =>  join(' ', @modified) } } if @modified;
-
-    return @query;
-}
-sub parse_file_csv {
-    my ($file,$col) = @_;
-    my $csv = Text::CSV_XS->new({binary=>1,empty_is_undef=>1});
-    open my $fh, "<:encoding(utf8)", $file or die "Unable to read $file: $!";
-    my %uniq = ();
-    while( my $row = $csv->getline($fh) ) {
-        my $val;
-        eval {
-            $val = $row->[$col];
-        };
-        next unless defined $val;
-        $uniq{$val} = 1;
-    }
-    return \%uniq;
-}
-sub parse_file_txt {
-    my ($file,$col) = @_;
-    my %uniq=();
-    my @rows = grep { defined && length && !/^#/ && chomp } read_lines($file);
-    if(@rows) {
-        for(@rows) {
-            my @cols = split /[\s,]+/;
-            my $value = $cols[$col];
-            if(defined $value) {
-                $uniq{$value} = 1;
-            }
-        }
-    }
-    return \%uniq;
 }
 __END__
 
@@ -720,66 +629,11 @@ Examples might include:
     # Tail the access log for www.example.com 404's
     es-search.pl --base access --tail --show src_ip,file,referer_domain dst:www.example.com AND crit:404
 
-=head2 Extended Syntax
+=head1 Extended Syntax
 
-The search string is pre-analyzed before being sent to ElasticSearch.  Basic formatting is corrected:
+=from_other App::ElasticSearch::Utilities::QueryString / Extended Syntax / all
 
-The following barewords are transformed:
-
-    or => OR
-    and => AND
-    not => NOT
-
-If a field is an IP address wild card, it is transformed:
-
-    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
-
-If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
-
-    $ cat test.dat
-    50  1.2.3.4
-    40  1.2.3.5
-    30  1.2.3.6
-    20  1.2.3.7
-
-Or
-
-    $ cat test.csv
-    50,1.2.3.4
-    40,1.2.3.5
-    30,1.2.3.6
-    20,1.2.3.7
-
-Or
-
-    $ cat test.txt
-    1.2.3.4
-    1.2.3.5
-    1.2.3.6
-    1.2.3.7
-
-We can source that file:
-
-    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
-
-This make it simple to use the --data-file output options and build queries
-based off previous queries. For .txt and .dat file, the delimiter for columns
-in the file must be either a tab, comma, or a semicolon.  For files ending in
-.csv, Text::CSV_XS is used to accurate parsing of the file format.
-
-You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
-B<zero-based> indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
-as:
-
-    src_ip:test.dat[1]
-
-or:
-    src_ip:test.dat[-1]
-
-This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
-an appropriate L<terms query|http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html>.
-
-=head2 Meta-Queries
+=head1 Meta-Queries
 
 Helpful in building queries is the --bases and --fields options which lists the index bases and fields:
 

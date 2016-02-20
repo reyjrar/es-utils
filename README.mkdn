@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 4.0
+version 4.1
 
 # SYNOPSIS
 
@@ -195,7 +195,7 @@ From App::ElasticSearch::Utilities:
     --pattern       Use a pattern to operate on the indexes
     --days          If using a pattern or base, how many days back to go, default: all
 
-## ARGUMENT GLOBALS
+# ARGUMENT GLOBALS
 
 Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils.yaml** file:
 
