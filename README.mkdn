@@ -253,11 +253,6 @@ regular expressions.  Those patterns are:
     DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
     ANY     expands to match any number of any characters.
 
-## CONTRIBUTORS
-
-    Mihai Oprea <mishu@mishulica.com>
-    Samit Badle
-
 # AUTHOR
 
 Brad Lhotsky &lt;brad@divisionbyzero.net>
@@ -269,3 +264,13 @@ This software is Copyright (c) 2012 by Brad Lhotsky.
 This is free software, licensed under:
 
     The (three-clause) BSD License
+
+# CONTRIBUTORS
+
+- Alexey Shatlovsky &lt;alexey.shatlovsky@booking.com>
+- Alexey Surikov &lt;ksurent@gmail.com>
+- Daniel Ostermeier &lt;daniel.ostermeier@gmail.com>
+- Jason Rojas &lt;jason.rojas@mgo.com>
+- Kang-min Liu &lt;gugod@gugod.org>
+- Samit Badle <Samit.Badle@gmail.com>
+- Takumi Sakamoto &lt;takumi.saka@gmail.com>
