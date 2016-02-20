@@ -15,12 +15,14 @@ our @_CONFIGS = (
     "$ENV{HOME}/.es-utils.yml",
 );
 
-use CLI::Helpers qw(:all);
-use Time::Local;
-use Getopt::Long qw(:config pass_through);
-use JSON::XS;
-use YAML;
 use Elastijk;
+use CLI::Helpers qw(:all);
+use Getopt::Long qw(:config pass_through);
+use Hash::Merge::Simple qw(clone_merge);
+use JSON::XS;
+use Time::Local;
+use YAML;
+
 use Sub::Exporter -setup => {
     exports => [ qw(
         es_globals
@@ -100,18 +102,21 @@ if( !defined $_OPTIONS_PARSED ) {
     );
     $_OPTIONS_PARSED = 1;
 }
+my @ConfigData=();
 foreach my $config_file (@_CONFIGS) {
     next unless -f $config_file;
     debug("Loading options from $config_file");
-    my %from_file = ();
     eval {
         my $ref = YAML::LoadFile($config_file);
-        %from_file = %{$ref};
+        push @ConfigData, $ref;
         debug_var($ref);
+        1;
+    } or do {
+        debug({color=>"red"}, "[$config_file] $@");
     };
-    debug({color=>"red"}, "[$config_file] $@") if $@;
-    $_GLOBALS{$_} = $from_file{$_} for keys %from_file;
 }
+%_GLOBALS = %{ clone_merge(@ConfigData) };
+
 # Set defaults
 my %DEF = (
     # Connection Options
