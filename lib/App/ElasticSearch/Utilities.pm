@@ -869,11 +869,6 @@ regular expressions.  Those patterns are:
     DATE    expands to match YYYY.MM.DD, YYYY-MM-DD, or YYYYMMDD
     ANY     expands to match any number of any characters.
 
-=head2 CONTRIBUTORS
-
-    Mihai Oprea <mishu@mishulica.com>
-    Samit Badle
-
 =cut
 
 
