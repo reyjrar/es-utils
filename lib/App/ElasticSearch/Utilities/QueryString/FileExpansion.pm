@@ -28,8 +28,8 @@ sub handle_token {
             my($file,$type,$col) = ($1,$2,$3);
             $col //= -1;
             $type = lc $type;
-            verbose({level=>2,color=>'magenta'}, sprintf "# %s attempt of %s type, %s[%d]",
-                $self->name, $type, $file, $col
+            verbose({level=>2,color=>'magenta'}, sprintf "# %s attempt of %s type, %s[%d] %s",
+                $self->name, $type, $file, $col, -f $file ? 'exists' : 'does not exist'
             );
             if( exists $parsers{$type} && -f $file ) {
                 my $uniq = $parsers{$type}->($file,$col);
@@ -68,6 +68,7 @@ sub _parse_txt {
     my ($file,$col) = @_;
     my %uniq=();
     my @rows = grep { defined && length && !/^#/ && chomp } read_lines($file);
+    debug({color=>'magenta'}, @rows);
     if(@rows) {
         for(@rows) {
             my @cols = split /[\s,]+/;
