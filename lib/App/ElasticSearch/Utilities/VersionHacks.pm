@@ -17,7 +17,22 @@ const my $MIN_VERSION => 1.0;
 const my %SIMPLE => (
     '_cluster/nodes' => {
         default => '_nodes',
-    }
+    },
+    '_optimize' => {
+        # Yes, in case you're wondering _optimize disappeared in 2.2 after being deprecated in 2.1
+        default => '_forcemerge',
+        1.0 => '_optimize',
+        1.1 => '_optimize',
+        1.2 => '_optimize',
+        1.3 => '_optimize',
+        1.4 => '_optimize',
+        1.5 => '_optimize',
+        1.6 => '_optimize',
+        1.7 => '_optimize',
+        1.8 => '_optimize',
+        1.9 => '_optimize',
+        2.0 => '_optimize',
+    },
 );
 my %CALLBACKS = (
     '_cluster/state' => {
