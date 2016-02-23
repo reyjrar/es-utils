@@ -4,8 +4,8 @@
 use strict;
 use warnings;
 
-use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(es_request);
+use CLI::Helpers qw(:output);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 
@@ -37,7 +37,7 @@ if(!defined $nres) {
 debug_var($nres);
 foreach my $uuid (sort { $nres->{nodes}{$a}->{name} cmp $nres->{nodes}{$b}->{name} } keys %{ $nres->{nodes} }) {
     my $node = $nres->{nodes}{$uuid};
-    my $color = $uuid eq $nres->{master_node} ? 'green' : 'cyan';
+    my $color = defined $nres->{master_node} && $uuid eq $nres->{master_node} ? 'green' : 'cyan';
 
     output({color=>$color}, $node->{name});
     output({indent=>1,kv=>1,color=>$color}, address => $node->{transport_address});
