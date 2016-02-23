@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 4.1
+version 4.2
 
 # SYNOPSIS
 
@@ -274,3 +274,27 @@ This is free software, licensed under:
 - Kang-min Liu &lt;gugod@gugod.org>
 - Samit Badle <Samit.Badle@gmail.com>
 - Takumi Sakamoto &lt;takumi.saka@gmail.com>
+
+# SUPPORT
+
+## Websites
+
+The following websites have more information about this module, and may be of help to you. As always,
+in addition to those websites please use your favorite search engine to discover more resources.
+
+- MetaCPAN
+
+    A modern, open-source CPAN search engine, useful to view POD in HTML format.
+
+    [http://metacpan.org/release/App-ElasticSearch-Utilities](http://metacpan.org/release/App-ElasticSearch-Utilities)
+
+- RT: CPAN's Bug Tracker
+
+    The RT ( Request Tracker ) website is the default bug/issue tracking system for CPAN.
+
+    [https://rt.cpan.org/Public/Dist/Display.html?Name=App-ElasticSearch-Utilities](https://rt.cpan.org/Public/Dist/Display.html?Name=App-ElasticSearch-Utilities)
+
+## Source Code
+
+This module's source code is available by visiting:
+[https://github.com/reyjrar/es-utils](https://github.com/reyjrar/es-utils)

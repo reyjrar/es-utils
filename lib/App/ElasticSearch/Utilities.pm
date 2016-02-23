@@ -115,7 +115,7 @@ foreach my $config_file (@_CONFIGS) {
         debug({color=>"red"}, "[$config_file] $@");
     };
 }
-%_GLOBALS = %{ clone_merge(@ConfigData) };
+%_GLOBALS  = @ConfigData ? %{ clone_merge(@ConfigData) } : ();
 
 # Set defaults
 my %DEF = (
