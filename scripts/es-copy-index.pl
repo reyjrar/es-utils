@@ -45,7 +45,7 @@ my %INDEX = (
 );
 my %HOST = (
     from => $OPT{from},
-    to   => exists $OPT{to} ? $OPT{to} : $OPT{from}.
+    to   => exists $OPT{to} ? $OPT{to} : $OPT{from},
 );
 if( $HOST{to} eq $HOST{from} && $INDEX{to} eq $INDEX{from} ) {
     output({color=>'red',IMPORTANT=>1},
@@ -136,7 +136,7 @@ else {
         push @ignored, $k if exists $OPT{$k} && -f $OPT{$k};
     }
     output({color=>'warning',sticky=>1}.
-        sprintf "%s - warning ignoring %s as they are invalid in this context.", basename($0), join(', ' map { "--$_" } @ignored)
+        sprintf "%s - warning ignoring %s as they are invalid in this context.", basename($0), join(', ', map { "--$_" } @ignored)
     ) if @ignored;
 } # End Mappings/Settings for Non-existant index.
 
