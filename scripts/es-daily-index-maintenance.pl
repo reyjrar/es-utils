@@ -4,10 +4,11 @@
 use strict;
 use warnings;
 
-use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
-use Pod::Usage;
-use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(:all);
+use CLI::Helpers qw(:all);
+use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
+use Hash::Flatten qw(flatten);
+use Pod::Usage;
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -18,6 +19,7 @@ GetOptions(\%opt,
     'delete-days:i',
     'close',
     'close-days:i',
+    'bloom',
     'replicas',
     'replicas',
     'replicas-min:i',
@@ -48,6 +50,7 @@ my %CFG = (
     timezone         => 'Europe/Amsterdam',
     delete           => 0,
     close            => 0,
+    bloom            => 0,
     optimize         => 0,
     replicas         => 0,
 );
@@ -57,7 +60,7 @@ foreach my $setting (keys %CFG) {
 }
 
 # Figure out what to run
-my @MODES = qw(close delete optimize replicas);
+my @MODES = qw(bloom close delete optimize replicas);
 if ( exists $opt{all} && $opt{all} ) {
     map {
         $CFG{$_} = 1 unless $_ eq 'replicas';
@@ -69,7 +72,7 @@ else {
         $operate++ if $CFG{$mode};
         last if $operate;
     }
-    pod2usage(-message => "No operation selected, use --close, --delete, --optimize, or --replicas.", -exitval => 1) unless $operate;
+    pod2usage(-message => "No operation selected, use --close, --delete, --bloom, --optimize, or --replicas.", -exitval => 1) unless $operate;
 }
 # Can't have replicas-min below 0
 $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
@@ -135,6 +138,35 @@ foreach my $index (sort @indices) {
             else {
                 output({color=>"green"}, "$index: Successfully set replicas to $replicas");
             }
+        }
+    }
+
+    # Run bloom?
+    if( $CFG{bloom} ) {
+        my $settings = flatten( es_request(_settings => { index => $index })->{$index}{settings}, {HashDelimiter=>'.',ArrayDelimiter=>'.'} );
+        debug_var($settings);
+        if( !exists $settings->{"index.codec.bloom.load"} ) {
+            verbose({color=>'yellow'}, "$index: closing ..");
+            if( es_close_index($index) ) {
+                my $res = es_request(_settings => { index => $index, method => 'PUT' },
+                    { "index.codec.bloom.load" => 'false' }
+                );
+                if( !defined $res ) {
+                    output({color=>'red'}, "$index: Encountered error disabling bloom filter.");
+                }
+                else {
+                    output({color=>'green'},"$index: bloom filters disabled.");
+                    debug_var({color=>'magenta'}, $res);
+                }
+                es_open_index($index);
+                verbose({color=>'yellow'}, "$index: Re-opened.");
+            }
+            else {
+                output({color=>'red'}, "$index: Could not close index to update bloom setting, skipping.");
+            }
+        }
+        else {
+            verbose({color=>'yellow'},"$index: Bloom filter setting already set, skipping.");
         }
     }
 
@@ -215,6 +247,7 @@ Options:
     --help              print help
     --manual            print full manual
     --all               Run close, delete, optimize, and replicas tools
+    --bloom             Disable bloom filters for all indexes older than 1 day
     --close             Run close for indexes older than
     --close-days        Age of the oldest index to keep open (default:60)
     --delete            Run delete indexes older than
@@ -233,6 +266,11 @@ Options:
 =head1 OPTIONS
 
 =over 8
+
+=item B<bloom>
+
+This will disable the bloom filters on all indexes older than 1 day unless the bloom
+filter setting "index.codec.bloom.load" has been explicitly set for this index.
 
 =item B<close>
 
