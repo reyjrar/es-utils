@@ -36,6 +36,7 @@ GetOptions(\%OPT, qw(
 # Documentation
 pod2usage(1) if $OPT{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $OPT{manual};
+debug_var(\%OPT);
 
 #------------------------------------------------------------------------#
 # Copy To/From
@@ -67,7 +68,7 @@ $q->set_size( $OPT{'block'} );
 # Connect to ElasticSearch
 my %ES = ();
 foreach my $dir (qw(from to)) {
-    $ES{$dir} = es_connect( [ "$OPT{$dir}:9200" ] );
+    $ES{$dir} = es_connect( [ "$HOST{$dir}:9200" ] );
 }
 
 die "Invalid index: $INDEX{from}" unless $ES{from}->exists( index => $INDEX{from} );
@@ -80,7 +81,7 @@ my ($status, $res);
 
 # Mappings/Settings for Non-existant index.
 unless( exists $OPT{append} ) {
-    die "Index $INDEX{to} already exists in $OPT{to}" if $TO_EXISTS;
+    die "Index $INDEX{to} already exists in $HOST{to}" if $TO_EXISTS;
     $res = es_request($ES{from}, '_settings', {index => $INDEX{from}} );
     debug_var($res);
     my $from_settings = $res->{$INDEX{from}}{settings};
@@ -127,7 +128,7 @@ unless( exists $OPT{append} ) {
     );
 
     if ($status ne "200") {
-        die "Failed to create index in $OPT{to} (http status = $status): " . $JSON->encode([ $status, $res ]);
+        die "Failed to create index in $HOST{to} (http status = $status): " . $JSON->encode([ $status, $res ]);
     }
 }
 else {
@@ -174,13 +175,13 @@ while( $res && @{ $res->{hits}{hits} }) {
             body => $body
         );
         if ($s2 ne "200") {
-            output({stderr=>1,color=>'red'},"Failed to put documents to $OPT{to} (http status = $status): " . $JSON->encode([ $s2, $r2 ]));
+            output({stderr=>1,color=>'red'},"Failed to put documents to $HOST{to} (http status = $status): " . $JSON->encode([ $s2, $r2 ]));
             next;
         }
         $success=1;
         last;
     }
-    die "Failed to write data to $OPT{to}:9200/$INDEX{to} after $RECORDS docs indexed."
+    die "Failed to write data to $HOST{to}:9200/$INDEX{to} after $RECORDS docs indexed."
         unless $success;
     my $took = time - $start;
     show_counts( scalar @{$res->{hits}{hits}} );
@@ -197,7 +198,7 @@ while( $res && @{ $res->{hits}{hits} }) {
 sub show_counts {
     my $inc_records = shift;
 
-    output({color=>'green'}, "Starting copy of $INDEX{from} to $OPT{to}:$INDEX{to}.") if $RECORDS == 0;
+    output({color=>'green'}, "Starting copy of $INDEX{from} to $HOST{to}:$INDEX{to}.") if $RECORDS == 0;
 
     $RECORDS += $inc_records;
     if( $RECORDS % ($OPT{block} * 10) == 0 ) {
