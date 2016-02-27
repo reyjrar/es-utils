@@ -19,8 +19,11 @@ use Elastijk;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config pass_through);
 use Hash::Merge::Simple qw(clone_merge);
+use Hijk;
 use JSON::XS;
 use Time::Local;
+use URI;
+use URI::QueryParam;
 use YAML;
 
 use Sub::Exporter -setup => {
@@ -263,7 +266,7 @@ sub es_connect {
     return $ES;
 }
 
-=func es_request([$handle],$command,{ method => 'GET', parameters => { a => 1 } }, {})
+=func es_request([$handle],$command,{ method => 'GET', uri_param => { a => 1 } }, {})
 
 Retrieve URL from ElasticSearch, returns a hash reference
 
@@ -319,17 +322,45 @@ sub es_request {
         output({color=>'cyan'}, "Called es_request($index / $options->{command}), but --noop and method is $options->{method}");
         return;
     }
-    eval {
-        debug("calling es_request($index / $options->{command})");
-        ($status,$res) = Elastijk::request($options);
-    };
-    my $err = $@;
-    if( $err || !defined $res ) {
-        output({color=>'red',stderr=>1}, "es_request($index / $options->{command}) failed[$status]: $err");
+    # _cat Queries don't work with Elastijk
+    if( $url =~ m#^_cat/# ) {
+        my $uri = URI->new(sprintf "http://%s:%d/%s", $options->{host}, $options->{port}, $url);
+        # Merge URI keys and uri_param keys
+        if ( exists $options->{uri_param} ) {
+            foreach my $k (keys %{ $options->{uri_param} }) {
+                $uri->query_param( $k => $options->{uri_param}{$k} );
+            }
+        }
+        eval {
+            my $resp = Hijk::request({
+                host            => $uri->host,
+                port            => $uri->port,
+                method          => 'GET',
+                path            => $uri->path,
+                query_string    => $uri->query,
+                connect_timeout => $DEF{timeout},
+                read_timeout    => $DEF{timeout},
+            });
+            $status = $resp->{status};
+            die sprintf "%d - %s", $resp->{error_number}, $resp->{error_string} unless $status == 200;
+            $res = [ map { s/^\s+//; s/\s+$//; $_ } grep { defined && length } split /\r?\n/, $resp->{body} ];
+            1;
+        } or do {
+            output({color=>'red',stderr=>1},sprintf "es_request() hijk::request(%s?%s) failed: %s", $uri->path, $uri->query, $@);
+        };
     }
-    elsif($status != 200) {
-        verbose({color=>'yellow'},"es_request($index / $options->{command}) returned HTTP Status $status");
+    else {
+        eval {
+            debug("calling es_request($index / $options->{command})");
+            ($status,$res) = Elastijk::request($options);
+            die sprintf "[%d] Empty response from %s:%d", $status, $options->{host}, $options->{port} unless defined $res;
+            1;
+        } or do {
+            my $err = $@;
+            output({color=>'red',stderr=>1}, "es_request($index / $options->{command}) failed[$status]: $err");
+        };
     }
+    verbose({color=>'yellow'},"es_request($index / $options->{command}) returned HTTP Status $status") if $status != 200;
 
     return $res;
 }
