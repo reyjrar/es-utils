@@ -11,6 +11,7 @@ use App::ElasticSearch::Utilities::QueryString;
 use Carp;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
+use Hash::Flatten qw(flatten);
 use JSON;
 use Pod::Usage;
 use POSIX qw(strftime);
@@ -34,6 +35,7 @@ GetOptions(\%OPT, qw(
     missing:s
     no-header
     prefix:s@
+    pretty
     show:s
     size|n:i
     sort:s
@@ -293,12 +295,28 @@ AGES: while( !$DONE && @AGES ) {
             $last_batch_id{$hit->{_id}}=1;
             my $record = {};
             if( @SHOW ) {
+                my $flat = flatten( $hit->{_source}, { HashDelimiter=>'.',ArrayDelimiter=>'.' } );
+                debug_var($flat);
                 foreach my $f (@always) {
-                    $record->{$f} = $hit->{_source}{$f};
+                    $record->{$f} = $flat->{$f};
                 }
                 foreach my $f (@SHOW) {
-                    $record->{$f} = exists $hit->{_source}{$f} ? $hit->{_source}{$f}
-                                  : document_lookdown($hit->{_source},$f);
+                    my $value = undef;
+                    if( exists $flat->{$f} ) {
+                        $value = $flat->{$f};
+                    }
+                    elsif( my $v = document_lookdown($hit->{_source},$f) ) {
+                        $value = $v;
+                    }
+                    elsif(index($f, '.') > 0) {
+                        # Try path matching the key
+                        my @values = ();
+                        foreach my $k (grep { index($_,$f) == 0 } keys %{ $flat }) {
+                            push @values, $flat->{$k};
+                        }
+                        $value = @values ? @values == 1 ? $values[0] : \@values : undef;
+                    }
+                    $record->{$f} = $value;
                 }
             }
             else {
@@ -344,7 +362,7 @@ AGES: while( !$DONE && @AGES ) {
 
 output({stderr=>1,color=>'yellow'},
     "# Search Parameters:",
-    (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>1})),
+    (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>exists $OPT{pretty}})),
     "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
     sprintf("# Indexes (%d of %d) searched: %s\n",
             scalar(keys %displayed_indices),
@@ -399,22 +417,36 @@ sub show_fields {
 
 sub show_bases {
     output({color=>'cyan'}, 'Bases available for search:' );
-    my %bases = map { es_index_strip_date($_) => 1 } keys %indices;
+    my @all   = es_indices(_all => 1);
+    my %bases = ();
 
-    foreach my $index (sort keys %bases) {
-        $bases{$index} = 1;
-        my $sub = (split '-', $index, 2)[-1];
-        next unless defined $sub;
-        $bases{$sub} = 1;
+    foreach my $index (@all) {
+        my $days_old = es_index_days_old( $index );
+        next unless defined $days_old;
+        $days_old = 0 if $days_old < 0;
+        foreach my $base (es_index_bases($index)) {
+            if( exists $bases{$base} ) {
+                $bases{$base}->{oldest}   = $days_old if $days_old > $bases{$base}->{oldest};
+                $bases{$base}->{youngest} = $days_old if $days_old < $bases{$base}->{youngest};
+            }
+            else {
+                $bases{$base} = { oldest => $days_old, youngest => $days_old };
+            }
+        }
     }
     foreach my $base (sort keys %bases) {
-        output(" - $base");
+        output({indent=>1,color=>'green'},$base);
+        verbose({indent=>2,kv=>1},
+            map {
+                $_ => sprintf "%d days old", $bases{$base}->{$_}
+            } qw( youngest oldest )
+        );
     }
 
     output({color=>"yellow"},
         sprintf("# Bases: %d from a combined %d indices.\n",
             scalar(keys %bases),
-            scalar(keys %indices),
+            scalar(@all),
         )
     );
 }
@@ -452,6 +484,7 @@ Options:
     --desc              Sort by descending timestamp (Default)
     --sort              List of fields for custom sorting
     --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
+    --pretty            Where possible, use JSON->pretty
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
@@ -570,6 +603,8 @@ Only show records without a referer field in the document.
 =item B<bases>
 
 Display a list of bases that can be used with the --base option.
+
+Use with --verbose to show age information on the indexes in each base.
 
 =item B<fields>
 
