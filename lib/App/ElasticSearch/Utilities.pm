@@ -18,6 +18,7 @@ our @_CONFIGS = (
 use Elastijk;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config pass_through);
+use Hash::Flatten qw(flatten);
 use Hash::Merge::Simple qw(clone_merge);
 use Hijk;
 use JSON::XS;
@@ -661,25 +662,43 @@ sub es_index_fields {
     # Handle Version incompatibilities
     my $ref = exists $result->{$index}{mappings} ? $result->{$index}{mappings} : $result->{$index};
 
-    my %fields = ();
-
     # Loop through the mappings, skipping _default_
     my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
+    my %f = ();
     foreach my $mapping (@mappings) {
         next unless exists $ref->{$mapping}{properties};
-        @fields{_extract_fields($ref->{$mapping}{properties})} = ();
+        my $f = \%f;
+
+        foreach my $k (keys %{ $ref->{$mapping}{properties} }) {
+            _flatten_mapping_hash($f, $k, $ref->{$mapping}{properties}{$k});
+        }
+    }
+    my $flat = flatten(\%f, {HashDelimiter=>'.', ArrayDelimiter=>'.'});
+    my %uniq = ();
+    foreach my $k (keys %{ $flat }) {
+        my $u = (split /\./, $k)[-1];
+        $uniq{$u} ||= 0;
+        $uniq{$u}++;
+    }
+    my %fields = %{ $flat };
+    foreach my $k (grep { $uniq{$_} == 1 } keys %uniq) {
+        $fields{$k} = 1;
     }
 
     return wantarray ? keys %fields : [ keys %fields ];
 }
 
-sub _extract_fields {
-    my $ref = shift;
-    my @fields = ();
-    foreach my $key ( keys %{$ref} ) {
-        push @fields, exists $ref->{$key}{properties} ? _extract_fields( $ref->{$key}{properties}, $key ) : $key;
+sub _flatten_mapping_hash {
+    my ($f,$k,$ref) = @_;
+
+    $f->{$k} ||= 1;
+
+    if( exists $ref->{properties} ) {
+        $f->{$k} = {};
+        foreach my $sk (keys %{ $ref->{properties} }) {
+            _flatten_mapping_hash($f->{$k},$sk, $ref->{properties}{$sk});
+        }
     }
-    return @fields;
 }
 
 =func es_close_index('index-name')
