@@ -558,15 +558,13 @@ sub es_index_bases {
         my $sep = index( $stripped, '_' ) >= 0 ? '_' : '-';
 
         my %collected = ();
-        my @set=();
         while( my $word = shift @parts ) {
-            push @set, $word;
-            $collected{join($sep,@set)} =1;
+            my @set=($word);
+            $collected{$word} =1;
             foreach my $sub ( @parts ) {
                 push @set, $sub;
                 $collected{join($sep,@set)} =1;
             }
-            pop @set for @parts;
         }
         $_stripped{$stripped} = [ sort keys %collected ]
     }
