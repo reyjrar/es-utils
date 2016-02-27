@@ -9,6 +9,7 @@ use App::ElasticSearch::Utilities qw(:default :index);
 use App::ElasticSearch::Utilities::Query;
 use App::ElasticSearch::Utilities::QueryString;
 use CLI::Helpers qw(:all);
+use File::Basename;
 use File::Slurp::Tiny qw(read_lines);
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Hash::Merge::Simple qw(clone_merge);
@@ -25,7 +26,7 @@ GetOptions(\%OPT, qw(
     source=s
     destination:s
     append|A
-    block:1000
+    block:i
     mapping:s
     settings:s
     help|h
@@ -43,6 +44,7 @@ debug_var(\%OPT);
 my %INDEX = (
     from => $OPT{source},
     to   => exists $OPT{destination} ? $OPT{destination} : $OPT{source},
+    block => exists $OPT{block} ? $OPT{block} : 1000,
 );
 my %HOST = (
     from => $OPT{from},
@@ -63,7 +65,7 @@ my $q  = @ARGV ? $qs->expand_query_string(@ARGV)
                : App::ElasticSearch::Utilities::Query->new(must => {match_all=>{}});
 
 $q->set_scan_scroll('1m');
-$q->set_size( $OPT{'block'} );
+$q->set_size( $INDEX{block} );
 
 # Connect to ElasticSearch
 my %ES = ();
@@ -136,7 +138,7 @@ else {
     foreach my $k (qw(settings mapping)) {
         push @ignored, $k if exists $OPT{$k} && -f $OPT{$k};
     }
-    output({color=>'warning',sticky=>1},
+    output({color=>'yellow',sticky=>1},
         sprintf "%s - warning ignoring %s as they are invalid in this context.", basename($0), join(', ', map { "--$_" } @ignored)
     ) if @ignored;
 } # End Mappings/Settings for Non-existant index.
@@ -192,7 +194,7 @@ while( $res && @{ $res->{hits}{hits} }) {
         }
     });
 
-    verbose(sprintf "Batch of %d done in %00.2fds.", $batch, $took);
+    verbose(sprintf "Batch of %d done in %00.2fs.", $batch, $took);
 }
 
 sub show_counts {
@@ -201,7 +203,7 @@ sub show_counts {
     output({color=>'green'}, "Starting copy of $INDEX{from} to $HOST{to}:$INDEX{to}.") if $RECORDS == 0;
 
     $RECORDS += $inc_records;
-    if( $RECORDS % ($OPT{block} * 10) == 0 ) {
+    if( $RECORDS % ($INDEX{block} * 10) == 0 ) {
         my $now = time;
         my $diff = $now - $LAST;
         my @time=localtime;
