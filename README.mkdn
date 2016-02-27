@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 4.2
+version 4.4
 
 # SYNOPSIS
 
@@ -64,7 +64,7 @@ Returns a hashref of the pattern filter used to get the indexes
 Without options, this connects to the server defined in the args.  If passed
 an array ref, it will use that as the connection definition.
 
-## es\_request(\[$handle\],$command,{ method => 'GET', parameters => { a => 1 } }, {})
+## es\_request(\[$handle\],$command,{ method => 'GET', uri\_param => { a => 1 } }, {})
 
 Retrieve URL from ElasticSearch, returns a hash reference
 
@@ -113,6 +113,10 @@ Options include:
 ## es\_index\_strip\_date( 'index-name' )
 
 Returns the index name with the date removed.
+
+## es\_index\_bases( 'index-name' )
+
+Returns an array of the possible index base names for this index
 
 ## es\_index\_days\_old( 'index-name' )
 

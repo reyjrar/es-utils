@@ -4,7 +4,7 @@ es-copy-index.pl - Copy an index from one cluster to another
 
 # VERSION
 
-version 4.2
+version 4.4
 
 # SYNOPSIS
 

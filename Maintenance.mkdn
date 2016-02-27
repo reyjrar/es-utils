@@ -4,7 +4,7 @@ es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
 
 # VERSION
 
-version 4.2
+version 4.4
 
 # SYNOPSIS
 
@@ -15,6 +15,7 @@ Options:
     --help              print help
     --manual            print full manual
     --all               Run close, delete, optimize, and replicas tools
+    --bloom             Disable bloom filters for all indexes older than 1 day
     --close             Run close for indexes older than
     --close-days        Age of the oldest index to keep open (default:60)
     --delete            Run delete indexes older than
@@ -64,6 +65,11 @@ Use with cron:
     22 4 * * * es-daily-index-maintenance.pl --local --all --delete-days=180 --replicas-age=90 --replicas-min=1
 
 # OPTIONS
+
+- **bloom**
+
+    This will disable the bloom filters on all indexes older than 1 day unless the bloom
+    filter setting "index.codec.bloom.load" has been explicitly set for this index.
 
 - **close**
 

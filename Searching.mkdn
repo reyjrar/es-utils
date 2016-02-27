@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 4.2
+version 4.4
 
 # SYNOPSIS
 
@@ -28,6 +28,7 @@ Options:
     --desc              Sort by descending timestamp (Default)
     --sort              List of fields for custom sorting
     --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
+    --pretty            Where possible, use JSON->pretty
     --no-header         Do not show the header with field names in the query results
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
@@ -197,6 +198,8 @@ es-search.pl - Search a logging cluster for information
 - **bases**
 
     Display a list of bases that can be used with the --base option.
+
+    Use with --verbose to show age information on the indexes in each base.
 
 - **fields**
 
