@@ -36,6 +36,7 @@ use Sub::Exporter -setup => {
         es_indices
         es_indices_meta
         es_index_valid
+        es_index_bases
         es_index_strip_date
         es_index_days_old
         es_index_shards
@@ -55,7 +56,7 @@ use Sub::Exporter -setup => {
         config  => [qw(es_globals)],
         default => [qw(es_connect es_indices es_request)],
         indices => [qw(:default es_indices_meta)],
-        index   => [qw(:default es_index_valid es_index_fields es_index_days_old)],
+        index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_bases)],
     },
 };
 use App::ElasticSearch::Utilities::VersionHacks qw(_fix_version_request);
@@ -461,24 +462,24 @@ sub es_indices {
         push @indices, $DEF{INDEX} if es_index_valid( $DEF{INDEX} );
     }
     else {
-        my %meta = es_indices_meta();
-        foreach my $index (sort keys %meta) {
+        my $res = es_request('_cat/indices?h=index,status');
+        foreach my $line (@{ $res }) {
+            my ($index,$status) = split /\s+/, $line;
             debug("Evaluating '$index'");
             if(!exists $args{_all}) {
                 # State Check Disqualification
                 if($args{state} ne 'all'  && $args{check_state})  {
-                    my $result = $meta{$index}->{state} eq $args{state};
+                    my $result = $status eq $args{state};
                     debug({indent=>1,color=>$result ? 'green' : 'red' },
-                        sprintf('+ method:state=%s, got %s', $args{state}, $meta{$index}->{state})
+                        sprintf('+ method:state=%s, got %s', $args{state}, $status)
                     );
                     next unless $result;
                 }
 
                 if( defined $DEF{BASE} ) {
                     debug({indent=>1}, "+ method:base - $DEF{BASE}");
-                    my @parts = split /[\-_]/, $index;
-                    my %parts = map { lc($_) => 1 } @parts;
-                    next unless exists $parts{$DEF{BASE}};
+                    my %bases = map { $_ => 1 } es_index_bases($index);
+                    next unless exists $bases{$DEF{BASE}};
                 }
                 else {
                     my $p = es_pattern;
@@ -490,8 +491,8 @@ sub es_indices {
                     debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
 
                     my $days_old = es_index_days_old( $index );
-                    debug("$index is $days_old days old");
-                    if( $days_old < 0 ) {
+                    debug(sprintf "%s is %s days old", $index, defined $days_old ? $days_old : 'undef');
+                    if( !defined $days_old ) {
                         debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
                         next;
                     }
@@ -525,10 +526,51 @@ sub es_index_strip_date {
 
     return -1 unless defined $index;
 
-    if( my ($indexName) = ($index =~ /^(.*)[-_]$PATTERN_REGEX{DATE}$/) ) {
-        return $indexName;
+    if( $index =~ s/[-_]$PATTERN_REGEX{DATE}// ) {
+        return $index;
     }
     return undef;
+}
+
+=func es_index_bases( 'index-name' )
+
+Returns an array of the possible index base names for this index
+
+=cut
+
+my %_stripped=();
+
+sub es_index_bases {
+    my ($index) = @_;
+
+    return unless defined $index;
+
+    # Strip to the base
+    my $stripped = es_index_strip_date($index);
+    return unless defined $stripped and length $stripped;
+
+    # Compute if we haven't already memoized
+    if( !exists $_stripped{$stripped} ) {
+        my %bases=();
+        my @parts = grep { defined && length } split /[-_]/, $stripped;
+        debug(sprintf "es_index_bases(%s) dissected to %s", $index, join(',', @parts));
+        my $sep = index( $stripped, '_' ) >= 0 ? '_' : '-';
+
+        my %collected = ();
+        my @set=();
+        while( my $word = shift @parts ) {
+            push @set, $word;
+            $collected{join($sep,@set)} =1;
+            foreach my $sub ( @parts ) {
+                push @set, $sub;
+                $collected{join($sep,@set)} =1;
+            }
+            pop @set for @parts;
+        }
+        $_stripped{$stripped} = [ sort keys %collected ]
+    }
+
+    return @{ $_stripped{$stripped} };
 }
 
 =func es_index_days_old( 'index-name' )
@@ -541,7 +583,7 @@ my $NOW = timelocal(0,0,0,(localtime)[3,4,5]);
 sub es_index_days_old {
     my ($index) = @_;
 
-    return -1 unless defined $index;
+    return unless defined $index;
 
     if( my ($dateStr) = ($index =~ /($PATTERN_REGEX{DATE})/) ) {
         my @date=();
@@ -558,7 +600,7 @@ sub es_index_days_old {
         my $diff = $NOW - $idx_time;
         return int($diff / 86400);
     }
-    return -1;
+    return;
 }
 
 
