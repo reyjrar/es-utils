@@ -662,39 +662,39 @@ sub es_index_fields {
 
     # Loop through the mappings, skipping _default_
     my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
-    my %f = ();
+    my %fields;
     foreach my $mapping (@mappings) {
-        next unless exists $ref->{$mapping}{properties};
-        my $f = \%f;
-
-        foreach my $k (keys %{ $ref->{$mapping}{properties} }) {
-            _flatten_mapping_hash($f, $k, $ref->{$mapping}{properties}{$k});
-        }
+        _find_fields(\%fields,$ref->{$mapping});
     }
-    my $flat = flatten(\%f, {HashDelimiter=>'.', ArrayDelimiter=>'.'});
-    my %uniq = ();
-    foreach my $k (keys %{ $flat }) {
-        my $u = (split /\./, $k)[-1];
-        $uniq{$u} ||= 0;
-        $uniq{$u}++;
-    }
-    my %fields = %{ $flat };
-    foreach my $k (grep { $uniq{$_} == 1 } keys %uniq) {
-        $fields{$k} = 1;
-    }
-
-    return wantarray ? keys %fields : [ keys %fields ];
+    my @uniq = sort grep { $fields{$_} == 1 } keys %fields;
+    return wantarray ? @uniq : \@uniq;
 }
 
-sub _flatten_mapping_hash {
-    my ($f,$k,$ref) = @_;
+sub _add_fields {
+    my ($f,@path) = @_;
+    my $key = join('.', @path);
+    $f->{$key} ||= 0;
+    $f->{$key}++;
+    if( $key ne $path[-1] ) {
+        $f->{$path[-1]} ||= 0;
+        $f->{$path[-1]}++;
+    }
+}
 
-    $f->{$k} ||= 1;
+sub _find_fields {
+    my ($f,$ref,@path) = @_;
 
-    if( exists $ref->{properties} ) {
-        $f->{$k} = {};
-        foreach my $sk (keys %{ $ref->{properties} }) {
-            _flatten_mapping_hash($f->{$k},$sk, $ref->{properties}{$sk});
+    if( exists $ref->{type} ) {
+        _add_fields($f,@path);
+    }
+    if( exists $ref->{properties} && ref $ref->{properties} eq 'HASH') {
+        foreach my $k (sort keys %{ $ref->{properties} }) {
+            _find_fields($f,$ref->{properties}{$k},@path,$k);
+        }
+    }
+    if( exists $ref->{fields} && ref $ref->{fields} eq 'HASH') {
+        foreach my $k (sort keys %{ $ref->{fields} } ) {
+            _add_fields($f,@path,$k);
         }
     }
 }

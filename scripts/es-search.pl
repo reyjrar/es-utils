@@ -200,6 +200,7 @@ my %last_batch_id     = ();
 my %AGGS_TOTALS       = ();
 my %AGES_SEEN         = ();
 
+verbose({color=>'green'}, "= Query setup complete, beginning request.");
 AGES: while( !$DONE && @AGES ) {
     # With --tail, we don't want to deplete @AGES
     $age = $OPT{tail} ? $AGES[0] : shift @AGES;

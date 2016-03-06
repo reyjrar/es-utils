@@ -42,8 +42,8 @@ debug_var(\%OPT);
 #------------------------------------------------------------------------#
 # Copy To/From
 my %INDEX = (
-    from => $OPT{source},
-    to   => exists $OPT{destination} ? $OPT{destination} : $OPT{source},
+    from  => $OPT{source},
+    to    => exists $OPT{destination} ? $OPT{destination} : $OPT{source},
     block => exists $OPT{block} ? $OPT{block} : 1000,
 );
 my %HOST = (
