@@ -125,7 +125,7 @@ unless( exists $OPT{append} ) {
         index => $INDEX{to},
         body  => {
             settings => $to_settings,
-            mappings => $mappings,
+            defined $mappings ? (mappings => $mappings) : (),
         }
     );
 
