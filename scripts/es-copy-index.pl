@@ -118,6 +118,7 @@ unless( exists $OPT{append} ) {
         };
     }
     else {
+        $res = es_request($ES{from}, '_mappings', {index => $INDEX{from}});
         $mappings = $res->{$INDEX{from}}{mappings};
     }
 
