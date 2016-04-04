@@ -5,6 +5,7 @@ use warnings;
 
 use App::ElasticSearch::Utilities qw(es_index_bases es_index_days_old es_index_strip_date);
 use CLI::Helpers qw(:output);
+use DateTime;
 use Data::Dumper;
 use POSIX qw(strftime);
 use Test::More;
@@ -12,14 +13,14 @@ use Test::More;
 $Data::Dumper::Indent   = 1;
 $Data::Dumper::Sortkeys = 1;
 
-my $now = time;
+my $now = DateTime->now();
 my @days_old = qw(0 1 3 5 8 13 21 90);
 
 my %TESTS=();
 foreach my $days_old ( @days_old ) {
     # Query String Parser Testing
-    my $lt = $now - ($days_old * 86400);
-    my $date = strftime('%Y.%m.%d', localtime($lt));
+    my $lt = $now->clone->subtract( days => $days_old );
+    my $date = $lt->strftime('%Y.%m.%d');
     my %tests = (
         "type-$date" => {
             es_index_bases      => 'type',
