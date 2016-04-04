@@ -578,7 +578,7 @@ Return the number of days old this index is.
 
 =cut
 
-my $NOW = timelocal(0,0,0,(localtime)[3,4,5]);
+my $NOW = timegm(0,0,0,(gmtime)[3,4,5]);
 sub es_index_days_old {
     my ($index) = @_;
 
@@ -595,8 +595,10 @@ sub es_index_days_old {
             }
         }
         $date[1]--; # move 1-12 -> 0-11
-        my $idx_time = timelocal( 0,0,0, @date );
+        my $idx_time = timegm( 0,0,0, @date );
         my $diff = $NOW - $idx_time;
+        $diff++;    # Add one second
+        debug({color=>"yellow"}, sprintf "es_index_days_old(%s) - Time difference is %0.3f", $index, $diff/86400);
         return int($diff / 86400);
     }
     return;
