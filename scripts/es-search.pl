@@ -356,7 +356,7 @@ AGES: while( !$DONE && @AGES ) {
             }
         });
         $duration += time - $start;
-        last unless @{ $result->{hits}{hits} } > 0;
+        last unless $result->{hits} && $result->{hits}{hits} && @{ $result->{hits}{hits} } > 0
     }
     last if all_records_displayed();
 }
