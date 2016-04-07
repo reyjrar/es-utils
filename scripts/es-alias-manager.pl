@@ -17,6 +17,7 @@ my %opt;
 GetOptions(\%opt,
     'all',
     'config:s',
+    'skip:s',
     # Basic options
     'help|h',
     'manual|m',
@@ -27,9 +28,21 @@ GetOptions(\%opt,
 pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
+my %actions = (
+    add => 'Create any missing aliases',
+    remove => 'Remove any aliases not in the desired set',
+);
+
+# We might skip one thing or another
+if( exists $opt{skip} && !exists $actions{$opt{skip}} ) {
+    output({color=>'red',sticky=>1}, "Invalid action to skip: $opt{skip}");
+    output({clear=>1},"Valid actions to skip are:");
+    output({indent=>1}, sprintf "%s - %s", $_, $actions{$_}) for sort keys %actions;
+    pod2usage(-exitstatus => 1);
+}
+
 my %CFG = (
     config => '/etc/elasticsearch/aliases.yml',
-
 );
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
@@ -145,6 +158,9 @@ foreach my $index (sort keys %{ $indices }) {
             }
             my $action =  exists $desired{$alias} ? 'add' : 'remove';
             push @updates, { $action => { index => $index, alias => $alias} };
+
+            # Do we skip an add or remove?
+            next if exists $opt{skip} && $action eq $opt{skip};
             verbose({color=>'cyan'}, "$index: $action alias '$alias'");
         }
     }
@@ -171,6 +187,7 @@ Options:
     --help              print help
     --manual            print full manual
     --config            Location of Config File, default /etc/elasticsearch/aliases.yml
+    --skip              Action name to be skipped, 'add' or 'remove', default none
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -183,6 +200,10 @@ Options:
 =item B<config>
 
 Location of the config file, default is /etc/elasticsearch/aliases.yml
+
+=item B<skip>
+
+Optionally skip a phase of alias management, valid phases are: add, remove
 
 =back
 
