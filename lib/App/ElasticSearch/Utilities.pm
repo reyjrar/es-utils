@@ -664,40 +664,73 @@ sub es_index_fields {
 
     # Loop through the mappings, skipping _default_
     my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
-    my %fields;
+    my %fieldcache;
     foreach my $mapping (@mappings) {
-        _find_fields(\%fields,$ref->{$mapping});
+        _find_fields(\%fieldcache,$ref->{$mapping});
     }
-    my @uniq = sort grep { $fields{$_} == 1 } keys %fields;
-    return wantarray ? @uniq : \@uniq;
+
+    # Store full path
+    my %fields = %{ $fieldcache{full} };
+
+    # Now add unique aliases
+    my @uniqaliases = grep { not exists $fields{$_} }
+                      grep { $fieldcache{alias}->{$_} == 1 }
+                        keys %{ $fieldcache{alias} };
+    @fields{@uniqaliases} = ();
+    # Return the results
+    return wantarray ? sort keys %fields : [ sort keys %fields ];
 }
 
+my $x=0;
 sub _add_fields {
     my ($f,@path) = @_;
+
+    return unless @path;
+
+    # initialize the fields
+    $f->{full}  ||= {};
+    $f->{alias} ||= {};
+
+    # Store the full path
     my $key = join('.', @path);
-    $f->{$key} ||= 0;
-    $f->{$key}++;
-    if( $key ne $path[-1] ) {
-        $f->{$path[-1]} ||= 0;
-        $f->{$path[-1]}++;
+    $f->{full}{$key} = 1;
+
+    # Aliases
+    my $alias = $key eq $path[-1] ? undef : $path[-1];
+    if( $alias ) {
+        $f->{alias}{$alias} ||= 0;
+        $f->{alias}{$alias}++;
     }
 }
 
 sub _find_fields {
     my ($f,$ref,@path) = @_;
 
-    if( exists $ref->{type} ) {
-        _add_fields($f,@path);
-    }
+    # Handle things with properties
     if( exists $ref->{properties} && ref $ref->{properties} eq 'HASH') {
         foreach my $k (sort keys %{ $ref->{properties} }) {
             _find_fields($f,$ref->{properties}{$k},@path,$k);
         }
     }
-    if( exists $ref->{fields} && ref $ref->{fields} eq 'HASH') {
-        foreach my $k (sort keys %{ $ref->{fields} } ) {
-            _add_fields($f,@path,$k);
+    # Handle elements that contain data
+    elsif( exists $ref->{type} ) {
+        _add_fields($f,@path);
+        # Handle multifields
+        if( exists $ref->{fields} && ref $ref->{fields} eq 'HASH') {
+            foreach my $k (sort keys %{ $ref->{fields} } ) {
+                _add_fields($f,@path,$k);
+            }
         }
+    }
+    # Unknown data, throw an error if we care that deeply.
+    else {
+        debug({stderr=>1,color=>'red'},
+            sprintf "_find_fields(): Invalid property at: %s ref info: %s",
+                join('.', @path),
+                join(',', ref $ref eq 'HASH' ? sort keys %{$ref} :
+                          ref $ref           ? ref $ref : 'unknown ref'
+                ),
+        );
     }
 }
 
