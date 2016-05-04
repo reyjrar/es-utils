@@ -312,8 +312,16 @@ AGES: while( !$DONE && @AGES ) {
                     elsif(index($f, '.') > 0) {
                         # Try path matching the key
                         my @values = ();
-                        foreach my $k (grep { index($_,$f) == 0 } keys %{ $flat }) {
-                            push @values, $flat->{$k};
+                        foreach my $k (keys %{ $flat }) {
+                            if( index($k,$f) == 0 ) {
+                                push @values, $flat->{$k};
+                            }
+                            elsif( $k =~ /\.\d+\./ ) {
+                                my $flatter =  join '.', grep { !/^\d+$/ } split /\./, $k;
+                                if ( $flatter eq $f ) {
+                                    push @values, $flat->{$k};
+                                }
+                            }
                         }
                         $value = @values ? @values == 1 ? $values[0] : \@values : undef;
                     }
