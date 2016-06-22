@@ -359,9 +359,9 @@ AGES: while( !$DONE && @AGES ) {
         $start = time;
         $result = es_request('_search/scroll', {
             uri_param => {
-                scroll_id => $result->{_scroll_id},
                 scroll    => $q->scroll,
-            }
+            },
+            body => $result->{_scroll_id},
         });
         $duration += time - $start;
         last unless $result->{hits} && $result->{hits}{hits} && @{ $result->{hits}{hits} } > 0
