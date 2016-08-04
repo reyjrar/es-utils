@@ -297,7 +297,7 @@ sub es_request {
     $options->{method} ||= 'GET';
     $options->{body} = $body if defined $body;
     $options->{command} = $url;
-    my $index = 'NoIndex';
+    my $index;
 
     if( exists $options->{index} ) {
         my $index_in = delete $options->{index};
@@ -316,7 +316,8 @@ sub es_request {
             $index = join(',', @valid);
         }
     }
-    $options->{index} = $index if $index ne 'NoIndex';
+    $options->{index} = $index if defined $index;
+    $index ||= '';
 
     # Figure out if we're modifying things
     my $modification = $url eq '_search' && $options->{method} eq 'POST' ? 0
@@ -324,7 +325,7 @@ sub es_request {
 
     my ($status,$res);
     if( $DEF{NOOP} && $modification) {
-        output({color=>'cyan'}, "Called es_request($index / $options->{command}), but --noop and method is $options->{method}");
+        output({color=>'cyan'}, "Called es_request($index/$options->{command}), but --noop and method is $options->{method}");
         return;
     }
 
@@ -334,26 +335,26 @@ sub es_request {
     # Check the response is defined, bail if it's not
     die "Unsupported request method: $options->{method}" unless defined $resp;
 
-    my $result;
+    # Logging
     if( !$resp->is_success ) {
         output({color=>'red',stderr=>1},
             sprintf "es_request(%s/%s) failed[%d]: %s",
                 $index, $options->{command}, $resp->code, $resp->message
         );
-    } elsif( !defined $resp->content || ( is_ref($resp->content) || length $resp->content )) {
+    } elsif( !defined $resp->content || ( !is_ref($resp->content) && !length $resp->content )) {
         output({color=>'yellow',stderr=>1},
             sprintf "es_request(%s/%s) empty response[%d]: %s",
                 $index, $options->{command}, $resp->code, $resp->message
         );
     }
     else {
-        $result = $resp->content;
+        debug_var($resp);
     }
     verbose({color=>'yellow'}, sprintf "es_request(%s/%s) returned HTTP Status %s",
         $index, $options->{command}, $resp->message,
     ) if $resp->code != 200;
 
-    return $result;
+    return $resp->content;
 }
 
 
@@ -628,7 +629,6 @@ sub es_index_valid {
     return $_valid_index{$index} if exists $_valid_index{$index};
 
     my $es = es_connect();
-
     my $result;
     eval {
         debug("Running index_exists");
