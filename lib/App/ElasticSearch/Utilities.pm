@@ -295,7 +295,6 @@ sub es_request {
 
     # Normalize the options
     $options->{method} ||= 'GET';
-    $options->{body} = $body if defined $body;
     $options->{command} = $url;
     my $index;
 
@@ -454,8 +453,8 @@ sub es_indices {
     }
     else {
         my $res = es_request('_cat/indices', { uri_param => { h => 'index,status' } });
-        foreach my $line (@{ $res }) {
-            my ($index,$status) = split /\s+/, $line;
+        foreach my $entry (@{ $res }) {
+            my ($index,$status) = @{ $entry }{qw(index status)};
             debug("Evaluating '$index'");
             if(!exists $args{_all}) {
                 # State Check Disqualification

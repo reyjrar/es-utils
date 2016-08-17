@@ -31,10 +31,11 @@ the API you'd expect from B<Elastijk>.
 
 # VERSION
 
+use App::ElasticSearch::Utilities::HTTPRequest;
 use CLI::Helpers qw(:output);
 use JSON::MaybeXS;
 use LWP::UserAgent;
-use Ref::Util qw(is_arrayref is_hashref);
+use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sub::Quote;
 use URI;
 use URI::QueryParam;
@@ -100,7 +101,7 @@ Lazy built B<LWP::UserAgent> to access LWP::UserAgent directly.
 
 has 'ua' => (
     is  => 'lazy',
-    isa => quote_sub(q{die "UA setup failed." unless ref $_[0] eq 'LWP::UserAgent'}),
+    isa => quote_sub(q{die "UA setup failed." unless ref($_[0]) =~ /^LWP::UserAgent/}),
 );
 
 sub _build_ua {
@@ -119,55 +120,40 @@ sub _build_ua {
     $ua->add_handler( response_done => sub {
         my ($response,$lwp_ua,$headers) = @_;
         debug( {color=>'magenta'}, "respone_done handler, got:");
-        debug_var($response);
 
         if( $response->is_success ) {
+            debug_var($response);
             my $ctype = $response->content_type() || 'invalid';
-			# JSON Transform
+            # JSON Transform
             if( $ctype =~ m{^application/json\b} ) {
-				debug({color=>'yellow',indent=>1},"JSON Decoding Response Content");
+                debug({color=>'yellow',indent=>1},"JSON Decoding Response Content");
                 eval {
                     my $decoded = decode_json( $response->content );
                     $response->content($decoded);
                 };
             }
             elsif ( $ctype =~ m{^text/plain} ) {
-				# Plain text transform for the _cat API
-				debug({color=>'yellow',indent=>1},"Plain Text Transform Response Content");
-    			my $decoded = [
-					map { s/^\s+//; s/\s+$//; $_ }
-					grep { defined && length }
-					split /\r?\n/, $response->content
-				];
+                # Plain text transform for the _cat API
+                debug({color=>'yellow',indent=>1},"Plain Text Transform Response Content");
+                my $decoded = [
+                    map { s/^\s+//; s/\s+$//; $_ }
+                    grep { defined && length }
+                    split /\r?\n/, $response->content
+                ];
                 debug_var($decoded);
-				$response->content($decoded);
+                $response->content($decoded);
+            }
+        }
+        if( my $content = $response->content ) {
+            debug({color=>'yellow'}, "After translation:");
+            if( is_ref($content) ) {
+                debug_var( $response->content );
+            }
+            else{
+                debug( $content );
             }
         }
         $_[0] = $response;
-    });
-
-    # Encode the JSON Automatically
-    $ua->add_handler( request_prepare => sub {
-        my ($request,$lwp_ua,$headers) = @_;
-        debug( {color=>'magenta'}, "request_prepare handler, got:");
-        debug_var($request);
-        if( $request->content ) {
-            if( is_hashref($request->content) ) {
-                eval {
-                    my $json = encode_json($request->content);
-                    $request->content( $json );
-                };
-            }
-            elsif( is_arrayref($request->content) ) {
-                # Bulk does this
-                my @body;
-                foreach my $entry (@{ $request->content }) {
-                    push @body, ref $entry ? encode_json($entry) : $entry;
-                }
-                $request->content( join("\n", @body) );
-            }
-        }
-        $_[0] = $request;
     });
 
     return $ua;
@@ -206,20 +192,28 @@ sub request {
             $uri->query_param( $k => $options->{uri_param}{$k} );
         }
     }
+    # Body Translations
+    if(!defined $body && exists $options->{body}) {
+        $body ||= delete $options->{body};
+    }
 
     # Determine request method
     my $method = exists $options->{method} ? uc $options->{method} : 'GET';
     debug({color=>'magenta'}, sprintf "Issuing %s with URI of '%s'", $method, $uri->as_string);
+    if( defined $body ) {
+        if( is_ref($body) )  {
+            debug_var({indent=>1}, $body);
+        }
+        else {
+            debug({indent=>1}, split /\r?\n/, $body);
+        }
+    }
 
     # Make the request
-    my @params = ( $uri->as_string );
-    push @params, $body if defined $body;
-    return $method eq 'GET'    ? $self->ua->get( @params ) :
-           $method eq 'HEAD'   ? $self->ua->head( @params ) :
-           $method eq 'PUT'    ? $self->ua->put( @params ) :
-           $method eq 'POST'   ? $self->ua->post( @params ) :
-           $method eq 'DELETE' ? $self->ua->delete( @params ) :
-           undef;
+    my $req = App::ElasticSearch::Utilities::HTTPRequest->new( $method => $uri->as_string );
+    $req->content($body) if defined $body;
+
+    return $self->ua->simple_request( $req );
 }
 
 
