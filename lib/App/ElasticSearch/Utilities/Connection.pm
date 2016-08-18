@@ -108,7 +108,7 @@ sub _build_ua {
     my ($self) = @_;
 
     # Construct the UA Object
-    my $local_version = defined( *{ __PACKAGE__ . '::VERSION'  }  ) ? *{ __PACKAGE__ . '::VERSION'   }{SCALAR} : '999.9';
+    my $local_version = eval '$VERSION' || '999.9';
     my $ua = LWP::UserAgent->new(
         keep_alive        => 3,
         agent             => sprintf("%s/%0.1f (Perl %s)", __PACKAGE__, $local_version, $^V),
