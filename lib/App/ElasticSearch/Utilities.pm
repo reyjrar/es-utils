@@ -21,6 +21,7 @@ use Hash::Flatten qw(flatten);
 use Hash::Merge::Simple qw(clone_merge);
 use JSON::MaybeXS;
 use LWP::UserAgent;
+use Net::Netrc;
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Time::Local;
 use URI;
@@ -70,7 +71,9 @@ From App::ElasticSearch::Utilities:
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
-    --proto         Defaults to 'http', can be anything LWP::UserAgent can speak
+    --proto         Defaults to 'http', can also be 'https'
+    --http-username HTTP Basic Auth username
+    --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
@@ -106,6 +109,8 @@ if( !defined $_OPTIONS_PARSED ) {
         'days:i',
         'noop!',
         'datesep|date-separator:s',
+        'http-username:s',
+        'http-password:s',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -140,6 +145,11 @@ my %DEF = (
                    exists $_GLOBALS{noop}         ? $_GLOBALS{noop} : undef,
     NOPROXY     => exists $opt{'keep-proxy'}      ? 0 :
                    exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'} : 1,
+    # HTTP Basic Authentication
+    USERNAME    => exists $opt{'http-username'}       ? $opt{'http-username'} :
+                   exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'} : undef,
+    PASSWORD    => exists $opt{'http-password'}       ? $opt{'http-password'} :
+                   exists $_GLOBALS{'http-password'}  ? $_GLOBALS{'http-password'} : undef,
     # Index selection options
     INDEX       => exists $opt{index}     ? $opt{index} : undef,
     BASE        => exists $opt{base}      ? lc $opt{base} :
