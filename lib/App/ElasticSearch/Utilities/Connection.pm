@@ -35,6 +35,7 @@ use App::ElasticSearch::Utilities::HTTPRequest;
 use CLI::Helpers qw(:output);
 use JSON::MaybeXS;
 use LWP::UserAgent;
+use Module::Load;
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sub::Quote;
 use URI;
@@ -103,6 +104,19 @@ has 'ua' => (
     is  => 'lazy',
     isa => quote_sub(q{die "UA setup failed." unless ref($_[0]) =~ /^LWP::UserAgent/}),
 );
+
+
+# Monkey Patch LWP::UserAgent to use our credentials
+{
+    no warnings 'redefine';
+
+    sub LWP::UserAgent::get_basic_credentials {
+        my ($self,$realm,$url) = @_;
+        my $uri = URI->new( $url );
+        load App::ElasticSearch::Utilities => 'es_basic_auth';
+        return es_basic_auth( $uri->host );
+    }
+}
 
 sub _build_ua {
     my ($self) = @_;

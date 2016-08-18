@@ -31,6 +31,7 @@ use YAML;
 use Sub::Exporter -setup => {
     exports => [ qw(
         es_globals
+        es_basic_auth
         es_pattern
         es_connect
         es_request
@@ -109,6 +110,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'days:i',
         'noop!',
         'datesep|date-separator:s',
+        'proto:s',
         'http-username:s',
         'http-password:s',
     );
@@ -204,6 +206,52 @@ sub es_globals {
     return unless exists $_GLOBALS{$key};
     return $_GLOBALS{$key};
 }
+
+=func es_basic_auth($host)
+
+Get the user/password combination for this host.  This is called from LWP::UserAgent if
+it recieves a 401, so the auth condition must be satisfied.
+
+Returns the username and password as a list.
+
+=cut
+
+my %_auth_cache = ();
+
+sub es_basic_auth {
+    my ($host) = @_;
+
+    $host ||= $DEF{HOST};
+
+    # Return the results if we've done this already
+    return @{ $_auth_cache{$host} }{qw(username password)}
+        if exists $_auth_cache{$host};
+
+    # Set the cached element
+    my %auth = ();
+
+    # Lookup the details netrc
+    my $netrc = Net::Netrc->lookup($host);
+    if( $DEF{HOST} eq $host ) {
+        %auth = map { lc($_) => $DEF{$_} } qw(USERNAME PASSWORD);
+    }
+
+    # Get the Username
+    $auth{username} ||= defined $DEF{USERNAME} ? $DEF{USERNAME}
+                      : defined $netrc         ? $netrc->login
+                      : prompt("Username for '$host': ",
+                            defined $DEF{USERNAME} ? (default => $DEF{USERNAME}) : ()
+                        );
+
+    # Prompt for the password
+    $auth{password} ||= defined $netrc ? $netrc->password
+                      : prompt(sprintf "Password for '%s' at '%s': ", $auth{username}, $host);
+
+    # Store
+    $_auth_cache{$host} = \%auth;
+    return @auth{qw(username password)};
+}
+
 
 =func es_pattern
 
