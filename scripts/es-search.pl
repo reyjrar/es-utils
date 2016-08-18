@@ -15,6 +15,7 @@ use Hash::Flatten qw(flatten);
 use JSON;
 use Pod::Usage;
 use POSIX qw(strftime);
+use Ref::Util qw(is_ref is_arrayref is_hashref);
 use YAML;
 
 #------------------------------------------------------------------------#
@@ -42,6 +43,7 @@ GetOptions(\%OPT, qw(
     tail
     timestamp:s
     top:s
+    with:s@
 ));
 
 # Search string is the rest of the argument string
@@ -161,16 +163,37 @@ if( exists $OPT{top} ) {
             output({color=>'red'}, "Aggregation '$type' is not currently supported, ignoring.");
         }
     }
+    if( exists $OPT{with} ) {
+        my @with = is_arrayref($OPT{with}) ? @{ $OPT{with} } : ( $OPT{with} );
+        foreach my $with ( @with )  {
+            my @attrs = split /:/, $with;
+            # Process Args from Right to Left
+            my $size  = $attrs[-1] =~ /^\d+$/ ? pop @attrs : 3;
+            my $field = exists $FIELDS{$attrs[-1]} ? pop @attrs : undef;
+            my $type  = @attrs ? pop @attrs : 'terms';
+            # Skip invalid elements
+            next unless defined $field and defined $size and $size > 0;
+
+            my $id = exists $sub_agg{$field} ? "$field.$type" : $field;
+
+            $sub_agg{$id} = {
+                $type => {
+                    field => $field,
+                    size  => $size,
+                }
+            };
+        }
+    }
 
     my $field = shift @agg_fields;
     $agg_header = "count\t" . $field;
     $agg{terms} = { field => $field };
 
-    if( keys %sub_agg ) {
+    if( exists $sub_agg{by} ) {
         $agg_header = "$OPT{by}\t" . $agg_header;
         $agg{terms}->{order} = { by => $ORDER };
-        $agg{aggregations} = \%sub_agg;
     }
+    $agg{aggregations} = \%sub_agg if keys %sub_agg;
 
     if( exists $OPT{all} ) {
         verbose({color=>'cyan'}, "# Aggregations with --all are limited to returning 1,000,000 results.");
@@ -231,6 +254,7 @@ AGES: while( !$DONE && @AGES ) {
         # Search Body
         $q->request_body,
     );
+    debug_var($result);
     $duration += time() - $start;
 
     # Advance if we don't have a result
@@ -255,7 +279,7 @@ AGES: while( !$DONE && @AGES ) {
     }
 
     while( $result && !$DONE ) {
-        my $hits = ref $result->{hits}{hits} eq 'ARRAY' ? $result->{hits}{hits} : [];
+        my $hits = is_arrayref($result->{hits}{hits}) ? $result->{hits}{hits} : [];
 
         # Handle Aggregations
         my $aggs = exists $result->{aggregations} ? $result->{aggregations}{top}{buckets} : [];
@@ -265,15 +289,49 @@ AGES: while( !$DONE && @AGES ) {
                 $AGGS_TOTALS{$agg->{key}} ||= 0;
                 $AGGS_TOTALS{$agg->{key}} += $agg->{doc_count};
                 my @out = (
-                    $agg->{doc_count},
-                    $agg->{key},
+                    delete $agg->{doc_count},
+                    delete $agg->{key},
                 );
                 if(exists $agg->{by} ) {
-                    if( exists $agg->{by}{value} ) {
-                        unshift @out, $agg->{by}{value};
+                    my $by = delete $agg->{by};
+                    if( exists $by->{value} ) {
+                        unshift @out, $by->{value};
                     }
                 }
-                output(exists $OPT{by} ? {data=>1} : {}, join("\t",@out));
+                # Handle the --with elements
+                my %subaggs = ();
+                if( keys %{ $agg } ) {
+                    foreach my $k (sort keys %{ $agg }) {
+                        if( exists $agg->{$k}{buckets} ) {
+                            my @sub;
+                            foreach my $subagg (@{ $agg->{$k}{buckets} }) {
+                                my @elms = ();
+                                next unless exists $subagg->{key};
+                                push @elms, $subagg->{key};
+                                foreach my $dk (qw(doc_count score bg_count)) {
+                                    push @elms, $subagg->{$dk} if exists $subagg->{$dk};
+                                }
+                                push @sub, \@elms;
+                            }
+                            $subaggs{$k} = \@sub if @sub;
+                        }
+                    }
+                }
+                if( keys %subaggs ) {
+                    foreach my $subagg (sort keys %subaggs) {
+                        foreach my $extra ( @{ $subaggs{$subagg} } ) {
+                            my @copy = @out;
+                            splice @copy, exists $OPT{by} ? 2 : 1, 0, $subagg, @{ $extra };
+                            output({data=>1},
+                                join "\t", @copy
+                            );
+                        }
+                    }
+                }
+                else {
+                    # Simple output
+                    output(exists $OPT{by} ? {data=>1} : {}, join("\t",@out));
+                }
                 $displayed++;
             }
             $TOTAL_HITS = exists $result->{aggegrations}{top}{other} ? $result->{aggregations}{top}{other} + $displayed : $TOTAL_HITS;
@@ -338,7 +396,7 @@ AGES: while( !$DONE && @AGES ) {
                 foreach my $f (@always,@SHOW) {
                     my $v = '-';
                     if( exists $record->{$f} && defined $record->{$f} ) {
-                        $v = ref $record->{$f} ? to_json($record->{$f},{allow_nonref=>1,canonical=>1}) : $record->{$f};
+                        $v = is_ref($record->{$f}) ? to_json($record->{$f},{allow_nonref=>1,canonical=>1}) : $record->{$f};
                     }
                     push @cols,$v;
                 }
@@ -402,7 +460,7 @@ sub document_lookdown {
     return $href->{$field} if exists $href->{$field};
 
     foreach my $k (keys %{ $href }) {
-        if( ref $href->{$k} eq 'HASH' ) {
+        if( is_hashref($href->{$k}) ) {
             return document_lookdown($href->{$k},$field);
         }
     }
@@ -483,6 +541,7 @@ Options:
     --tail              Continue the query until CTRL+C is sent
     --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
+    --with              Perform a sub aggregation on the query
     --match-all         Enables the ElasticSearch match_all operator
     --prefix            Takes "field:string" and enables the Lucene prefix query for that field
     --exists            Field which must be present in the document
@@ -573,6 +632,60 @@ Supported sub agggregations and formats:
     max:<field>
     avg:<field>
     sum:<field>
+
+=item B<with>
+
+Perform a subaggregation on the top terms and report that sub aggregation details in the output.  The format is:
+
+    --with <aggregation>:<field>:<size>
+
+The default B<size> is 3.
+The default B<aggregation> is 'terms'.
+
+B<field> is the only required element.
+
+e.g.
+
+    $ es-search.pl --base logstash error --top program --size 2 --by cardinality:host --with host:5
+
+This will show the top 2 programs with log messages containing the word error by the cardinality (count
+distinct host) of hosts showing the top 5 hosts
+
+Without the --with, the results might look like this:
+
+    112314 sshd
+    21224  ntp
+
+The B<--with> option would expand that output to look like this:
+
+    112314   host   bastion-804   12431   sshd
+    112314   host   bastion-803   10009   sshd
+    112314   host   bastion-805   9768    sshd
+    112314   host   bastion-801   8789    sshd
+    112314   host   bastion-802   4121    sshd
+    21224    host   webapp-324    21223   ntp
+    21224    host   mail-42       1       ntp
+
+This may be specified multiple times, the result is more I<rows>, not more I<columns>, e.g.
+
+
+    $ es-search.pl --base logstash error --top program --size 2 --by cardinality:host --with host:5 --with dc:2
+
+Produces:
+
+    112314   dc     arlington     112314  sshd
+    112314   host   bastion-804   12431   sshd
+    112314   host   bastion-803   10009   sshd
+    112314   host   bastion-805   9768    sshd
+    112314   host   bastion-801   8789    sshd
+    112314   host   bastion-802   4121    sshd
+    21224    dc     amsterdam     21223   ntp
+    21224    dc     la            1       ntp
+    21224    host   webapp-324    21223   ntp
+    21224    host   mail-42       1       ntp
+
+You may sub aggregate using any L<bucket agggregation|https://www.elastic.co/guide/en/elasticsearch/reference/master/search-aggregations-bucket.html>
+as long as the aggregation provides a B<key> element.  Additionally, doc_count, score, and bg_count will be reported in the output.
 
 
 =item B<match-all>
