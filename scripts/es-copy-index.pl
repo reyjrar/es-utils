@@ -13,7 +13,7 @@ use File::Basename;
 use File::Slurp::Tiny qw(read_lines);
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Hash::Merge::Simple qw(clone_merge);
-use JSON::XS;
+use JSON::MaybeXS;
 use Pod::Usage;
 use Time::HiRes qw(time);
 
@@ -59,7 +59,7 @@ if( $HOST{to} eq $HOST{from} && $INDEX{to} eq $INDEX{from} ) {
 
 #------------------------------------------------------------------------#
 # Build the Query
-my $JSON = JSON::XS->new->pretty->canonical;
+my $JSON = JSON->new->pretty->canonical;
 my $qs = App::ElasticSearch::Utilities::QueryString->new();
 my $q  = @ARGV ? $qs->expand_query_string(@ARGV)
                : App::ElasticSearch::Utilities::Query->new(must => {match_all=>{}});
@@ -118,20 +118,22 @@ unless( exists $OPT{append} ) {
         };
     }
     else {
-        $res = es_request($ES{from}, '_mappings', {index => $INDEX{from}});
         $mappings = $res->{$INDEX{from}}{mappings};
     }
 
-    ($status, $res) = $ES{to}->put(
-        index => $INDEX{to},
-        body  => {
+    $res = es_request('/',
+        {
+            method => 'PUT',
+            index => $INDEX{to},
+        },
+        {
             settings => $to_settings,
             mappings => $mappings,
         }
     );
 
-    if ($status ne "200") {
-        die "Failed to create index in $HOST{to} (http status = $status): " . $JSON->encode([ $status, $res ]);
+    if (!defined $res || !is_hashref($res) || !$res->{ok}) {
+        die "Failed to create index in $HOST{to} : " . $JSON->encode($res);
     }
 }
 else {

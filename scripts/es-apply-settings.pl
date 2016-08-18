@@ -4,11 +4,11 @@
 use strict;
 use warnings;
 
-use JSON::XS;
+use App::ElasticSearch::Utilities qw(:default es_apply_index_settings es_open_index es_close_index);
+use CLI::Helpers qw(:all);
+use JSON::MaybeXS;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
-use CLI::Helpers qw(:all);
-use App::ElasticSearch::Utilities qw(:default es_apply_index_settings es_open_index es_close_index);
 
 #------------------------------------------------------------------------#
 # Argument Collection

@@ -7,6 +7,7 @@ use warnings;
 
 use Const::Fast;
 use CLI::Helpers qw(:all);
+use Ref::Util qw(is_ref is_hashref);
 use Sub::Exporter -setup => {
     exports => [ qw(
         _fix_version_request
@@ -33,10 +34,31 @@ const my %SIMPLE => (
         1.9 => '_optimize',
         2.0 => '_optimize',
     },
+    '_status' => {
+        default => '_status',
+        2.0     => '_stats',
+        2.1     => '_stats',
+        2.2     => '_stats',
+        2.3     => '_stats',
+        5.0     => '_stats',
+    }
 );
 my %CALLBACKS = (
     '_cluster/state' => {
         default => \&_cluster_state_1_0,
+    },
+    '_search/scroll' => {
+        default => \&_search_scroll_2_0,
+        1.0     => \&_search_scroll_1_0,
+        1.1     => \&_search_scroll_1_0,
+        1.2     => \&_search_scroll_1_0,
+        1.3     => \&_search_scroll_1_0,
+        1.4     => \&_search_scroll_1_0,
+        1.5     => \&_search_scroll_1_0,
+        1.6     => \&_search_scroll_1_0,
+        1.7     => \&_search_scroll_1_0,
+        1.8     => \&_search_scroll_1_0,
+        1.9     => \&_search_scroll_1_0,
     },
 );
 
@@ -49,11 +71,12 @@ sub _fix_version_request {
     if( ! defined $version  ){
         eval {
             $version = App::ElasticSearch::Utilities::_get_es_version();
-        };
-        if(my $err = $@) {
+            1;
+        } or do {
+            my $err = $@;
             output({stderr=>1,color=>'red'}, "Failed version detection!", $@);
-        }
-        if (defined $version < $MIN_VERSION) {
+        };
+        if (defined $version && $version < $MIN_VERSION) {
             output({stderr=>1,color=>'red',sticky=>1},
                     "!!! Detected ElasticSearch Version '$version', which is < $MIN_VERSION, please upgrade your cluster !!!");
             exit 1;
@@ -142,5 +165,50 @@ sub _cluster_state_1_0 {
     }
     return ($url,$options,$data);
 }
+
+sub search_scroll_2_0 {
+    my ($url,$options,$data) = @_;
+
+    # Translate 1.0 version of scrolls to the 2.0 version
+    my %params = ();
+    if( defined $data ) {
+        if( is_hashref($data) ) {
+            %params = %{ $data };
+        }
+        elsif( length $data ) {
+            $params{scroll_id} = $data;
+            if( exists $options->{uri_param} ) {
+                $params{scroll} = exists $options->{uri_param}{scroll} ?
+                                    delete $options->{uri_param}{scroll} :
+                                    '30s';
+            }
+        }
+    }
+
+    # Violate HTTP RFC and set this as the body
+    $data = \%params;
+
+    return ($url,$options,$data);
+}
+
+sub search_scroll_1_0 {
+    my ($url,$options,$data) = @_;
+
+    # If we pass a post 2.0 version of a scroll,
+    # translate it back to the 1.0 vesion
+    if ( defined $data && is_hashref($data) ) {
+        if( exists $data->{scroll} ) {
+            $options->{uri_param} ||= {};
+            $options->{uri_param}{scroll} = $data->{scroll};
+        }
+        if( exists $data->{scroll_id} ) {
+            my $scroll_id = $data->{scroll_id};
+            undef($data);
+            $data = $scroll_id;
+        }
+    }
+    return ($url,$options,$data);
+}
+
 
 1;

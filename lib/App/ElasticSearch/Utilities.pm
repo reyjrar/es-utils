@@ -15,13 +15,14 @@ our @_CONFIGS = (
     "$ENV{HOME}/.es-utils.yml",
 );
 
-use Elastijk;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config pass_through);
 use Hash::Flatten qw(flatten);
 use Hash::Merge::Simple qw(clone_merge);
-use Hijk;
-use JSON::XS;
+use JSON::MaybeXS;
+use LWP::UserAgent;
+use Net::Netrc;
+use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Time::Local;
 use URI;
 use URI::QueryParam;
@@ -60,6 +61,7 @@ use Sub::Exporter -setup => {
         index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_bases)],
     },
 };
+use App::ElasticSearch::Utilities::Connection;
 use App::ElasticSearch::Utilities::VersionHacks qw(_fix_version_request);
 
 =head1 ARGS
@@ -69,6 +71,9 @@ From App::ElasticSearch::Utilities:
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
+    --proto         Defaults to 'http', can also be 'https'
+    --http-username HTTP Basic Auth username
+    --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
@@ -104,6 +109,8 @@ if( !defined $_OPTIONS_PARSED ) {
         'days:i',
         'noop!',
         'datesep|date-separator:s',
+        'http-username:s',
+        'http-password:s',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -130,12 +137,19 @@ my %DEF = (
                    exists $_GLOBALS{host}         ? $_GLOBALS{host} : 'localhost',
     PORT        => exists $opt{port}              ? $opt{port} :
                    exists $_GLOBALS{port}         ? $_GLOBALS{port} : 9200,
+    PROTO       => exists $opt{proto}             ? $opt{proto} :
+                   exists $_GLOBALS{proto}        ? $_GLOBALS{proto} : 'http',
     TIMEOUT     => exists $opt{timeout}           ? $opt{timeout} :
                    exists $_GLOBALS{timeout}      ? $_GLOBALS{timeout} : 30,
     NOOP        => exists $opt{noop}              ? $opt{noop} :
                    exists $_GLOBALS{noop}         ? $_GLOBALS{noop} : undef,
     NOPROXY     => exists $opt{'keep-proxy'}      ? 0 :
                    exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'} : 1,
+    # HTTP Basic Authentication
+    USERNAME    => exists $opt{'http-username'}       ? $opt{'http-username'} :
+                   exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'} : undef,
+    PASSWORD    => exists $opt{'http-password'}       ? $opt{'http-password'} :
+                   exists $_GLOBALS{'http-password'}  ? $_GLOBALS{'http-password'} : undef,
     # Index selection options
     INDEX       => exists $opt{index}     ? $opt{index} : undef,
     BASE        => exists $opt{base}      ? lc $opt{base} :
@@ -150,6 +164,8 @@ my %DEF = (
 );
 debug_var(\%DEF);
 CLI::Helpers::override(verbose => 1) if $DEF{NOOP};
+
+my $BASE_URL = URI->new(sprintf "%s://%s:%d", @DEF{qw(PROTO HOST PORT)});
 
 if( $DEF{NOPROXY} ) {
     debug("Removing any active HTTP Proxies from ENV.");
@@ -209,19 +225,16 @@ sub es_pattern {
 
 sub _get_es_version {
     return $CURRENT_VERSION if defined $CURRENT_VERSION;
-    eval {
-        my ($status,$result) = Elastijk::request({
-            host    => $DEF{HOST},
-            port    => $DEF{PORT},
-            method  => 'GET',
-            command => '/',
-        });
-        if( $status eq "200" ) {
-            $CURRENT_VERSION = join('.', (split /\./,$result->{version}{number})[0,1]);
+    my $conn = es_connect();
+    my $resp = $conn->ua->get( $BASE_URL->as_string );
+    if( $resp->is_success ) {
+        eval {
+            $CURRENT_VERSION = join('.', (split /\./,$resp->content->{version}{number})[0,1]);
         }
     };
     if( !defined $CURRENT_VERSION || $CURRENT_VERSION <= 0 ) {
-        output({color=>'red',stderr=>1}, "Unable to determine Elasticsearch version, something has gone terribly wrong: aborting.");
+        output({color=>'red',stderr=>1}, sprintf "[%d] Unable to determine Elasticsearch version, something has gone terribly wrong: aborting.", $resp->code);
+        output({color=>'red',stderr=>1}, $resp->content) if $resp->content;
         exit 1;
     }
     debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");
@@ -242,6 +255,7 @@ sub es_connect {
 
     my $server = $DEF{HOST};
     my $port   = $DEF{PORT};
+    my $proto  = $DEF{PROTO};
 
     # If we're overriding, return a unique handle
     if(defined $override_servers) {
@@ -255,14 +269,15 @@ sub es_connect {
 
         if( @servers > 0 ) {
             my $pick = @servers > 1 ? $servers[int(rand(@servers))] : $servers[0];
-            return Elastijk->new(%{$pick});
+            return App::ElasticSearch::Utilities::Connection->new(%{$pick});
         }
     }
 
     # Otherwise, cache our handle
-    $ES ||= Elastijk->new(
-        host => $server,
-        port => $port
+    $ES ||= App::ElasticSearch::Utilities::Connection->new(
+        host  => $server,
+        port  => $port,
+        proto => $proto,
     );
 
     return $ES;
@@ -282,23 +297,20 @@ First hash ref contains options, including:
 =cut
 
 sub es_request {
-    my $instance = ref $_[0] eq 'Elastijk::oo' ? shift @_ : es_connect();
+    my $instance = ref $_[0] eq 'App::ElasticSearch::Utilities::Connection' ? shift @_ : es_connect();
 
     $CURRENT_VERSION = _get_es_version() if !defined $CURRENT_VERSION;
 
     my($url,$options,$body) = _fix_version_request(@_);
 
-    # Pull connection options
-    $options->{$_} = $instance->{$_} for qw(host port);
-
+    # Normalize the options
     $options->{method} ||= 'GET';
-    $options->{body} = $body if defined $body;
     $options->{command} = $url;
-    my $index = 'NoIndex';
+    my $index;
 
     if( exists $options->{index} ) {
         my $index_in = delete $options->{index};
-        #
+
         # No need to validate _all
         if( $index_in eq '_all') {
             $index = $index_in;
@@ -313,7 +325,8 @@ sub es_request {
             $index = join(',', @valid);
         }
     }
-    $options->{index} = $index if $index ne 'NoIndex';
+    $options->{index} = $index if defined $index;
+    $index ||= '';
 
     # Figure out if we're modifying things
     my $modification = $url eq '_search' && $options->{method} eq 'POST' ? 0
@@ -321,50 +334,36 @@ sub es_request {
 
     my ($status,$res);
     if( $DEF{NOOP} && $modification) {
-        output({color=>'cyan'}, "Called es_request($index / $options->{command}), but --noop and method is $options->{method}");
+        output({color=>'cyan'}, "Called es_request($index/$options->{command}), but --noop and method is $options->{method}");
         return;
     }
-    # _cat Queries don't work with Elastijk
-    if( $url =~ m#^_cat/# ) {
-        my $uri = URI->new(sprintf "http://%s:%d/%s", $options->{host}, $options->{port}, $url);
-        # Merge URI keys and uri_param keys
-        if ( exists $options->{uri_param} ) {
-            foreach my $k (keys %{ $options->{uri_param} }) {
-                $uri->query_param( $k => $options->{uri_param}{$k} );
-            }
-        }
-        eval {
-            my $resp = Hijk::request({
-                host            => $uri->host,
-                port            => $uri->port,
-                method          => 'GET',
-                path            => $uri->path,
-                query_string    => $uri->query,
-                connect_timeout => $DEF{timeout},
-                read_timeout    => $DEF{timeout},
-            });
-            $status = $resp->{status};
-            die sprintf "%d - %s", $resp->{error_number}, $resp->{error_string} unless $status == 200;
-            $res = [ map { s/^\s+//; s/\s+$//; $_ } grep { defined && length } split /\r?\n/, $resp->{body} ];
-            1;
-        } or do {
-            output({color=>'red',stderr=>1},sprintf "es_request() hijk::request(%s?%s) failed: %s", $uri->path, $uri->query, $@);
-        };
+
+    # Make the request
+    my $resp = $instance->request($url,$options,$body);
+
+    # Check the response is defined, bail if it's not
+    die "Unsupported request method: $options->{method}" unless defined $resp;
+
+    # Logging
+    if( !$resp->is_success ) {
+        output({color=>'red',stderr=>1},
+            sprintf "es_request(%s/%s) failed[%d]: %s",
+                $index, $options->{command}, $resp->code, $resp->message
+        );
+    } elsif( !defined $resp->content || ( !is_ref($resp->content) && !length $resp->content )) {
+        output({color=>'yellow',stderr=>1},
+            sprintf "es_request(%s/%s) empty response[%d]: %s",
+                $index, $options->{command}, $resp->code, $resp->message
+        );
     }
     else {
-        eval {
-            debug("calling es_request($index / $options->{command})");
-            ($status,$res) = Elastijk::request($options);
-            die sprintf "[%d] Empty response from %s:%d", $status, $options->{host}, $options->{port} unless defined $res;
-            1;
-        } or do {
-            my $err = $@;
-            output({color=>'red',stderr=>1}, "es_request($index / $options->{command}) failed[$status]: $err");
-        };
+        debug_var($resp);
     }
-    verbose({color=>'yellow'},"es_request($index / $options->{command}) returned HTTP Status $status") if $status != 200;
+    verbose({color=>'yellow'}, sprintf "es_request(%s/%s) returned HTTP Status %s",
+        $index, $options->{command}, $resp->message,
+    ) if $resp->code != 200;
 
-    return $res;
+    return $resp->content;
 }
 
 
@@ -463,9 +462,9 @@ sub es_indices {
         push @indices, $DEF{INDEX} if es_index_valid( $DEF{INDEX} );
     }
     else {
-        my $res = es_request('_cat/indices?h=index,status');
-        foreach my $line (@{ $res }) {
-            my ($index,$status) = split /\s+/, $line;
+        my $res = es_request('_cat/indices', { uri_param => { h => 'index,status' } });
+        foreach my $entry (@{ $res }) {
+            my ($index,$status) = @{ $entry }{qw(index status)};
             debug("Evaluating '$index'");
             if(!exists $args{_all}) {
                 # State Check Disqualification
@@ -616,7 +615,7 @@ sub es_index_shards {
 
     my %shards = map { $_ => 0 } qw(primaries replicas);
     my $result = es_request('_settings', {index=>$index});
-    if( defined $result && ref $result eq 'HASH')  {
+    if( defined $result && is_hashref($result) )   {
         $shards{primaries} = $CURRENT_VERSION < 1.0 ? $result->{$index}{settings}{'index.number_of_shards'}
                                                     : $result->{$index}{settings}{index}{number_of_shards};
         $shards{replicas}  = $CURRENT_VERSION < 1.0 ? $result->{$index}{settings}{'index.number_of_replicas'}
@@ -639,7 +638,6 @@ sub es_index_valid {
     return $_valid_index{$index} if exists $_valid_index{$index};
 
     my $es = es_connect();
-
     my $result;
     eval {
         debug("Running index_exists");
@@ -707,7 +705,7 @@ sub _find_fields {
     my ($f,$ref,@path) = @_;
 
     # Handle things with properties
-    if( exists $ref->{properties} && ref $ref->{properties} eq 'HASH') {
+    if( exists $ref->{properties} && is_hashref($ref->{properties}) ) {
         foreach my $k (sort keys %{ $ref->{properties} }) {
             _find_fields($f,$ref->{properties}{$k},@path,$k);
         }

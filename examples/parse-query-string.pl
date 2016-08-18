@@ -6,7 +6,7 @@ use warnings;
 
 use App::ElasticSearch::Utilities::QueryString;
 use CLI::Helpers qw(:output);
-use JSON::XS;
+use JSON::MaybeXS;
 
 my $json  = JSON->new->ascii->canonical(1)->pretty;
 my $qs    = App::ElasticSearch::Utilities::QueryString->new();
