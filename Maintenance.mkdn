@@ -4,7 +4,7 @@ es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
 
 # VERSION
 
-version 4.8
+version 5.0
 
 # SYNOPSIS
 
@@ -32,6 +32,10 @@ From App::ElasticSearch::Utilities:
     --local         Use localhost as the elasticsearch host
     --host          ElasticSearch host to connect to
     --port          HTTP port for your cluster
+    --proto         Defaults to 'http', can also be 'https'
+    --http-username HTTP Basic Auth username
+    --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
+    --password-exec Script to run to get the users password
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
@@ -41,6 +45,8 @@ From App::ElasticSearch::Utilities:
     --datesep       Date separator, default '.' also (--date-separator)
     --pattern       Use a pattern to operate on the indexes
     --days          If using a pattern or base, how many days back to go, default: all
+
+See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections from App::ElasticSearch::Utilities.
 
 From CLI::Helpers:
 
