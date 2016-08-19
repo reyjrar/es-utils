@@ -19,6 +19,7 @@ use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config pass_through);
 use Hash::Flatten qw(flatten);
 use Hash::Merge::Simple qw(clone_merge);
+use IPC::Run3;
 use JSON::MaybeXS;
 use LWP::UserAgent;
 use Net::Netrc;
@@ -75,6 +76,7 @@ From App::ElasticSearch::Utilities:
     --proto         Defaults to 'http', can also be 'https'
     --http-username HTTP Basic Auth username
     --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
+    --password-exec Script to run to get the users password
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 30
     --keep-proxy    Do not remove any proxy settings from %ENV
@@ -85,14 +87,128 @@ From App::ElasticSearch::Utilities:
     --pattern       Use a pattern to operate on the indexes
     --days          If using a pattern or base, how many days back to go, default: all
 
+See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections from App::ElasticSearch::Utilities.
+
 =head1 ARGUMENT GLOBALS
 
 Some options may be specified in the B</etc/es-utils.yaml> or B<$HOME/.es-utils.yaml> file:
 
     ---
+    base: logstash
+    days: 7
     host: esproxy.example.com
     port: 80
     timeout: 10
+    proto: https
+    http-username: bob
+    password-exec: /home/bob/bin/get-es-passwd.sh
+
+=head1 CONNECTION ARGUMENTS
+
+Arguments for establishing a connection with the cluster.  Unless specified otherwise, these options
+can all be set in the globals file.
+
+=over
+
+=item B<local>
+
+Assume ElasticSearch is running locally, connect to localhost.
+
+=item B<host>
+
+Use a different hostname or IP address to connect.
+
+=item B<port>
+
+Defaults to 9200.
+
+=item B<proto>
+
+Defaults to 'http', can also be 'https'.
+
+=item B<http-username>
+
+If HTTP Basic Authentication is required, use this username.
+
+See also the L<HTTP Basic Authentication> section for more details
+
+=item B<http-password>
+
+If HTTP Basic Authentication is required, use this password, B<**INSECURE**>, set
+in globals, netrc, or use the B<password-exec> option below.
+
+=item B<password-exec>
+
+If HTTP Basic Authentication is required, run this command, passing the arguments:
+
+    <command_to_run> <es_host> <es_username>
+
+The script expects the last line to contain the password in plaintext.
+
+=item B<noop>
+
+Prevents any communication to the cluster from making changes to the settings or data contained therein.
+In short, it prevents anything but HEAD and GET requests, B<except> POST requests to the _search endpoint.
+
+=item B<timeout>
+
+Timeout for connections and requests, defaults to 10.
+
+=item B<keep-proxy>
+
+By default, HTTP proxy environment variables are stripped. Use this option to keep your proxy environment variables
+in tact.
+
+
+=back
+
+=head1 INDEX SELECTION ARGUMENTS
+
+=over
+
+=item B<base>
+
+In an environment using monthly, weekly, daily, or hourly indexes.  The base index name is everything without the date.
+Parsing for bases, also provides splitting and matching on segments of the index name delineated by the '-' character.
+If we have the following indexes:
+
+    web-dc1-YYYY.MM.DD
+    web-dc2-YYYY.MM.DD
+    logstash-dc1-YYYY.MM.DD
+    logstash-dc2-YYYY.MM.DD
+
+Valid bases would be:
+
+    web
+    web-dc1
+    web-dc2
+    logstash
+    logstash-dc1
+    logstash-dc2
+    dc1
+    dc2
+
+Combining that with the days option can provide a way to select many indexes at once.
+
+=item B<days>
+
+How many days backwards you want your operation to be relevant.
+
+=item B<datesep>
+
+Default is '.' Can be set to an empty string for no separator.
+
+=item B<pattern>
+
+A pattern to match the indexes.  Can expand the following key words and characters:
+
+    '*'    expanded to '.*'
+    'ANY'  expanded to '.*'
+    'DATE' expanded to a pattern to match a date, based on datesep
+
+The indexes are compared against this pattern.
+
+=back
 
 =cut
 
@@ -113,6 +229,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'proto:s',
         'http-username:s',
         'http-password:s',
+        'password-exec:s',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -152,6 +269,8 @@ my %DEF = (
                    exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'} : undef,
     PASSWORD    => exists $opt{'http-password'}       ? $opt{'http-password'} :
                    exists $_GLOBALS{'http-password'}  ? $_GLOBALS{'http-password'} : undef,
+    PASSEXEC    => exists $opt{'password-exec'}       ? $opt{'password-exec'} :
+                   exists $_GLOBALS{'password-exec'}  ? $_GLOBALS{'password-exec'} : undef,
     # Index selection options
     INDEX       => exists $opt{index}     ? $opt{index} : undef,
     BASE        => exists $opt{base}      ? lc $opt{base} :
@@ -207,6 +326,67 @@ sub es_globals {
     return $_GLOBALS{$key};
 }
 
+=head1 HTTP Basic Authentication
+
+The implementation for HTTP Basic Authentication leverages the LWP::UserAgent's underlying HTTP 401
+detection and is automatic.  There is no way to force basic authentication, it has to be requested
+by the server.  If the server does request it, here's what you need to know about how usernames and
+passwords are resolved.
+
+The username is selected by going through these mechanisms until one is found:
+
+    --http-username
+    'http-username' in /etc/es-utils.yml or ~/.es-utils.yml
+    Netrc element matching the hostname of the request
+    CLI::Helpers prompt()
+
+Once the username has been resolved, the following mechanisms are tried in order:
+
+    --http-password
+    'http-password' in /etc/es-utils.yml or ~/.es-utils.yml
+    Netrc element matching the hostname of the request
+    Password executable defined by --password-exec
+    'password-exec' in /etc/es-utils.yml, ~/.es-utils.yml
+    CLI::Helpers prompt()
+
+=head2 Password Exec
+
+It is B<BAD> practice to specify passwords as a command line argument, or store it in a plaintext
+file.  There are cases where this may be necessary, but it is not recommended.  The best method for securing  your
+password is to use the B<password-exec> option.
+
+This option must point to an executable script.  That script will be passed two arguments, the hostname and the username
+for the request.  It expects the password printed to STDOUT as the last line of output.  Here's an example password-exec setup
+using Apple Keychain:
+
+    #!/bin/sh
+
+    HOSTNAME=$1;
+    USERNAME=$2;
+
+    /usr/bin/security find-generic-password -w -a "$USERNAME" -s "$HOSTNAME"
+
+If we save this to "$HOME/bin/get-passwd.sh" we can execute a script
+like this:
+
+    $ es-search.pl --http-username bob --password-exec $HOME/bin/get-passwd.sh \
+                    --base secure-data --fields
+
+Though it's probably best to set this in your ~/.es-utils.yml file:
+
+    ---
+    host: secured-cluster.example.org
+    port: 443
+    proto: https
+    http-username: bob
+    password-exec: /home/bob/bin/get-passwd.sh
+
+=head3 CLI::Helpers and Password Prompting
+
+If all the fails to yield a password, the last resort is to use CLI::Helpers::prompt() to ask the user for their
+password.  If the user is using version 1.1 or higher of CLI::Helpers, this call will turn off echo and readline magic
+for the password prompt.
+
 =func es_basic_auth($host)
 
 Get the user/password combination for this host.  This is called from LWP::UserAgent if
@@ -245,11 +425,48 @@ sub es_basic_auth {
 
     # Prompt for the password
     $auth{password} ||= defined $netrc ? $netrc->password
-                      : prompt(sprintf "Password for '%s' at '%s': ", $auth{username}, $host);
+                      : (es_pass_exec($host,$auth{username})
+                            || prompt(sprintf "Password for '%s' at '%s': ", $auth{username}, $host)
+                        );
 
     # Store
     $_auth_cache{$host} = \%auth;
     return @auth{qw(username password)};
+}
+
+=func es_pass_exec(host, username)
+
+Called from es_basic_auth to exec a program, capture the password
+and return it to the caller.  This allows the use of password vaults
+and keychains.
+
+=cut
+
+sub es_pass_exec {
+    my ($host,$username) = @_;
+    # Simplest case we can't run
+    return unless $DEF{PASSEXEC} and -x $DEF{PASSEXEC};
+
+    my(@out,@err);
+    # Run the password command captue out, error and RC
+    run3 [ $DEF{PASSEXEC}, $host, $username ], \undef, \@out, \@err;
+    my $rc = $?;
+
+    # Record the error
+    if( @err or $rc != 0 ) {
+        output({color=>'red',stderr=>1},
+            sprintf("es_pass_exec() called '%s' and met with an error code '%d'", $DEF{PASSEXEC}, $rc),
+            @err
+        );
+        return;
+    }
+
+    # Format and return the result
+    my $passwd = $out[-1];
+    chomp($passwd);
+
+    return unless defined $passwd and length $passwd;
+    return $passwd;
 }
 
 
