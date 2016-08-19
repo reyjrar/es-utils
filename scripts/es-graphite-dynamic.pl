@@ -21,6 +21,8 @@ GetOptions(\%opt,
     'carbon-port:i',
     'with-indices',
     'with-cluster',
+    'prefix:s',
+    'no-prefix',
     'help|h',
     'manual|m',
 );
@@ -42,7 +44,7 @@ my %cfg = (
     'carbon-proto' => 'tcp',
     'carbon-base'  => 'general.es',
     %opt,
-    host => App::ElasticSearch::Utilities::def('HOST')
+    host => App::ElasticSearch::Utilities::def('HOST'),
 );
 
 #------------------------------------------------------------------------#
@@ -90,7 +92,8 @@ if( exists $cfg{'with-indices'} ) {
 # Send output to appropriate channels
 for ( @metrics ) {
     # Format
-    s/^/$cfg{'carbon-base'}.$HOSTNAME./;
+    my $prefix = exists $cfg{prefix} ? $cfg{prefix} : join('.', $cfg{'carbon-base'}, $HOSTNAME);
+    s/^/$prefix./ unless $cfg{'no-prefix'};
     s/$/ $TIME\n/;
 
     # Send the Data
@@ -196,6 +199,8 @@ Options:
     --carbon-proto      Protocol for to use for Carbon (Default: tcp)
     --with-indices      Also send individual index stats
     --ignore            Comma separated list of keys to ignore in collection
+    --prefix            A metric path to prefix stats, defaults to (--carbon-base).(hostname)
+    --no-prefix         Don't prefix the metrics at all
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -240,6 +245,30 @@ default ignore list: attributes,id,timestamp,upms,_all,_shards
 Examples:
 
     es-graphite-dynamic.pl --with-indices --ignore primaries,get,warmer
+
+=item B<prefix>
+
+A metric path to prefix the collected stats with.  This is useful for using es-graphite-dynamic.pl with another
+collector such as Diamond which expects metrics in a certain format.  To use with diamond's userscripts or files collector
+you could:
+
+    #!/bin/sh
+    # userscripts
+
+    es-graphite-dynamic.pl --local --prefix elasticsearch
+
+Or with the file collector, you could cron this:
+
+    es-graphite-dynamic.pl --loocal --prefix elasticsearch --data-file /tmp/diamond/elasticsearch.out --quiet
+
+
+If not specified, the assumption is data will be going directly to graphite and the metric path will be set as:
+
+    'general.es.$HOSTNAME'
+
+=item B<no-prefix>
+
+Don't set the prefix to the metric names.
 
 =back
 
