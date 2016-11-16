@@ -135,33 +135,31 @@ sub _build_ua {
         my ($response,$lwp_ua,$headers) = @_;
         debug( {color=>'magenta'}, "respone_done handler, got:");
 
-        if( $response->is_success ) {
-            debug_var($response);
-            my $ctype = $response->content_type() || 'invalid';
-            # JSON Transform
-            if( $ctype =~ m{^application/json\b} ) {
-                debug({color=>'yellow',indent=>1},"JSON Decoding Response Content");
-                eval {
-                    my $decoded = decode_json( $response->content );
-                    $response->content($decoded);
-                };
-            }
-            elsif ( $ctype =~ m{^text/plain} ) {
-                # Plain text transform for the _cat API
-                debug({color=>'yellow',indent=>1},"Plain Text Transform Response Content");
-                my $decoded = [
-                    map { s/^\s+//; s/\s+$//; $_ }
-                    grep { defined && length }
-                    split /\r?\n/, $response->content
-                ];
-                debug_var($decoded);
+        debug_var($response);
+        my $ctype = $response->content_type() || 'invalid';
+        # JSON Transform
+        if( $ctype =~ m{^application/json\b} ) {
+            debug({color=>'yellow',indent=>1},"JSON Decoding Response Content");
+            eval {
+                my $decoded = decode_json( $response->content );
                 $response->content($decoded);
-            }
+            };
+        }
+        elsif ( $response->is_success && $ctype =~ m{^text/plain} ) {
+            # Plain text transform for the _cat API
+            debug({color=>'yellow',indent=>1},"Plain Text Transform Response Content");
+            my $decoded = [
+                map { s/^\s+//; s/\s+$//; $_ }
+                grep { defined && length }
+                split /\r?\n/, $response->content
+            ];
+            debug_var($decoded);
+            $response->content($decoded);
         }
         if( my $content = $response->content ) {
             debug({color=>'yellow'}, "After translation:");
             if( is_ref($content) ) {
-                debug_var( $response->content );
+                debug_var( $content );
             }
             else{
                 debug( $content );

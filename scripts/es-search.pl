@@ -84,7 +84,7 @@ my %CONFIG = (
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
 $ORDER = 'asc' if exists $OPT{tail};
 my %by_age = ();
-my %indices = map { $_ => es_index_days_old($_) } es_indices();
+my %indices = map { $_ => (es_index_days_old($_) || 0) } es_indices();
 die "# Failed to retrieve any indices using your paramaters." unless keys %indices;
 my %FIELDS = ();
 foreach my $index (sort by_index_age keys %indices) {
@@ -147,7 +147,11 @@ my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max
 my $SUBAGG = undef;
 my $agg_header = '';
 if( exists $OPT{top} ) {
-    my @agg_fields = grep { length($_) && exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; lc } split ',', $OPT{top};
+    my @top = split /:/, $OPT{top};
+    my $top_field = pop @top;
+    my $top_agg   = @top ? shift @top : 'terms';
+
+    my @agg_fields = grep { exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; $_; } split ',', $top_field;
     croak(sprintf("Option --top takes a field, found %d fields: %s\n", scalar(@agg_fields),join(',',@agg_fields)))
         unless @agg_fields == 1;
 
@@ -187,20 +191,20 @@ if( exists $OPT{top} ) {
 
     my $field = shift @agg_fields;
     $agg_header = "count\t" . $field;
-    $agg{terms} = { field => $field };
+    $agg{$top_agg} = { field => $field };
 
     if( exists $sub_agg{by} ) {
         $agg_header = "$OPT{by}\t" . $agg_header;
-        $agg{terms}->{order} = { by => $ORDER };
+        $agg{$top_agg}->{order} = { by => $ORDER };
     }
     $agg{aggregations} = \%sub_agg if keys %sub_agg;
 
     if( exists $OPT{all} ) {
         verbose({color=>'cyan'}, "# Aggregations with --all are limited to returning 1,000,000 results.");
-        $agg{terms}->{size} = 1_000_000;
+        $agg{$top_agg}->{size} = 1_000_000;
     }
     else {
-        $agg{terms}->{size} = $CONFIG{size};
+        $agg{$top_agg}->{size} = $CONFIG{size};
     }
     $q->add_aggregations( top => \%agg );
 }
@@ -244,6 +248,9 @@ AGES: while( !$DONE && @AGES ) {
         $header=0;
     }
 
+    debug("== Query");
+    debug_var($q->request_body);
+
     my $result = es_request('_search',
         # Search Parameters
         {
@@ -254,6 +261,7 @@ AGES: while( !$DONE && @AGES ) {
         # Search Body
         $q->request_body,
     );
+    debug({clear=>1},"== Results");
     debug_var($result);
     $duration += time() - $start;
 
@@ -261,7 +269,12 @@ AGES: while( !$DONE && @AGES ) {
     next unless defined $result;
 
     if ( $result->{error} ) {
-        my ($simple_error) = $result->{error} =~ m/(QueryParsingException\[\[[^\]]+\][^\]]+\]\]);/;
+        my $simple_error;
+        eval {
+            $simple_error = $result->{error}{caused_by}{caused_by}{reason};
+        } or do {
+            ($simple_error) = $result->{error} =~ m/(QueryParsingException\[\[[^\]]+\][^\]]+\]\]);/;
+        };
         $simple_error ||= '';
         output({stderr=>1,color=>'red'},
             "# Received an error from the cluster. $simple_error"
@@ -288,10 +301,13 @@ AGES: while( !$DONE && @AGES ) {
             foreach my $agg ( @$aggs ) {
                 $AGGS_TOTALS{$agg->{key}} ||= 0;
                 $AGGS_TOTALS{$agg->{key}} += $agg->{doc_count};
-                my @out = (
-                    delete $agg->{doc_count},
-                    delete $agg->{key},
-                );
+                my @out = ();
+
+                foreach my $k (qw(score doc_count bg_count key)) {
+                    next unless exists $agg->{$k};
+                    my $value = delete $agg->{$k};
+                    push @out, defined $value ? ($k eq 'score' ? sprintf "%0.3f", $value : $value ) : '-';
+                }
                 if(exists $agg->{by} ) {
                     my $by = delete $agg->{by};
                     if( exists $by->{value} ) {
@@ -302,6 +318,7 @@ AGES: while( !$DONE && @AGES ) {
                 my %subaggs = ();
                 if( keys %{ $agg } ) {
                     foreach my $k (sort keys %{ $agg }) {
+                        next unless is_hashref($agg->{$k});
                         if( exists $agg->{$k}{buckets} ) {
                             my @sub;
                             foreach my $subagg (@{ $agg->{$k}{buckets} }) {
@@ -309,7 +326,9 @@ AGES: while( !$DONE && @AGES ) {
                                 next unless exists $subagg->{key};
                                 push @elms, $subagg->{key};
                                 foreach my $dk (qw(doc_count score bg_count)) {
-                                    push @elms, $subagg->{$dk} if exists $subagg->{$dk};
+                                    next unless exists $subagg->{$dk};
+                                    my $v = delete $subagg->{$dk};
+                                    push @elms, defined $v ? ($dk eq 'score' ? sprintf "%0.3f", $v : $v ) : '-';
                                 }
                                 push @sub, \@elms;
                             }
@@ -438,7 +457,7 @@ output({stderr=>1,color=>'yellow'},
     ),
 );
 
-if(!exists $OPT{by} && keys %AGGS_TOTALS) {
+if(!exists $OPT{by} && !exists $OPT{with} && keys %AGGS_TOTALS) {
     output({color=>'yellow'}, '#', '# Totals across batch', '#');
     output({color=>'cyan'},$agg_header);
     foreach my $k (sort { $AGGS_TOTALS{$b} <=> $AGGS_TOTALS{$a} } keys %AGGS_TOTALS) {
@@ -488,7 +507,7 @@ sub show_bases {
     my %bases = ();
 
     foreach my $index (@all) {
-        my $days_old = es_index_days_old( $index );
+        my $days_old = es_index_days_old( $index ) || 0;
         next unless defined $days_old;
         $days_old = 0 if $days_old < 0;
         foreach my $base (es_index_bases($index)) {

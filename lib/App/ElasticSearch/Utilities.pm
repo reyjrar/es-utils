@@ -729,7 +729,7 @@ sub es_indices {
     else {
         my $res = es_request('_cat/indices', { uri_param => { h => 'index,status' } });
         foreach my $entry (@{ $res }) {
-            my ($index,$status) = @{ $entry }{qw(index status)};
+            my ($index,$status) = is_hashref($entry) ? @{ $entry }{qw(index status)} : split /\s+/, $entry;
             debug("Evaluating '$index'");
             if(!exists $args{_all}) {
                 # State Check Disqualification

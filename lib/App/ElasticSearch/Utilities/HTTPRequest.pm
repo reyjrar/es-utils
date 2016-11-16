@@ -25,8 +25,6 @@ sub new {
     my $self = $class->SUPER::new(@_);
     $self->header('Accept' => 'application/json');
 
-    my ($pkg) = caller();
-    warn "You probably shouldn't being calling __PACKAGE__->new()" unless $pkg eq 'App::ElasticSearch::Utilities::Connection';
     return $self;
 }
 
