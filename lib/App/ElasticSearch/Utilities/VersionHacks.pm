@@ -34,12 +34,9 @@ const my %SIMPLE => (
         'v2.0'  => '_optimize',
     },
     '_status' => {
-        default => '_status',
-        'v2.0'  => '_stats',
-        'v2.1'  => '_stats',
-        'v2.2'  => '_stats',
-        'v2.3'  => '_stats',
-        'v5.0'  => '_stats',
+        default => '_stats',
+        'v1.0'  => '_status',
+        'v1.1'  => '_status',
     }
 );
 my %CALLBACKS = (

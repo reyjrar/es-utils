@@ -1153,7 +1153,7 @@ sub es_node_stats {
     push @cmd, join(',', @nodes) if @nodes;
     push @cmd, 'stats';
 
-    return es_request(join('/',@cmd), { uri_param => {all => 'true', human => 'true'} });
+    return es_request(join('/',@cmd));
 }
 
 =func def('key')

@@ -202,9 +202,9 @@ foreach my $index (sort @indices) {
 
     # Close the index?
     if( $CFG{close} && $CFG{'close-days'} < $days_old ) {
-        my $status = es_request('_status',{index=>$index});
+        my $status = es_request('_stats/store',{index=>$index});
         if( defined $status ) {
-            if( defined $status->{_shards} && exists $status->{_shards}{total} && $status->{_shards}{total} > 0 ) {
+            if( $status->{_shards} && $status->{_shards}{total} && $status->{_shards}{total} > 0 ) {
                 # retrieve aliases
                 my $ars = es_request('_alias', {index=>$index});
                 foreach my $alias ( keys %{ $ars->{$index}{aliases} } ) {
