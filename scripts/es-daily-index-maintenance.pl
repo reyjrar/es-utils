@@ -30,6 +30,7 @@ GetOptions(\%opt,
     'index-basename:s',
     'date-separator:s',
     'timezone:s',
+    'allocation-exclude:s%',
     # Basic options
     'help|h',
     'manual|m',
@@ -41,26 +42,32 @@ pod2usage(-exitval => 0) if $opt{help};
 pod2usage(-exitval => 0, -verbose => 2) if $opt{manual};
 
 my %CFG = (
-    'optimize-days'  => 1,
-    'delete-days'    => 90,
-    'close-days'     => 60,
-    'replicas-min'   => 0,
-    'replicas-max'   => 100,
-    'replicas-age'   => 60,
-    timezone         => 'Europe/Amsterdam',
-    delete           => 0,
-    close            => 0,
-    bloom            => 0,
-    optimize         => 0,
-    replicas         => 0,
+    'optimize-days'      => 1,
+    'delete-days'        => 90,
+    'close-days'         => 60,
+    'replicas-min'       => 0,
+    'replicas-max'       => 100,
+    'replicas-age'       => 60,
+    timezone             => 'Europe/Amsterdam',
+    delete               => 0,
+    close                => 0,
+    bloom                => 0,
+    optimize             => 0,
+    replicas             => 0,
+    'allocation-exclude' => 0,
+    'allocation-require' => 0,
 );
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
 }
 
+if( $CFG{bloom} ) {
+    output({color=>'red'}, "WARNING: The index.codec.bloom.load is now disabled as of v1.4");
+}
+
 # Figure out what to run
-my @MODES = qw(bloom close delete optimize replicas);
+my @MODES = qw(close delete optimize replicas);
 if ( exists $opt{all} && $opt{all} ) {
     map {
         $CFG{$_} = 1 unless $_ eq 'replicas';

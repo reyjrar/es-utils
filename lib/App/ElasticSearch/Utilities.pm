@@ -35,6 +35,7 @@ use Sub::Exporter -setup => {
         es_basic_auth
         es_pattern
         es_connect
+        es_master
         es_request
         es_nodes
         es_indices
@@ -230,6 +231,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'http-username:s',
         'http-password:s',
         'password-exec:s',
+        'master-only|M',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -264,6 +266,7 @@ my %DEF = (
                    exists $_GLOBALS{noop}         ? $_GLOBALS{noop} : undef,
     NOPROXY     => exists $opt{'keep-proxy'}      ? 0 :
                    exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'} : 1,
+    MASTERONLY  => exists $opt{'master-only'}     ? $opt{'master-only'} : 0,
     # HTTP Basic Authentication
     USERNAME    => exists $opt{'http-username'}       ? $opt{'http-username'} :
                    exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'} : undef,
@@ -312,6 +315,7 @@ foreach my $literal ( @ORDERED ) {
 }
 
 our $CURRENT_VERSION;
+my  $CLUSTER_MASTER;
 
 =func es_globals($key)
 
@@ -548,6 +552,32 @@ sub es_connect {
     return $ES;
 }
 
+=func es_request([$handle])
+
+Returns true (1) if the handle is to the the cluster master, or false (0) otherwise.
+
+=cut
+
+sub es_master {
+    my ($instance) = @_;
+    if(!defined $instance && defined $CLUSTER_MASTER) {
+        return $CLUSTER_MASTER;
+    }
+    my $is_master = 0;
+    my @request = ('/_cluster/state/master_node');
+    unshift @request, $instance if defined $instance;
+
+    my $cluster = es_request(@request);
+    if( $cluster->{master_node} ) {
+        my $local = es_request('/_nodes/_local');
+        if ($local->{nodes} && $local->{nodes}{$cluster->{master_node}}) {
+            $is_master = 1;
+        }
+    }
+    $CLUSTER_MASTER = $is_master unless defined $instance;
+    return $is_master;
+}
+
 =func es_request([$handle],$command,{ method => 'GET', uri_param => { a => 1 } }, {})
 
 Retrieve URL from ElasticSearch, returns a hash reference
@@ -593,14 +623,26 @@ sub es_request {
     $options->{index} = $index if defined $index;
     $index ||= '';
 
+
     # Figure out if we're modifying things
     my $modification = $url eq '_search' && $options->{method} eq 'POST' ? 0
                      : $options->{method} ne 'GET';
 
     my ($status,$res);
-    if( $DEF{NOOP} && $modification) {
-        output({color=>'cyan'}, "Called es_request($index/$options->{command}), but --noop and method is $options->{method}");
-        return;
+    if($modification) {
+        # Set NOOP if necessary
+        if(!$DEF{NOOP} && $DEF{MASTERONLY}) {
+            if( !es_master() ) {
+                $DEF{NOOP} = 1;
+            }
+        }
+
+        # Check for noop
+        if( $DEF{NOOP} ) {
+            my $flag = $DEF{MASTERONLY} && !es_master() ? '--master-only' : '--noop';
+            output({color=>'cyan'}, "Called es_request($index/$options->{command}), but $flag set and method is $options->{method}");
+            return;
+        }
     }
 
     # Make the request
@@ -881,10 +923,8 @@ sub es_index_shards {
     my %shards = map { $_ => 0 } qw(primaries replicas);
     my $result = es_request('_settings', {index=>$index});
     if( defined $result && is_hashref($result) )   {
-        $shards{primaries} = $CURRENT_VERSION < 1.0 ? $result->{$index}{settings}{'index.number_of_shards'}
-                                                    : $result->{$index}{settings}{index}{number_of_shards};
-        $shards{replicas}  = $CURRENT_VERSION < 1.0 ? $result->{$index}{settings}{'index.number_of_replicas'}
-                                                    : $result->{$index}{settings}{index}{number_of_replicas};
+        $shards{primaries} = $result->{$index}{settings}{index}{number_of_shards};
+        $shards{replicas}  = $result->{$index}{settings}{index}{number_of_replicas};
     }
 
     return wantarray ? %shards : \%shards;
@@ -927,19 +967,10 @@ sub es_index_fields {
 
     # Loop through the mappings, skipping _default_
     my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
-    my %fieldcache;
+    my %fields;
     foreach my $mapping (@mappings) {
-        _find_fields(\%fieldcache,$ref->{$mapping});
+        _find_fields(\%fields,$ref->{$mapping});
     }
-
-    # Store full path
-    my %fields = %{ $fieldcache{full} };
-
-    # Now add unique aliases
-    my @uniqaliases = grep { not exists $fields{$_} }
-                      grep { $fieldcache{alias}->{$_} == 1 }
-                        keys %{ $fieldcache{alias} };
-    @fields{@uniqaliases} = ();
     # Return the results
     return wantarray ? sort keys %fields : [ sort keys %fields ];
 }
@@ -950,20 +981,9 @@ sub _add_fields {
 
     return unless @path;
 
-    # initialize the fields
-    $f->{full}  ||= {};
-    $f->{alias} ||= {};
-
     # Store the full path
     my $key = join('.', @path);
-    $f->{full}{$key} = 1;
-
-    # Aliases
-    my $alias = $key eq $path[-1] ? undef : $path[-1];
-    if( $alias ) {
-        $f->{alias}{$alias} ||= 0;
-        $f->{alias}{$alias}++;
-    }
+    $f->{$key} = 1;
 }
 
 sub _find_fields {

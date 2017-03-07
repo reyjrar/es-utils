@@ -270,10 +270,66 @@ sub add_aggregations {
     $self->set_size(0);
     $self->set_scroll(undef);
 }
+
+=method wrap_aggregations( name => { ... } )
+
+Use this to wrap an aggregation in another aggregation.  For example:
+
+    $q->add_aggregation(ip => { terms => { field => src_ip } });
+
+Creates:
+
+    {
+        "aggs": {
+            "ip": {
+                "terms": {
+                    "field": "src_ip"
+                }
+            }
+        }
+    }
+
+
+Would give you the top IP for the whole query set.  To wrap that aggregation to get top IPs per hour, you could:
+
+    $q->wrap_aggregations( hourly => { date_histogram => { field => 'timestamp', interval => '1h' } } );
+
+Which translates the query into:
+
+    {
+        "aggs": {
+            "hourly": {
+                "date_histogram": {
+                    "field": "timestamp",
+                    "interval": "1h"
+                }
+                "aggs": {
+                    "ip": {
+                        "terms": {
+                            "field": "src_ip"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+=cut
+
+sub wrap_aggregations {
+    my $self = shift;
+    my %wrapper = @_;
+    foreach my $a (keys %wrapper) {
+        $wrapper{$a}->{aggs} = clone $self->aggregations;
+    }
+    $self->set_aggregations(\%wrapper);
+}
+
 # Support Short-hand like ES
-*aggs = \&aggregations;
-*set_aggs = \&set_aggregations;
-*add_aggs = \&add_aggregations;
+*aggs      = \&aggregations;
+*set_aggs  = \&set_aggregations;
+*add_aggs  = \&add_aggregations;
+*wrap_aggs = \&wrap_aggregations;
 
 =method set_scan_scroll($ctxt_life)
 
