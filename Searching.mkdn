@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 5.2
+version 5.3
 
 # SYNOPSIS
 
@@ -20,6 +20,7 @@ Options:
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
     --with              Perform a sub aggregation on the query
     --match-all         Enables the ElasticSearch match_all operator
+    --interval          When running aggregations, wrap the aggreation in a date_histogram with this interval
     --prefix            Takes "field:string" and enables the Lucene prefix query for that field
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
@@ -220,6 +221,11 @@ es-search.pl - Search a logging cluster for information
 
     You may sub aggregate using any [bucket agggregation](https://www.elastic.co/guide/en/elasticsearch/reference/master/search-aggregations-bucket.html)
     as long as the aggregation provides a **key** element.  Additionally, doc\_count, score, and bg\_count will be reported in the output.
+
+- **interval**
+
+    When performing aggregations, wrap those aggregations in a date\_histogram of this interval.  This
+    helps flush out "what changed in the last hour."
 
 - **match-all**
 

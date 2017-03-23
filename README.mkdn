@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 5.2
+version 5.3
 
 # SYNOPSIS
 
@@ -76,6 +76,10 @@ Returns a hashref of the pattern filter used to get the indexes
 
 Without options, this connects to the server defined in the args.  If passed
 an array ref, it will use that as the connection definition.
+
+## es\_request(\[$handle\])
+
+Returns true (1) if the handle is to the the cluster master, or false (0) otherwise.
 
 ## es\_request(\[$handle\],$command,{ method => 'GET', uri\_param => { a => 1 } }, {})
 
