@@ -128,7 +128,7 @@ unless( exists $OPT{append} ) {
         },
         {
             settings => $to_settings,
-            mappings => $mappings,
+            defined $mappings ? (mappings => $mappings) : (),
         }
     );
 
