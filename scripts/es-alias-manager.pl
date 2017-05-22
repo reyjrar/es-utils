@@ -81,7 +81,7 @@ my %PARTS = (
 
 foreach my $base (keys %{ $ALIAS }) {
     my $re = $ALIAS->{$base}{pattern};
-    $re =~ s/[^a-zA-Z0-9\-\{\}\*\?]+//g;
+    $re =~ s/[^\w{}*?-]+//g;
 
     # Wildcards
     $re =~ s/\*+/.\+/g;
