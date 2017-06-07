@@ -1062,12 +1062,11 @@ Optimize an index to a single segment per shard
 sub es_optimize_index {
     my($index) = @_;
 
-    return es_request('_optimize',{
+    return es_request('_forcemerge',{
             method    => 'POST',
             index     => $index,
             uri_param => {
                 max_num_segments => 1,
-                wait_for_merge   => 0,
             },
     });
 }
