@@ -48,7 +48,7 @@ my %CFG = (
     'replicas-min'       => 0,
     'replicas-max'       => 100,
     'replicas-age'       => 60,
-    timezone             => 'Europe/Amsterdam',
+    timezone             => 'UTC',
     delete               => 0,
     close                => 0,
     bloom                => 0,
@@ -60,10 +60,6 @@ my %CFG = (
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
     $CFG{$setting} = $opt{$setting} if exists $opt{$setting} and defined $opt{$setting};
-}
-
-if( $CFG{bloom} ) {
-    output({color=>'red'}, "WARNING: The index.codec.bloom.load is now disabled as of v1.4");
 }
 
 # Figure out what to run
@@ -86,6 +82,12 @@ $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
 
 # Create the target uri for the ES Cluster
 my $es = es_connect();
+
+if( $CFG{bloom} ) {
+    output({color=>'red'}, "WARNING: The index.codec.bloom.load is now disabled as of v1.4");
+    $CFG{bloom}=0 if es_version() gt '1.4.0';
+}
+
 
 # Ages for replica management
 my $AGE = (grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'})[-1];
