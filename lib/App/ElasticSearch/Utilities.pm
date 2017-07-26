@@ -794,7 +794,15 @@ sub es_indices {
                     next unless $index =~ /$p->{re}/;
                 }
                 debug({indent=>2},"= name checks succeeded");
-                if( $args{check_dates} && defined $DEF{DAYS} ) {
+
+                if ($args{older} && defined $DEF{DAYS}) {
+                    debug({indent=>2,color=>"yellow"}, "+ checking to see if index is older than $DEF{DAYS} days.");
+                    my $days_old = es_index_days_old( $index );
+                    if ($days_old < $DEF{DAYS}) {
+                        next;
+                    }
+                }
+                elsif( $args{check_dates} && defined $DEF{DAYS} ) {
                     debug({indent=>2,color=>"yellow"}, "+ checking to see if index is in the past $DEF{DAYS} days.");
 
                     my $days_old = es_index_days_old( $index );

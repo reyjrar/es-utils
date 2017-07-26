@@ -4,7 +4,7 @@
 use strict;
 use warnings;
 
-use App::ElasticSearch::Utilities qw(:default es_apply_index_settings es_open_index es_close_index);
+use App::ElasticSearch::Utilities qw(:default es_apply_index_settings es_open_index es_close_index es_index_days_old);
 use CLI::Helpers qw(:all);
 use JSON::MaybeXS;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
@@ -15,6 +15,7 @@ use Pod::Usage;
 my %opt;
 GetOptions(\%opt,
     'close',
+    'older',
     # Basic options
     'help|h',
     'manual|m',
@@ -44,7 +45,7 @@ debug("Settings to apply");
 debug_var($settings);
 
 # Delete Indexes older than a certain point
-my @indices = es_indices();
+my @indices = es_indices(older => $opt{older});
 if ( !@indices ) {
     output({color=>"red"}, "No matching indices found.");
     exit 1;
@@ -124,6 +125,13 @@ Print this message and exit
 B<IMPORTANT>: Settings are not dynamic, and the index needs to closed to have
 the settings applied.  If this is set, the index will be re-opened before moving to the
 next index.
+
+=item B<older>
+
+When this option is used along with the --days option the the setting will only be applied
+to indexs that are older than the days specified.
+
+    es-apply-settings.pl --older --days 30 --pattern logstash-*
 
 =back
 
