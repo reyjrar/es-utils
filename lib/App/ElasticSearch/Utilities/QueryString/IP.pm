@@ -18,7 +18,7 @@ sub handle_token {
                 my $cidr = Net::CIDR::Lite->new();
                 $cidr->add($match);
                 my @range = split /-/, ($cidr->list_range)[0];
-                return { query_string => sprintf("%s_numeric:[%s TO %s]", $term, @range) };
+                return { query_string => sprintf("%s:[%s TO %s]", $term, @range) };
             }
         }
     }
@@ -32,7 +32,7 @@ __END__
 
 =head2 App::ElasticSearch::Utilities::QueryString::IP
 
-If a field is an IP address wild card, it is transformed:
+If a field is an IP address uses CIDR Notation, it's expanded to a range query.
 
-    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
+    src_ip:10.0/8 => src_ip:[10.0.0.0 TO 10.255.255.255]
 

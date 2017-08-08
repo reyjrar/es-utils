@@ -127,7 +127,7 @@ if( $OPT{fields} ) {
 }
 # Improper Usage
 pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'No search string specified'})
-    unless keys %{ $q->query->{bool} };
+    unless keys %{ $q->query };
 pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Cannot use --tail and --top together'})
     if exists $OPT{tail} && $OPT{top};
 pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Cannot use --tail and --sort together'})
@@ -825,8 +825,8 @@ Examples might include:
     es-search.pl program:"apache" AND crit:500 --show file,out_bytes
 
     # Search for ip subnet client IP 1.2.3.0 to 1.2.3.255 or 1.2.0.0 to 1.2.255.255
-    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.*"
-    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.*"
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.0/24"
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.0/16"
 
     # Show the top src_ip for 'www.example.com'
     es-search.pl --base access dst:www.example.com --top src_ip

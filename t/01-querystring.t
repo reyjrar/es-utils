@@ -55,7 +55,7 @@ my %tests = (
             'must' => [
               {
                 'query_string' => {
-                  'query' => 'src_ip_numeric:[10.0.0.0 TO 10.255.255.255]'
+                  'query' => 'src_ip:[10.0.0.0 TO 10.255.255.255]'
                 }
               }
             ]
