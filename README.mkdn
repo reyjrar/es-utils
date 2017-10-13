@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 5.3
+version 5.4
 
 # SYNOPSIS
 
@@ -463,6 +463,8 @@ This is free software, licensed under:
 - Daniel Ostermeier <daniel.ostermeier@gmail.com>
 - Jason Rojas <jason.rojas@mgo.com>
 - Kang-min Liu <gugod@gugod.org>
+- Lisa Hare <lhare@inview.co.uk>
+- Markus Linnala <Markus.Linnala@cybercom.com>
 - Samit Badle <Samit.Badle@gmail.com>
 - Takumi Sakamoto <takumi.saka@gmail.com>
 
