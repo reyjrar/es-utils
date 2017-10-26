@@ -37,7 +37,7 @@ GetOptions(\%OPT, qw(
     no-header
     prefix:s@
     pretty
-    show:s
+    show:s@
     size|n:i
     sort:s
     tail
@@ -101,8 +101,10 @@ debug_var(\%FIELDS);
 
 # Which fields to show
 my @SHOW = ();
-if ( exists $OPT{show} && length $OPT{show} ) {
-    @SHOW = grep { exists $FIELDS{$_} } split /,/, $OPT{show};
+if ( exists $OPT{show} && scalar @{ $OPT{show} } ) {
+    foreach my $args (@{ $OPT{show} }) {
+        push @SHOW, grep { defined && length } split /,/, $args;
+    }
 }
 # How to sort
 my $SORT = [ { $CONFIG{timestamp} => $ORDER } ];
