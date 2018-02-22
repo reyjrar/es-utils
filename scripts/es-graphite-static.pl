@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-graphite-static.pl
 # ABSTRACT: Gather performance metrics from an ES node and send them to Graphite
 use strict;

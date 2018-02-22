@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-open.pl
 # ABSTRACT: Open any closed indices matching your paramters.
 use strict;

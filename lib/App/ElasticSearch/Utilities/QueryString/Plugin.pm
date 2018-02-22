@@ -3,8 +3,39 @@ package App::ElasticSearch::Utilities::QueryString::Plugin;
 
 use Hash::Merge::Simple qw(clone_merge);
 use Moo::Role;
-use Sub::Quote;
+use Ref::Util qw(is_arrayref is_hashref);
+use Types::Standard qw( Str Int );
 
+
+=attr name
+
+Name of the plugin, used in debug reporting.
+
+=cut
+
+# Attributes
+has name => (
+    is  => 'lazy',
+    isa => Str,
+);
+sub _build_name {
+    my $self = shift;
+    my $class = ref $self;
+    return (split /::/, $class)[-1];
+}
+
+=attr priority
+
+Priority is an integer which determmines the order tokens are parsed in
+low->high order.
+
+=cut
+
+has priority => (
+    is  => 'lazy',
+    isa => Int,
+);
+sub _build_priority { 50; }
 
 =head1 INTERFACE
 
@@ -19,31 +50,17 @@ and returns a hash reference specifying
 
 requires qw(handle_token);
 
-# Attributes
-has name => (
-    is => 'ro',
-    isa => quote_sub(q{die "Needs to be a string" if ref $_[0]}),
-    builder => '_build_name',
-    lazy => 1,
-);
-has priority => (
-    is      => 'ro',
-    isa     => quote_sub(q{die "Not between 1 and 100" unless $_[0] > 0 && $_[0] <= 100 }),
-    builder => '_build_priority',
-    lazy    => 1,
-);
-
 around 'handle_token' => sub {
     my $orig = shift;
     my $self = shift;
     my $refs = $orig->($self,@_);
     if( defined $refs ) {
-        if( ref $refs eq 'ARRAY' ) {
+        if( is_arrayref($refs) ) {
             foreach my $doc (@{ $refs }) {
                 $doc->{_by} = $self->name;
             }
         }
-        elsif( ref $refs eq 'HASH' ) {
+        elsif( is_hashref($refs) ) {
             $refs->{_by} = $self->name;
         }
         return $refs;
@@ -53,13 +70,6 @@ around 'handle_token' => sub {
     }
 };
 
-# Builders
-sub _build_name {
-    my $self = shift;
-    my $class = ref $self;
-    return (split /::/, $class)[-1];
-}
-sub _build_priority { 50; }
 
 # Handle Build Args
 sub BUILDARGS {

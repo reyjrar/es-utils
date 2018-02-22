@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-storage-data.pl
 # ABSTRACT: Index pattern-aware elasticsearch storage statistics
 use strict;

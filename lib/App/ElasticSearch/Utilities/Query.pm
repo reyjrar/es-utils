@@ -7,17 +7,13 @@ use warnings;
 use CLI::Helpers qw(:output);
 use Clone qw(clone);
 use Moo;
+use Ref::Util qw(is_arrayref is_hashref);
+use Types::Standard qw(ArrayRef HashRef Int Maybe Str);
+use Types::ElasticSearch qw(TimeConstant is_TimeConstant);
 use namespace::autoclean;
-use Sub::Quote;
 
-my %VALID = (
-    array_ref     => quote_sub(q{die "must be an array reference" if defined $_[0] and ref $_[0] ne 'ARRAY'}),
-    hash_ref      => quote_sub(q{die "must be a hash reference" if defined $_[0] and ref $_[0] ne 'HASH'}),
-    time_constant => quote_sub(q{die "must be time constant: https://www.elastic.co/guide/en/elasticsearch/reference/master/common-options.html#time-units" if defined $_[0] && $_[0] !~ /^\d+(y|M|w|d|h|m|s|ms)$/ }),
-    integer       => quote_sub(q{die "must be 0+ and integer" if defined $_[0] and $_[0] !~ /^\d+$/ }),
-);
 my %TO = (
-    array_ref => quote_sub(q{defined $_[0] && ref $_[0] eq 'ARRAY' ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0]}),
+    array_ref => sub { defined $_[0] && ref($_[0]) eq 'ARRAY' ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0] },
 );
 
 =attr query_stash
@@ -28,10 +24,10 @@ Hash reference containing replaceable query elements.  See L<stash>.
 
 has query_stash => (
     is       => 'rw',
+    isa      => HashRef,
     lazy     => 1,
     init_arg => undef,
     default  => sub {{}},
-    isa      => $VALID{hash_ref},
 );
 
 =attr must
@@ -54,13 +50,24 @@ Can be set using set_should and is a valid init_arg.
 The filter section of a bool query as an array reference.  See: L<add_bool>
 Can be set using set_filter and is a valid init_arg.
 
+=nested
+
+The nested query, this shortcircuits the rest of the query due to restrictions
+on the nested queries.
+
+=nested_path
+
+The path by being nested, only used in nested queries.
+
 =cut
 
 my %QUERY = (
-    must     => { default => sub {undef}, isa => $VALID{array_ref}, coerce => $TO{array_ref}, init_arg => 'must'     },
-    must_not => { default => sub {undef}, isa => $VALID{array_ref}, coerce => $TO{array_ref}, init_arg => 'must_not' },
-    should   => { default => sub {undef}, isa => $VALID{array_ref}, coerce => $TO{array_ref}, init_arg => 'should'   },
-    filter   => { default => sub {undef}, isa => $VALID{array_ref}, coerce => $TO{array_ref}, init_arg => 'filter'   },
+    must        => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'must'     },
+    must_not    => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'must_not' },
+    should      => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'should'   },
+    filter      => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'filter'   },
+    nested      => { default => sub {undef}, isa => Maybe[HashRef], init_arg => 'nested' },
+    nested_path => { default => sub {undef}, isa => Maybe[Str],     init_arg => 'nested_path' },
 );
 
 =attr from
@@ -95,11 +102,11 @@ Aliased as B<aggs>.
 =cut
 
 my %REQUEST_BODY = (
-    from         => { default => sub {undef}, isa => $VALID{integer} },
-    size         => { default => sub {50},    isa => $VALID{integer} },
-    fields       => { default => sub {undef}, isa => $VALID{array_ref}, coerce => $TO{array_ref} },
-    sort         => { default => sub {undef}, isa => $VALID{array_ref}, coerce => $TO{array_ref} },
-    aggregations => { default => sub {undef}, isa => $VALID{hash_ref} },
+    from         => { isa => Maybe[Int] },
+    size         => { default => sub {50},    isa => Int },
+    fields       => { isa => Maybe[ArrayRef], coerce => $TO{array_ref} },
+    sort         => { isa => Maybe[ArrayRef], coerce => $TO{array_ref} },
+    aggregations => { isa => Maybe[HashRef] },
 );
 
 =attr scroll
@@ -125,35 +132,35 @@ Can be set with B<set_terminateafter>.  Cannot be an init_arg.
 =cut
 
 my %PARAMS = (
-    scroll          => { default => sub {undef}, isa => $VALID{time_constant} },
-    timeout         => { default => sub {undef}, isa => $VALID{time_constant} },
-    terminate_after => { default => sub {undef}, isa => $VALID{integer} },
+    scroll          => { isa => Maybe[TimeConstant] },
+    timeout         => { isa => TimeConstant },
+    terminate_after => { isa => Int },
 );
 
 # Dynamically build our attributes
 foreach my $attr (keys %QUERY) {
     has $attr => (
-        is => 'rw',
-        lazy => 1,
-        writer => "set_$attr",
+        is       => 'rw',
+        lazy     => 1,
+        writer   => "set_$attr",
         init_arg => undef,
         %{ $QUERY{$attr} },
     );
 }
 foreach my $attr (keys %REQUEST_BODY) {
     has $attr => (
-        is => 'rw',
-        lazy => 1,
-        writer => "set_$attr",
+        is       => 'rw',
+        lazy     => 1,
+        writer   => "set_$attr",
         init_arg => undef,
         %{ $REQUEST_BODY{$attr} },
     );
 }
 foreach my $attr (keys %PARAMS) {
     has $attr => (
-        is => 'rw',
-        lazy => 1,
-        writer => "set_$attr",
+        is       => 'rw',
+        lazy     => 1,
+        writer   => "set_$attr",
         init_arg => undef,
         %{ $PARAMS{$attr} },
     );
@@ -221,26 +228,39 @@ the query will not be represented in the hash it returns.
 sub query {
     my $self = shift;
 
-    my %bool = ();
-    foreach my $k (keys %QUERY) {
-        no strict 'refs';
-        $bool{$k} = [];
-        my $v;
-        eval {
-            debug({color=>'yellow'}, "query() - retrieving section '$k'");
-            $v = $self->$k();
-            debug_var({color=>'cyan'},$v) if defined $v and ref $v;
-            1;
-        } or do {
-            debug({color=>'red'}, "query() - Failed to retrieve '$k'");
+    my $qref;
+    if( $self->nested ) {
+        $qref = {
+            nested => {
+                path  => $self->nested_path,
+                query => $self->nested,
+            }
         };
-        $bool{$k} = clone $v if defined $v;
-        if($self->stash($k)) {
-            push @{ $bool{$k} }, $self->stash($k);
-        }
-        delete $bool{$k} if exists $bool{$k} and not @{ $bool{$k} };
     }
-    return { bool => \%bool };
+    else {
+        my %bool = ();
+        foreach my $k (keys %QUERY) {
+            next if $k =~ /^nested/;
+            no strict 'refs';
+            $bool{$k} = [];
+            my $v;
+            eval {
+                debug({color=>'yellow'}, "query() - retrieving section '$k'");
+                $v = $self->$k();
+                debug_var({color=>'cyan'},$v) if defined $v and ref $v;
+                1;
+            } or do {
+                debug({color=>'red'}, "query() - Failed to retrieve '$k'");
+            };
+            $bool{$k} = clone $v if defined $v;
+            if($self->stash($k)) {
+                push @{ $bool{$k} }, $self->stash($k);
+            }
+            delete $bool{$k} if exists $bool{$k} and not @{ $bool{$k} };
+        }
+        $qref = { bool => \%bool };
+    }
+    return $qref;
 }
 
 =method add_aggregations( name => { ...  } )
@@ -346,11 +366,9 @@ sub set_scan_scroll {
     my ($self,$ctxt_life) = @_;
 
     # Validate Context Lifetime
-    eval {
-        $VALID{time_constant}->($ctxt_life);
-    } or do {
+    if( !is_TimeConstant( $ctxt_life) ) {
         undef($ctxt_life);
-    };
+    }
     $ctxt_life ||= '1m';
 
     $self->set_sort( [qw(_doc)] );

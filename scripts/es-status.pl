@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-status.pl
 # ABSTRACT: Simple ElaticSearch Status Checks
 use strict;

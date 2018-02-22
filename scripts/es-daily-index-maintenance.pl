@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-daily-index-maintenance.pl
 # ABSTRACT: Run to prune old indexes and optimize existing
 use strict;

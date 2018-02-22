@@ -6,6 +6,7 @@ use warnings;
 
 use CLI::Helpers qw(:output);
 use File::Slurp::Tiny qw(read_lines);
+use Ref::Util qw(is_hashref);
 use Text::CSV_XS;
 use namespace::autoclean;
 
@@ -33,7 +34,7 @@ sub handle_token {
             );
             if( exists $parsers{$type} && -f $file ) {
                 my $uniq = $parsers{$type}->($file,$col);
-                if (defined $uniq && ref $uniq eq 'HASH' && scalar(keys %$uniq)) {
+                if (defined $uniq && is_hashref($uniq) && scalar(keys %$uniq)) {
                     verbose({color=>'cyan'},
                         sprintf "# FILE:%s[%d] contained %d unique elements.",
                         $file,

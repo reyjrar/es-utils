@@ -9,7 +9,8 @@ use App::ElasticSearch::Utilities::Query;
 use CLI::Helpers qw(:output);
 use Module::Pluggable::Object;
 use Moo;
-use Sub::Quote;
+use Ref::Util qw(is_arrayref);
+use Types::Standard qw(ArrayRef);
 
 use namespace::autoclean;
 
@@ -40,8 +41,8 @@ For query processing plugins.
 =cut
 
 has search_path => (
-    is => 'rw',
-    isa => quote_sub(q{die "Not an ARRAY" unless ref $_[0] eq 'ARRAY'}),
+    is      => 'rw',
+    isa     => ArrayRef,
     default => sub {[]},
 );
 
@@ -52,10 +53,10 @@ Array reference of ordered query string processing plugins, lazily assembled.
 =cut
 
 has plugins => (
-    is => 'ro',
-    isa => quote_sub(q{die "Not an ARRAY" unless ref $_[0] eq 'ARRAY' }),
+    is      => 'ro',
+    isa     => ArrayRef,
     builder => '_build_plugins',
-    lazy => 1,
+    lazy    => 1,
 );
 
 =method expand_query_string(@tokens)
@@ -76,7 +77,7 @@ sub expand_query_string {
         foreach my $p (@{ $self->plugins }) {
             my $res = $p->handle_token($token);
             if( defined $res ) {
-                push @processed, ref $res eq 'ARRAY' ? @{$res} : $res;
+                push @processed, is_arrayref($res) ? @{$res} : $res;
                 next TOKEN;
             }
         }
@@ -100,6 +101,11 @@ sub expand_query_string {
         elsif( exists $part->{condition} ) {
             my $target = $invert ? 'must_not' : 'must';
             $query->add_bool( $target => $part->{condition} );
+            @dangling=();
+        }
+        elsif( exists $part->{nested} ) {
+            $query->nested($part->{nested}{query});
+            $query->nested_path($part->{nested}{path});
             @dangling=();
         }
         # Carry over the Inversion for instance where we jump out of the QS

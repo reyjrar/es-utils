@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-apply-settings.pl
 # ABSTRACT: Run to apply a JSON list of settings to indexes matching a pattern
 use strict;

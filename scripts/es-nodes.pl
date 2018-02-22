@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-nodes.pl
 # ABSTRACT: Listing the nodes in a cluster with some details
 use strict;

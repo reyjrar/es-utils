@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 5.4
+version 5.5
 
 # SYNOPSIS
 
@@ -87,8 +87,8 @@ Examples might include:
     es-search.pl program:"apache" AND crit:500 --show file,out_bytes
 
     # Search for ip subnet client IP 1.2.3.0 to 1.2.3.255 or 1.2.0.0 to 1.2.255.255
-    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.*"
-    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.*"
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.0/24"
+    es-search.pl --size=100 dst:"admin.example.com" AND src_ip:"1.2.0/16"
 
     # Show the top src_ip for 'www.example.com'
     es-search.pl --base access dst:www.example.com --top src_ip

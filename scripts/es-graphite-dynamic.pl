@@ -1,14 +1,15 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-graphite-dynamic.pl
 # ABSTRACT: Dynamically gather metrics and send to graphite
 use strict;
 use warnings;
 
-use CLI::Helpers qw(:all);
 use App::ElasticSearch::Utilities qw(es_request es_node_stats es_index_stats);
-use IO::Socket::INET;
+use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
+use IO::Socket::INET;
 use Pod::Usage;
+use Ref::Util qw(is_hashref is_arrayref);
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -133,7 +134,7 @@ sub dynamic_stat_collector {
     my @stats = ();
 
     # Base Case
-    return unless ref $ref eq 'HASH';
+    return unless is_hashref($ref);
 
     foreach my $key (sort keys %{ $ref }) {
         # Skip uninteresting keys
@@ -148,7 +149,7 @@ sub dynamic_stat_collector {
         $key_name =~ s/(?:size_)?in_bytes/bytes/;
         $key_name =~ s/\./_/g;
 
-        if( ref $ref->{$key} eq 'HASH' ) {
+        if( is_hashref($ref->{$key}) ) {
             # Recurse
             push @stats, dynamic_stat_collector($ref->{$key},@path,$key_name);
         }

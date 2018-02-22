@@ -528,7 +528,7 @@ sub es_connect {
 
     # If we're overriding, return a unique handle
     if(defined $override_servers) {
-        my @overrides = ref $override_servers eq 'ARRAY' ? @$override_servers : $override_servers;
+        my @overrides =  is_arrayref($override_servers) ? @$override_servers : $override_servers;
         my @servers;
         foreach my $entry ( @overrides ) {
             my ($s,$p) = split /\:/, $entry;
@@ -613,7 +613,7 @@ sub es_request {
         else {
             # Validate each included index
             my @valid;
-            my @test = ref $index_in eq 'ARRAY' ? @{ $index_in } : split /\,/, $index_in;
+            my @test = is_arrayref($index_in) ? @{ $index_in } : split /\,/, $index_in;
             foreach my $i (@test) {
                 push @valid, $i if es_index_valid($i);
             }
@@ -1007,7 +1007,7 @@ sub _find_fields {
     elsif( exists $ref->{type} ) {
         _add_fields($f,@path);
         # Handle multifields
-        if( exists $ref->{fields} && ref $ref->{fields} eq 'HASH') {
+        if( exists $ref->{fields} && is_hashref($ref->{fields}) ) {
             foreach my $k (sort keys %{ $ref->{fields} } ) {
                 _add_fields($f,@path,$k);
             }
@@ -1018,8 +1018,8 @@ sub _find_fields {
         debug({stderr=>1,color=>'red'},
             sprintf "_find_fields(): Invalid property at: %s ref info: %s",
                 join('.', @path),
-                join(',', ref $ref eq 'HASH' ? sort keys %{$ref} :
-                          ref $ref           ? ref $ref : 'unknown ref'
+                join(',', is_hashref($ref) ? sort keys %{$ref} :
+                          ref $ref         ? ref $ref : 'unknown ref'
                 ),
         );
     }
@@ -1082,7 +1082,7 @@ sub es_optimize_index {
 sub es_apply_index_settings {
     my($index,$settings) = @_;
 
-    if(ref $settings ne 'HASH') {
+    if(!is_hashref($settings)) {
         output({stderr=>1,color=>'red'}, 'usage is es_apply_index_settings($index,$settings_hashref)');
         return;
     }

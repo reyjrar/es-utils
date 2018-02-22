@@ -29,7 +29,7 @@ sub new {
 }
 
 sub content {
-	my ($self,$body) = @_;
+    my ($self,$body) = @_;
 
     if( is_arrayref($body) ) {
         # Bulk does this

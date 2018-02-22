@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # PODNAME: es-search.pl
 # ABSTRACT: Provides a CLI for quick searches of data in ElasticSearch daily indexes
 $|=1;           # Flush STDOUT
@@ -12,7 +12,7 @@ use Carp;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Hash::Flatten qw(flatten);
-use JSON;
+use JSON::MaybeXS qw(:legacy);
 use Pod::Usage;
 use POSIX qw(strftime);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
@@ -74,8 +74,8 @@ pod2usage({-exitval => 1, -sections => 'SYNOPSIS', -msg =>"Unknown option(s): $u
 #--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
-    size      => (exists $OPT{size} && $OPT{size} > 0)              ? int($OPT{size})         : 20,
-    format    => (exists $OPT{format} && length $OPT{format})       ? lc $OPT{format}         : 'yaml',
+    size      => (exists $OPT{size}      && $OPT{size} > 0)         ? int($OPT{size})         : 20,
+    format    => (exists $OPT{format}    && length $OPT{format})    ? lc $OPT{format}         : 'yaml',
     timestamp => (exists $OPT{timestamp} && length $OPT{timestamp}) ? $OPT{timestamp}         :
                  defined es_globals('timestamp')                    ? es_globals('timestamp') : '@timestamp',
     summary   => $OPT{top} && ( !$OPT{by} && !$OPT{with} && !$OPT{interval} ),

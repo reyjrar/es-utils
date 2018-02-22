@@ -37,7 +37,7 @@ use JSON::MaybeXS;
 use LWP::UserAgent;
 use Module::Load;
 use Ref::Util qw(is_ref is_arrayref is_hashref);
-use Sub::Quote;
+use Types::Standard qw( Enum InstanceOf Int Str );
 use URI;
 use URI::QueryParam;
 
@@ -51,8 +51,8 @@ Hostname or ip to connect to, default 'B<localhost>'
 =cut
 has 'host' => (
     is      => 'ro',
-    isa     => quote_sub(q{ die "must specify a hostname or ip for host parameter" unless defined $_[0] and length $_[0] }),
-    default => quote_sub(q{'localhost'}),
+    isa     => Str,
+    default => sub { 'localhost' },
 );
 
 =attr port
@@ -62,8 +62,8 @@ Port to connect the HTTP transport for the ElasticSearch cluster, default is B<9
 =cut
 has 'port' => (
     is      => 'ro',
-    isa     => quote_sub(q{ die "must specify a port number" unless defined $_[0] and $_[0] =~ /^\d+$/ }),
-    default => quote_sub(q{9200}),
+    isa     => Int,
+    default => sub { 9200 },
 );
 
 =attr proto
@@ -78,8 +78,8 @@ basic authentication.
 
 has 'proto' => (
     is      => 'ro',
-    isa     => quote_sub(q{ die "must specify a protocol either http or https" unless defined $_[0] and $_[0] =~ /^http(s)?/}),
-    default => quote_sub(q{'http'}),
+    isa     => Enum[qw(http https)],
+    default => sub { 'http' },
 );
 
 =attr timeout
@@ -90,8 +90,8 @@ Connection and Read Timeout for the HTTP connection, defaults to B<10> seconds.
 
 has 'timeout' => (
     is      => 'ro',
-    isa     => quote_sub(q{ die "must specify a timeout in seconds" unless defined $_[0] and $_[0] =~ /^\d+$/ }),
-    default => quote_sub(q{10}),
+    isa     => Int,
+    default => sub { 10 },
 );
 
 =attr ua
@@ -102,7 +102,7 @@ Lazy built B<LWP::UserAgent> to access LWP::UserAgent directly.
 
 has 'ua' => (
     is  => 'lazy',
-    isa => quote_sub(q{die "UA setup failed." unless ref($_[0]) =~ /^LWP::UserAgent/}),
+    isa => InstanceOf["LWP::UserAgent"],
 );
 
 
@@ -113,7 +113,7 @@ has 'ua' => (
     sub LWP::UserAgent::get_basic_credentials {
         my ($self,$realm,$url) = @_;
         my $uri = URI->new( $url );
-        load App::ElasticSearch::Utilities => 'es_basic_auth';
+        load "App::ElasticSearch::Utilities" => 'es_basic_auth';
         return es_basic_auth( $uri->host );
     }
 }
