@@ -89,6 +89,8 @@ Comma separated list of node attributes to display, aliased as --attr
 
     --attributes dc,id
 
+=back
+
 =head1 DESCRIPTION
 
 This tool provides access to information on nodes in the the cluster.

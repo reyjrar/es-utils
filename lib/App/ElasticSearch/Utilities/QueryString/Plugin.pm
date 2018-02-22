@@ -1,6 +1,11 @@
 package App::ElasticSearch::Utilities::QueryString::Plugin;
 # ABSTRACT: Moo::Role for implementing QueryString Plugins
 
+use strict;
+use warnings;
+
+# VERSION
+
 use Hash::Merge::Simple qw(clone_merge);
 use Moo::Role;
 use Ref::Util qw(is_arrayref is_hashref);
@@ -72,6 +77,11 @@ around 'handle_token' => sub {
 
 
 # Handle Build Args
+
+=for Pod::Coverage BUILDARGS
+
+=cut
+
 sub BUILDARGS {
     my($class,%in) = @_;
 

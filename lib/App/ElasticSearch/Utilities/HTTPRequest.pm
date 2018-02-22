@@ -9,11 +9,11 @@ use this module in your code.
 
 =cut
 
-# VERSION
-
 use strict;
 use warnings;
 no warnings 'uninitialized';
+
+# VERSION
 
 use JSON::MaybeXS;
 use Ref::Util qw(is_ref is_arrayref is_hashref);

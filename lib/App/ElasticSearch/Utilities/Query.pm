@@ -4,6 +4,8 @@ package App::ElasticSearch::Utilities::Query;
 use strict;
 use warnings;
 
+# VERSION
+
 use CLI::Helpers qw(:output);
 use Clone qw(clone);
 use Moo;
@@ -50,12 +52,12 @@ Can be set using set_should and is a valid init_arg.
 The filter section of a bool query as an array reference.  See: L<add_bool>
 Can be set using set_filter and is a valid init_arg.
 
-=nested
+=attr nested
 
 The nested query, this shortcircuits the rest of the query due to restrictions
 on the nested queries.
 
-=nested_path
+=attr nested_path
 
 The path by being nested, only used in nested queries.
 
@@ -180,8 +182,10 @@ sub uri_params {
     foreach my $field (keys %PARAMS) {
         my $v = eval {
             debug({color=>'magenta'}, "uri_params() - retrieving param '$field'");
+            ## no critic
             no strict 'refs';
             $self->$field();
+            ## user critic
         };
         next unless defined $v;
         $params{$field} = $v;
@@ -201,10 +205,12 @@ sub request_body {
 
     my %body = ();
     foreach my $section (keys %REQUEST_BODY) {
-        no strict 'refs';
         eval {
             debug({color=>'yellow'}, "request_body() - retrieving section '$section'");
+            ## no critic
+            no strict 'refs';
             $body{$section} = $self->$section;
+            ## use critic
             delete $body{$section} unless defined $body{$section};
             debug_var({color=>'cyan'},$body{$section}) if defined $body{$section} and ref $body{$section};
             1;
@@ -241,12 +247,14 @@ sub query {
         my %bool = ();
         foreach my $k (keys %QUERY) {
             next if $k =~ /^nested/;
-            no strict 'refs';
             $bool{$k} = [];
             my $v;
             eval {
                 debug({color=>'yellow'}, "query() - retrieving section '$k'");
+                ## no critic
+                no strict 'refs';
                 $v = $self->$k();
+                ## user critic
                 debug_var({color=>'cyan'},$v) if defined $v and ref $v;
                 1;
             } or do {
@@ -351,6 +359,13 @@ sub wrap_aggregations {
 *add_aggs  = \&add_aggregations;
 *wrap_aggs = \&wrap_aggregations;
 
+=for Pod::Coverage aggs
+=for Pod::Coverage set_aggs
+=for Pod::Coverage add_aggs
+=for Pod::Coverage wrap_aggs
+=cut
+
+
 =method set_scan_scroll($ctxt_life)
 
 This function emulates the old scan scroll feature in early version of Elasticsearch. It takes
@@ -406,11 +421,13 @@ sub add_bool {
     my $condition = shift;
 
     if( exists $QUERY{$section} ) {
+        ## no critic
         no strict 'refs';
         my $set = $self->$section;
         push @{ $set }, $condition;
         my $setter = "set_$section";
         $self->$setter($set);
+        ## use critic
     }
     $self;
 }

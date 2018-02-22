@@ -65,6 +65,8 @@ Print this message and exit
 
 Print detailed help with examples
 
+=back
+
 =head1 DESCRIPTION
 
 This tool provides access to open any closed indices in the cluster

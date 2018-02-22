@@ -4,6 +4,8 @@ package App::ElasticSearch::Utilities::QueryString;
 use strict;
 use warnings;
 
+# VERSION
+
 use App::ElasticSearch::Utilities qw(:config);
 use App::ElasticSearch::Utilities::Query;
 use CLI::Helpers qw(:output);
@@ -150,6 +152,8 @@ The token expansion plugins can return undefined, which is basically a noop on t
 The plugin can return a hash reference, which marks that token as handled and no other plugins
 receive that token.  The hash reference may contain:
 
+=over 2
+
 =item query_string
 
 This is the rewritten bits that will be reassembled in to the final query string.
@@ -177,6 +181,8 @@ state.  After each token is processed, if it didn't set this flag, the flag is r
 This is used for bare words like "not", "or", and "and" to denote that these terms cannot dangle from the
 beginning or end of the query_string.  This allows the final pass of the query_string builder to strip these
 words to prevent syntax errors.
+
+=back
 
 =head1 Extended Syntax
 

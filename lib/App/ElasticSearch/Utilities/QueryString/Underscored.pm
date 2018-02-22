@@ -3,6 +3,9 @@ package App::ElasticSearch::Utilities::QueryString::Underscored;
 
 use strict;
 use warnings;
+
+# VERSION
+
 use CLI::Helpers qw(:output);
 use namespace::autoclean;
 
@@ -20,6 +23,10 @@ my %Underscored = (
         return { condition => { prefix => { $field => $text } } }
     },
 );
+
+=for Pod::Coverage handle_token
+
+=cut
 
 sub handle_token {
     my ($self,$token) = @_;

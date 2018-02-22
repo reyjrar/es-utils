@@ -268,6 +268,8 @@ Displays the details on index settings, use --verbose to get more information
 
     ./es-status.pl --settings --verbose
 
+=back
+
 =head1 DESCRIPTION
 
 This script is designed to help you get information about the state of the

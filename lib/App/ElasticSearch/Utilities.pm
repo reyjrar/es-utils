@@ -1,10 +1,10 @@
 # ABSTRACT: Utilities for Monitoring ElasticSearch
 package App::ElasticSearch::Utilities;
 
-# VERSION
-
 use strict;
 use warnings;
+
+# VERSION
 
 our $_OPTIONS_PARSED;
 our %_GLOBALS = ();
@@ -552,7 +552,7 @@ sub es_connect {
     return $ES;
 }
 
-=func es_request([$handle])
+=func es_master([$handle])
 
 Returns true (1) if the handle is to the the cluster master, or false (0) otherwise.
 
@@ -844,7 +844,7 @@ sub es_index_strip_date {
     if( $index =~ s/[-_]$PATTERN_REGEX{DATE}// ) {
         return $index;
     }
-    return undef;
+    return;
 }
 
 =func es_index_bases( 'index-name' )
@@ -919,7 +919,7 @@ sub es_index_days_old {
 }
 
 
-=func es_index_shard_replicas( 'index-name' )
+=func es_index_shards( 'index-name' )
 
 Returns the number of replicas for a given index.
 
@@ -1079,6 +1079,12 @@ sub es_optimize_index {
     });
 }
 
+=func es_apply_index_settings('index-name', { settings })
+
+Apply a HASH of settings to an index.
+
+=cut
+
 sub es_apply_index_settings {
     my($index,$settings) = @_;
 
@@ -1103,7 +1109,7 @@ sub es_index_segments {
 
     if( !defined $index || !length $index || !es_index_valid($index) ) {
         output({stderr=>1,color=>'red'}, "es_index_segments('$index'): invalid index");
-        return undef;
+        return;
     }
 
     return es_request('_segments', {

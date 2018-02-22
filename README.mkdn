@@ -77,7 +77,7 @@ Returns a hashref of the pattern filter used to get the indexes
 Without options, this connects to the server defined in the args.  If passed
 an array ref, it will use that as the connection definition.
 
-## es\_request(\[$handle\])
+## es\_master(\[$handle\])
 
 Returns true (1) if the handle is to the the cluster master, or false (0) otherwise.
 
@@ -139,7 +139,7 @@ Returns an array of the possible index base names for this index
 
 Return the number of days old this index is.
 
-## es\_index\_shard\_replicas( 'index-name' )
+## es\_index\_shards( 'index-name' )
 
 Returns the number of replicas for a given index.
 
@@ -166,6 +166,10 @@ Deletes an index
 ## es\_optimize\_index('index-name')
 
 Optimize an index to a single segment per shard
+
+## es\_apply\_index\_settings('index-name', { settings })
+
+Apply a HASH of settings to an index.
 
 ## es\_index\_segments( 'index-name' )
 

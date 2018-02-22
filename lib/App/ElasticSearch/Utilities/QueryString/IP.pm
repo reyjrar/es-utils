@@ -4,11 +4,17 @@ package App::ElasticSearch::Utilities::QueryString::IP;
 use strict;
 use warnings;
 
+# VERSION
+
 use Net::CIDR::Lite;
 use namespace::autoclean;
 
 use Moo;
 with 'App::ElasticSearch::Utilities::QueryString::Plugin';
+
+=for Pod::Coverage handle_token
+
+=cut
 
 sub handle_token {
     my ($self,$token) = @_;
@@ -22,7 +28,7 @@ sub handle_token {
             }
         }
     }
-    return undef;
+    return;
 }
 
 1;

@@ -3,6 +3,9 @@ package App::ElasticSearch::Utilities::QueryString::BareWords;
 
 use strict;
 use warnings;
+
+# VERSION
+
 use CLI::Helpers qw(:output);
 use namespace::autoclean;
 
@@ -16,6 +19,10 @@ my %BareWords = (
     or  => { query_string => 'OR',  invert => 0, dangles => 1 },
     not => { query_string => 'NOT', invert => 1, dangles => 1 },
 );
+
+=for Pod::Coverage handle_token
+
+=cut
 
 sub handle_token {
     my ($self,$token) = @_;

@@ -1,9 +1,10 @@
 #!perl
 # PODNAME: es-search.pl
 # ABSTRACT: Provides a CLI for quick searches of data in ElasticSearch daily indexes
-$|=1;           # Flush STDOUT
 use strict;
 use warnings;
+
+$|=1;           # Flush STDOUT
 
 use App::ElasticSearch::Utilities qw(:all);
 use App::ElasticSearch::Utilities::Query;
@@ -16,6 +17,7 @@ use JSON::MaybeXS qw(:legacy);
 use Pod::Usage;
 use POSIX qw(strftime);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
+use Time::HiRes qw(sleep time);
 use YAML;
 
 #------------------------------------------------------------------------#
@@ -159,7 +161,7 @@ if( exists $OPT{top} ) {
     my $top_field = pop @top;
     my $top_agg   = @top ? shift @top : 'terms';
 
-    my @agg_fields = grep { exists $FIELDS{$_} } map { s/^\s+//; s/\s+$//; $_; } split ',', $top_field;
+    my @agg_fields = grep { exists $FIELDS{$_} } split /\s*,\s*/, $top_field;
     croak(sprintf("Option --top takes a field, found %d fields: %s\n", scalar(@agg_fields),join(',',@agg_fields)))
         unless @agg_fields == 1;
 
@@ -250,7 +252,7 @@ AGES: while( !$DONE && @AGES ) {
     $age = $OPT{tail} ? $AGES[0] : shift @AGES;
 
     # Pause for 200ms if we're tailing
-    select(undef,undef,undef,0.2) if exists $OPT{tail} && $last_hit_ts;
+    sleep(0.2) if exists $OPT{tail} && $last_hit_ts;
 
     my $start=time();
     $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start-30));
@@ -507,7 +509,7 @@ sub document_lookdown {
             return document_lookdown($href->{$k},$field);
         }
     }
-    return undef;
+    return;
 }
 
 sub show_fields {

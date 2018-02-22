@@ -1,6 +1,11 @@
 package Types::ElasticSearch;
 # ABSTRACT: Types for working with ElasticSearch
 
+use strict;
+use warnings;
+
+# VERSION
+
 use Type::Library -base;
 use Type::Tiny;
 

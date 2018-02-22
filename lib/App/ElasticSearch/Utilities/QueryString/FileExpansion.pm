@@ -4,6 +4,8 @@ package App::ElasticSearch::Utilities::QueryString::FileExpansion;
 use strict;
 use warnings;
 
+# VERSION
+
 use CLI::Helpers qw(:output);
 use File::Slurp::Tiny qw(read_lines);
 use Ref::Util qw(is_hashref);
@@ -20,6 +22,10 @@ my %parsers = (
     dat => \&_parse_txt,
     csv => \&_parse_csv,
 );
+
+=for Pod::Coverage handle_token
+
+=cut
 
 sub handle_token {
     my($self,$token) = @_;
@@ -46,7 +52,7 @@ sub handle_token {
             }
         }
     }
-    return undef;
+    return;
 }
 
 sub _parse_csv {
@@ -68,10 +74,11 @@ sub _parse_csv {
 sub _parse_txt {
     my ($file,$col) = @_;
     my %uniq=();
-    my @rows = grep { defined && length && !/^#/ && chomp } read_lines($file);
+    my @rows = grep { defined && length && !/^#/ } read_lines($file);
     debug({color=>'magenta'}, @rows);
     if(@rows) {
         for(@rows) {
+            chomp;
             my @cols = split /[\s,]+/;
             my $value = $cols[$col];
             if(defined $value) {

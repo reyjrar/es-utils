@@ -29,6 +29,9 @@ the API you'd expect from B<Elastijk>.
 
 =cut
 
+use strict;
+use warnings;
+
 # VERSION
 
 use App::ElasticSearch::Utilities::HTTPRequest;
@@ -122,7 +125,9 @@ sub _build_ua {
     my ($self) = @_;
 
     # Construct the UA Object
+    ## no critic
     my $local_version = eval '$VERSION' || '999.9';
+    ## use critic
     my $ua = LWP::UserAgent->new(
         keep_alive        => 3,
         agent             => sprintf("%s/%0.1f (Perl %s)", __PACKAGE__, $local_version, $^V),
@@ -149,8 +154,7 @@ sub _build_ua {
             # Plain text transform for the _cat API
             debug({color=>'yellow',indent=>1},"Plain Text Transform Response Content");
             my $decoded = [
-                map { s/^\s+//; s/\s+$//; $_ }
-                grep { defined && length }
+                grep { defined && length && !/^\s+$/ }
                 split /\r?\n/, $response->content
             ];
             debug_var($decoded);
@@ -270,7 +274,7 @@ sub put {
 =method bulk( body => ..., index => ... )
 
 Parameter B<body> is required.  The body should be an array containing the command and documents to send to the
-ElasticSearch bulk API, see: L<https://www.elastic.co/guide/en/elasticsearch/reference/2.3/docs-bulk.html|Bulk API>
+ElasticSearch bulk API, see: L<Bulk API|https://www.elastic.co/guide/en/elasticsearch/reference/2.3/docs-bulk.html>
 
 Returns a list containing the HTTP Status Code, and the Response Content.
 

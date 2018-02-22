@@ -1,9 +1,10 @@
 # ABSTRACT: Fix version issues to support all the things
 package App::ElasticSearch::Utilities::VersionHacks;
 
-# VERSION
 use strict;
 use warnings;
+
+# VERSION
 
 use Const::Fast;
 use CLI::Helpers qw(:all);
@@ -127,7 +128,7 @@ sub _cluster_state_1_0 {
         my @requested = ();
         if( exists $options->{uri_param} ) {
             my %filters =
-                    map { s/filter_//; $_ => 1; }
+                    map  { /filter_(.+)$/; $1 => 1 }
                     grep { /^filter_/ && $options->{uri_param}{$_} }
                 keys %{ $options->{uri_param} };
             # Remove them from the parameters

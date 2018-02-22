@@ -3,12 +3,22 @@ package App::ElasticSearch::Utilities::QueryString::Nested;
 
 use strict;
 use warnings;
+
+# VERSION
+
 use App::ElasticSearch::Utilities::QueryString;
 use CLI::Helpers qw(:output);
 use namespace::autoclean;
 
 use Moo;
 with 'App::ElasticSearch::Utilities::QueryString::Plugin';
+
+=attr qs
+
+A L<App::ElasticSearch::Utilities::QueryString> object that contains the nested
+query.
+
+=cut
 
 has 'qs' => (
     is       => 'ro',
@@ -17,13 +27,11 @@ has 'qs' => (
     handles  => [qw(expand_query_string)],
 );
 
-=example
+my %Reserved = map { $_ => 1 } qw( _prefix_ _exists_ _missing_ );
 
-    nested_path:"field:match AND string"
+=for Pod::Coverage handle_token
 
 =cut
-
-my %Reserved = map { $_ => 1 } qw( _prefix_ _exists_ _missing_ );
 
 sub handle_token {
     my ($self,$token) = @_;
@@ -61,5 +69,7 @@ __END__
 
 =head2 App::ElasticSearch::Utilities::QueryString::Nested
 
-Implement the proposed nested query syntax early.
+Implement the proposed nested query syntax early.  Example:
+
+    nested_path:"field:match AND string"
 
