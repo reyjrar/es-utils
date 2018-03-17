@@ -841,7 +841,7 @@ sub es_index_strip_date {
 
     return -1 unless defined $index;
 
-    if( $index =~ s/[-_]$PATTERN_REGEX{DATE}// ) {
+    if( $index =~ s/[-_]$PATTERN_REGEX{DATE}.*// ) {
         return $index;
     }
     return;

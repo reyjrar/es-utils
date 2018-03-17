@@ -9,6 +9,7 @@ use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Hash::Flatten qw(flatten);
 use Pod::Usage;
+use POSIX qw(ceil);
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -22,9 +23,9 @@ GetOptions(\%opt,
     'bloom',
     'replicas',
     'replicas',
-    'replicas-min:i',
-    'replicas-max:i',
-    'replicas-age:s',
+    'replicas-min|replica-min:i',
+    'replicas-max|replica-max:i',
+    'replicas-age|replica-age:i',
     'optimize',
     'optimize-days:i',
     'index-basename:s',
@@ -46,7 +47,7 @@ my %CFG = (
     'delete-days'        => 90,
     'close-days'         => 60,
     'replicas-min'       => 0,
-    'replicas-max'       => 100,
+    'replicas-max'       => 1,
     'replicas-age'       => 60,
     timezone             => 'UTC',
     delete               => 0,
@@ -75,7 +76,7 @@ else {
         $operate++ if $CFG{$mode};
         last if $operate;
     }
-    pod2usage(-message => "No operation selected, use --close, --delete, --bloom, --optimize, or --replicas.", -exitval => 1) unless $operate;
+    pod2usage(-message => "No operation selected, use --close, --delete, --optimize, or --replicas.", -exitval => 1) unless $operate;
 }
 # Can't have replicas-min below 0
 $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
@@ -83,14 +84,12 @@ $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
 # Create the target uri for the ES Cluster
 my $es = es_connect();
 
-if( $CFG{bloom} ) {
-    output({color=>'red'}, "WARNING: The index.codec.bloom.load is now disabled as of v1.4");
-    $CFG{bloom}=0 if es_version() gt '1.4.0';
-}
-
+# This setting is no longer supported
+output({color=>'red',sticky=>1,stderr=>1}, "WARNING: The index.codec.bloom.load is now disabled as of v1.4")
+    if $CFG{bloom};
 
 # Ages for replica management
-my $AGE = (grep { my $x = int($_); $x > 0; } split /,/, $CFG{'replicas-age'})[-1];
+my $AGE = $CFG{'replicas-age'};
 
 # Retrieve a list of indexes
 my @indices = es_indices(
@@ -120,21 +119,18 @@ foreach my $index (sort @indices) {
 
     # Manage replicas
     if( $CFG{replicas} ) {
-        my %shards = es_index_shards($index);
-        # Default for replicas is primaries - 1;
-        my $replicas = $shards{primaries} - 1;
-        my $iter = int(($AGE/$replicas) + 0.5);
-        my @ages = map { my $v = $_ * $iter; $v < 1 ? 1 : $v } 0 .. $replicas - 1;
-        splice @ages, -1, 1, $AGE;
-        foreach my $age ( @ages ) {
-            if ( $days_old >= $age ) {
-                $replicas--;
-            }
+        my $replicas;
+        if( $days_old > $AGE ) {
+            $replicas = $CFG{'replicas-min'};
         }
-        # If we set replicas max, honor it.
-        $replicas = $opt{'replicas-max'} if exists $opt{'replicas-max'} && $replicas > $opt{'replicas-max'};
-        debug({indent=>1}, "+ replica aging (P:$shards{primaries} R:$shards{replicas}->$replicas): " . join(',', @ages));
-        $replicas = $CFG{'replicas-min'} if $replicas < $CFG{'replicas-min'};
+        else {
+            my $daily = $CFG{'replicas-max'} / $AGE;
+            $replicas = ceil( $CFG{'replicas-max'} - ($daily * $days_old) );
+            $replicas = $replicas < $CFG{'replicas-min'} ? $CFG{'replicas-min'} : $replicas;
+            $replicas = $replicas > $CFG{'replicas-max'} ? $CFG{'replicas-max'} : $replicas;
+        }
+        my %shards = es_index_shards($index);
+        debug({indent=>1}, "+ replica aging (P:$shards{primaries} R:$shards{replicas}->$replicas)");
         if ( $shards{primaries} > 0 && $shards{replicas} != $replicas ) {
             verbose({color=>'yellow'}, "$index: should have $replicas replicas, has $shards{replicas}");
             my $result = es_request('_settings',
@@ -147,35 +143,6 @@ foreach my $index (sort @indices) {
             else {
                 output({color=>"green"}, "$index: Successfully set replicas to $replicas");
             }
-        }
-    }
-
-    # Run bloom?
-    if( $CFG{bloom} ) {
-        my $settings = flatten( es_request(_settings => { index => $index })->{$index}{settings}, {HashDelimiter=>'.',ArrayDelimiter=>'.'} );
-        debug_var($settings);
-        if( !exists $settings->{"index.codec.bloom.load"} ) {
-            verbose({color=>'yellow'}, "$index: closing ..");
-            if( es_close_index($index) ) {
-                my $res = es_request(_settings => { index => $index, method => 'PUT' },
-                    { "index.codec.bloom.load" => 'false' }
-                );
-                if( !defined $res ) {
-                    output({color=>'red'}, "$index: Encountered error disabling bloom filter.");
-                }
-                else {
-                    output({color=>'green'},"$index: bloom filters disabled.");
-                    debug_var({color=>'magenta'}, $res);
-                }
-                es_open_index($index);
-                verbose({color=>'yellow'}, "$index: Re-opened.");
-            }
-            else {
-                output({color=>'red'}, "$index: Could not close index to update bloom setting, skipping.");
-            }
-        }
-        else {
-            verbose({color=>'yellow'},"$index: Bloom filter setting already set, skipping.");
         }
     }
 
@@ -256,7 +223,6 @@ Options:
     --help              print help
     --manual            print full manual
     --all               Run close, delete, optimize, and replicas tools
-    --bloom             Disable bloom filters for all indexes older than 1 day
     --close             Run close for indexes older than
     --close-days        Age of the oldest index to keep open (default:60)
     --delete            Run delete indexes older than
@@ -266,7 +232,7 @@ Options:
     --replicas          Run the replic aging hook
     --replicas-age      Age of the index to reach the minimum replicas (default:60)
     --replicas-min      Minimum number of replicas this index may have (default:0)
-    --replicas-max      Maximum number of replicas this index may have (default:100)
+    --replicas-max      Maximum number of replicas this index may have (default:1)
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -275,11 +241,6 @@ Options:
 =head1 OPTIONS
 
 =over 8
-
-=item B<bloom>
-
-This will disable the bloom filters on all indexes older than 1 day unless the bloom
-filter setting "index.codec.bloom.load" has been explicitly set for this index.
 
 =item B<close>
 
@@ -321,7 +282,7 @@ The minimum number of replicas to allow replica aging to set.  The default is 0
 
 =item B<replicas-max>
 
-The maximum number of replicas to allow replica aging to set.  The default is 100
+The maximum number of replicas to allow replica aging to set.  The default is 1
 
     --replicas-max=2
 
