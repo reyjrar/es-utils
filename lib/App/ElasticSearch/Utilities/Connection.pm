@@ -189,6 +189,7 @@ sub request {
     my ($self,$url,$options,$body) = @_;
 
     # Build the Path
+    $options->{command} ||= $url;
     my @path = grep { defined && length } @{ $options }{qw(index command)};
     my $path = join('/', @path);
 

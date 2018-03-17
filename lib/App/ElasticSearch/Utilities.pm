@@ -612,23 +612,29 @@ sub es_request {
         }
         else {
             # Validate each included index
-            my @valid;
-            my @test = is_arrayref($index_in) ? @{ $index_in } : split /\,/, $index_in;
-            foreach my $i (@test) {
-                push @valid, $i if es_index_valid($i);
-            }
-            $index = join(',', @valid);
+            my @indexes = is_arrayref($index_in) ? @{ $index_in } : split /\,/, $index_in;
+            $index = join(',', @indexes);
         }
     }
-    $options->{index} = $index if defined $index;
-    $index ||= '';
+
+    # For the cat api, index goes *after* the command
+    if( $url =~ /^_cat/ && $index ) {
+        $url =~ s/\/$//;
+        $url = join('/', $url, $index);
+        delete $options->{command};
+    }
+    elsif( $index ) {
+        $options->{index} = $index;
+    }
+    else {
+        $index = '';
+    }
 
 
     # Figure out if we're modifying things
     my $modification = $url eq '_search' && $options->{method} eq 'POST' ? 0
                      : $options->{method} ne 'GET';
 
-    my ($status,$res);
     if($modification) {
         # Set NOOP if necessary
         if(!$DEF{NOOP} && $DEF{MASTERONLY}) {
