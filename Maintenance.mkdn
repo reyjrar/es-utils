@@ -15,7 +15,6 @@ Options:
     --help              print help
     --manual            print full manual
     --all               Run close, delete, optimize, and replicas tools
-    --bloom             Disable bloom filters for all indexes older than 1 day
     --close             Run close for indexes older than
     --close-days        Age of the oldest index to keep open (default:60)
     --delete            Run delete indexes older than
@@ -25,7 +24,7 @@ Options:
     --replicas          Run the replic aging hook
     --replicas-age      Age of the index to reach the minimum replicas (default:60)
     --replicas-min      Minimum number of replicas this index may have (default:0)
-    --replicas-max      Maximum number of replicas this index may have (default:100)
+    --replicas-max      Maximum number of replicas this index may have (default:1)
 
 From App::ElasticSearch::Utilities:
 
@@ -72,11 +71,6 @@ Use with cron:
 
 # OPTIONS
 
-- **bloom**
-
-    This will disable the bloom filters on all indexes older than 1 day unless the bloom
-    filter setting "index.codec.bloom.load" has been explicitly set for this index.
-
 - **close**
 
     Run the close hook
@@ -117,7 +111,7 @@ Use with cron:
 
 - **replicas-max**
 
-    The maximum number of replicas to allow replica aging to set.  The default is 100
+    The maximum number of replicas to allow replica aging to set.  The default is 1
 
         --replicas-max=2
 
