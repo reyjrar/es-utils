@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use feature qw(state);
 
-use App::ElasticSearch::Utilities qw(es_request es_pattern es_nodes es_indices);
+use App::ElasticSearch::Utilities qw(es_request es_pattern es_nodes es_indices es_index_strip_date);
 use CLI::Helpers qw(:output);
 use Getopt::Long::Descriptive;
 use Pod::Usage;
@@ -16,8 +16,8 @@ my ($opt,$usage) = describe_options('%c %o',
     ['sort:s',  "sort by name or size, default: name",
             { default => 'name', callbacks => { 'must be name or size' => sub { $_[0] eq 'name' || $_[0] eq 'size' } } }
     ],
-    ['view:s',  "Show by index or node, default: node",
-          { default => 'node', callbacks => { 'must be index or node' => sub { $_[0] eq 'node' || $_[0] eq 'index' } } }
+    ['view:s',  "Show by index, base or node, default: node",
+          { default => 'node', callbacks => { 'must be index or node' => sub { $_[0] =~ /^base|index|node$/ } } }
     ],
     ['asc',     "Sort ascending  (default by name)"],
     ['desc',    "Sort descending (default by size)"],
@@ -46,6 +46,7 @@ my %NODES   = es_nodes();
 # Loop through the indices and take appropriate actions;
 my %indices = ();
 my %nodes = ();
+my %bases = ();
 foreach my $index (@INDICES) {
     verbose({color=>'green'}, "$index - Gathering statistics");
 
@@ -64,6 +65,10 @@ foreach my $index (@INDICES) {
         size        => $status->{store}{size_in_bytes},
         docs        => $status->{docs}{count},
     };
+    my $base = es_index_strip_date($index);
+    $bases{$base} ||=  { size => 0, docs => 0 };
+    $bases{$base}->{size} += $status->{store}{size_in_bytes};
+    $bases{$base}->{docs} += $status->{docs}{count};
 
     my $shards = es_request("_cat/shards",
         { index => $index, uri_param => { qw(bytes b format json) }}
@@ -101,6 +106,16 @@ if( $opt->view eq 'index' ) {
         output({color=>"magenta",indent=>1}, $index);
         output({color=>"cyan",kv=>1,indent=>2}, 'size', pretty_size( $indices{$index}->{size}));
         output({color=>"cyan",kv=>1,indent=>2}, 'docs', $indices{$index}->{docs});
+        $displayed++;
+        last if $opt->limit > 0 && $displayed >= $opt->limit;
+    }
+}
+if( $opt->view eq 'base' ) {
+    my $displayed = 0;
+    foreach my $index (sort indices_by keys %bases) {
+        output({color=>"magenta",indent=>1}, $index);
+        output({color=>"cyan",kv=>1,indent=>2}, 'size', pretty_size( $bases{$index}->{size}));
+        output({color=>"cyan",kv=>1,indent=>2}, 'docs', $bases{$index}->{docs});
         $displayed++;
         last if $opt->limit > 0 && $displayed >= $opt->limit;
     }
