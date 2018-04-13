@@ -334,7 +334,7 @@ can all be set in the globals file.
 
         '*'    expanded to '.*'
         'ANY'  expanded to '.*'
-        'DATE' expanded to a pattern to match a date, based on datesep
+        'DATE' expanded to a pattern to match a date,
 
     The indexes are compared against this pattern.
 
@@ -450,7 +450,7 @@ regular expressions.  Those patterns are:
 
 # AUTHOR
 
-Brad Lhotsky <brad@divisionbyzero.net>
+Brad Lhotsky &lt;brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
@@ -462,15 +462,15 @@ This is free software, licensed under:
 
 # CONTRIBUTORS
 
-- Alexey Shatlovsky <alexey.shatlovsky@booking.com>
-- Alexey Surikov <ksurent@gmail.com>
-- Daniel Ostermeier <daniel.ostermeier@gmail.com>
-- Jason Rojas <jason.rojas@mgo.com>
-- Kang-min Liu <gugod@gugod.org>
-- Lisa Hare <lhare@inview.co.uk>
+- Alexey Shatlovsky &lt;alexey.shatlovsky@booking.com>
+- Alexey Surikov &lt;ksurent@gmail.com>
+- Daniel Ostermeier &lt;daniel.ostermeier@gmail.com>
+- Jason Rojas &lt;jason.rojas@mgo.com>
+- Kang-min Liu &lt;gugod@gugod.org>
+- Lisa Hare &lt;lhare@inview.co.uk>
 - Markus Linnala <Markus.Linnala@cybercom.com>
 - Samit Badle <Samit.Badle@gmail.com>
-- Takumi Sakamoto <takumi.saka@gmail.com>
+- Takumi Sakamoto &lt;takumi.saka@gmail.com>
 
 # SUPPORT
 

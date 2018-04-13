@@ -13,11 +13,12 @@ use Pod::Usage;
 #------------------------------------------------------------------------#
 # Argument Collection
 my ($opt,$usage) = describe_options('%c %o',
+    ['all',     "Scan all indices instead of processing the --base/--days parameters"],
     ['sort:s',  "sort by name or size, default: name",
-            { default => 'name', callbacks => { 'must be name or size' => sub { $_[0] eq 'name' || $_[0] eq 'size' } } }
+            { default => 'name', callbacks => { 'must be name or size' => sub { $_[0] =~ /^name|size$/ } } }
     ],
     ['view:s',  "Show by index, base or node, default: node",
-          { default => 'node', callbacks => { 'must be index or node' => sub { $_[0] =~ /^base|index|node$/ } } }
+          { default => 'node', callbacks => { 'must be base, index, or node' => sub { $_[0] =~ /^base|index|node$/ } } }
     ],
     ['asc',     "Sort ascending  (default by name)"],
     ['desc',    "Sort descending (default by size)"],
@@ -40,15 +41,23 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $opt->manual;
 my $PATTERN = es_pattern();
 
 # Indices and Nodes
-my @INDICES = es_indices();
+my @INDICES = es_indices($opt->all ? ( _all => 1 ) : ());
 my %NODES   = es_nodes();
 
 # Loop through the indices and take appropriate actions;
 my %indices = ();
 my %nodes = ();
 my %bases = ();
+my %overview = (
+    shards  => 0,
+    indices => 0,
+    docs    => 0,
+    size    => 0,
+);
 foreach my $index (@INDICES) {
     verbose({color=>'green'}, "$index - Gathering statistics");
+
+    $overview{indices}++;
 
     my $result = es_request('_status', { index => $index });
     if( !defined $result ) {
@@ -65,20 +74,27 @@ foreach my $index (@INDICES) {
         size        => $status->{store}{size_in_bytes},
         docs        => $status->{docs}{count},
     };
+
+    # Update the Overview
+    $overview{size} += $status->{store}{size_in_bytes};
+    $overview{docs} += $status->{docs}{count};
+
     my $base = es_index_strip_date($index);
     $bases{$base} ||=  { size => 0, docs => 0 };
     $bases{$base}->{size} += $status->{store}{size_in_bytes};
     $bases{$base}->{docs} += $status->{docs}{count};
 
-    my $shards = es_request("_cat/shards",
-        { index => $index, uri_param => { qw(bytes b format json) }}
+    my $shards = es_request("_cat/shards/$index",
+        { uri_param => { qw(bytes b format json) }}
     );
 
     my %shards = ();
     foreach my $s (@{ $shards }) {
-        my $node = $s->{node};
+        my ($node) = ($s->{node} =~ /^(\S+)/);
         $shards{$s->{shard}} ||= {};
         $nodes{$node}   ||= {};
+
+        $overview{shards}++;
 
         if( exists $shards{$s->{shard}}->{$node} ) {
             $shards{$s->{shard}}->{$node}{size} += $s->{store};
@@ -112,6 +128,7 @@ if( $opt->view eq 'index' ) {
 }
 if( $opt->view eq 'base' ) {
     my $displayed = 0;
+    %indices = %bases;
     foreach my $index (sort indices_by keys %bases) {
         output({color=>"magenta",indent=>1}, $index);
         output({color=>"cyan",kv=>1,indent=>2}, 'size', pretty_size( $bases{$index}->{size}));
@@ -124,13 +141,18 @@ elsif( $opt->view eq 'node' ) {
     my $displayed = 0;
     foreach my $node (sort nodes_by keys %nodes) {
         output({color=>"magenta",indent=>1}, $node);
-        output({color=>"cyan",kv=>1,indent=>2}, 'size', pretty_size( $nodes{$node}->{size}));
-        output({color=>"cyan",kv=>1,indent=>2}, 'shards',  $nodes{$node}->{shards});
-        output({color=>"cyan",kv=>1,indent=>2}, 'docs',  $nodes{$node}->{docs});
+        output({color=>"cyan",kv=>1,indent=>2}, 'size',   pretty_size( $nodes{$node}->{size}));
+        output({color=>"cyan",kv=>1,indent=>2}, 'shards', $nodes{$node}->{shards});
+        output({color=>"cyan",kv=>1,indent=>2}, 'docs',   $nodes{$node}->{docs});
         $displayed++;
         last if $opt->limit > 0 && $displayed >= $opt->limit;
     }
 }
+output({color=>'white',clear=>1},"Total for scanned data");
+    output({color=>"cyan",kv=>1,indent=>1}, 'size',   pretty_size( $overview{size}));
+    output({color=>"cyan",kv=>1,indent=>1}, 'shards', $overview{shards});
+    output({color=>"cyan",kv=>1,indent=>1}, 'docs',   $overview{docs});
+
 
 exit (0);
 
