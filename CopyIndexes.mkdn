@@ -180,9 +180,9 @@ The following barewords are transformed:
 
 ## App::ElasticSearch::Utilities::QueryString::IP
 
-If a field is an IP address wild card, it is transformed:
+If a field is an IP address uses CIDR Notation, it's expanded to a range query.
 
-    src_ip:10.* => src_ip:[10.0.0.0 TO 10.255.255.255]
+    src_ip:10.0/8 => src_ip:[10.0.0.0 TO 10.255.255.255]
 
 ## App::ElasticSearch::Utilities::Underscored
 
@@ -250,7 +250,7 @@ an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch
 
 # AUTHOR
 
-Brad Lhotsky &lt;brad@divisionbyzero.net>
+Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
