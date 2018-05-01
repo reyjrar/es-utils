@@ -567,7 +567,7 @@ sub es_master {
     unshift @request, $instance if defined $instance;
 
     my $cluster = es_request(@request);
-    if( $cluster->{master_node} ) {
+    if( defined $cluster && $cluster->{master_node} ) {
         my $local = es_request('/_nodes/_local');
         if ($local->{nodes} && $local->{nodes}{$cluster->{master_node}}) {
             $is_master = 1;
@@ -587,6 +587,9 @@ First hash ref contains options, including:
     index               Index name
     type                Index type
     method              Default is GET
+
+If the request is not successful, this function will throw a fatal exception.
+If you'd like to proceed you need to catch that error.
 
 =cut
 
@@ -657,23 +660,20 @@ sub es_request {
     die "Unsupported request method: $options->{method}" unless defined $resp;
 
     # Logging
+    verbose({color=>'yellow'}, sprintf "es_request(%s/%s) returned HTTP Status %s",
+        $index, $options->{command}, $resp->message,
+    ) if $resp->code != 200;
+
+    # Error handling
     if( !$resp->is_success ) {
-        output({color=>'red',stderr=>1},
-            sprintf "es_request(%s/%s) failed[%d]: %s",
-                $index, $options->{command}, $resp->code, $resp->message
-        );
+        die sprintf "es_request(%s/%s) failed[%d]: %s",
+                    $index, $options->{command}, $resp->code, $resp->message;
     } elsif( !defined $resp->content || ( !is_ref($resp->content) && !length $resp->content )) {
         output({color=>'yellow',stderr=>1},
             sprintf "es_request(%s/%s) empty response[%d]: %s",
                 $index, $options->{command}, $resp->code, $resp->message
         );
     }
-    else {
-        debug_var($resp);
-    }
-    verbose({color=>'yellow'}, sprintf "es_request(%s/%s) returned HTTP Status %s",
-        $index, $options->{command}, $resp->message,
-    ) if $resp->code != 200;
 
     return $resp->content;
 }
@@ -711,11 +711,11 @@ my $_indices_meta;
 sub es_indices_meta {
     if(!defined $_indices_meta) {
         my $result = es_request('_cluster/state/metadata');
-        $_indices_meta = $result->{metadata}{indices};
-        if ( !defined $_indices_meta ) {
+        if ( !defined $result ) {
             output({stderr=>1,color=>"red"}, "es_indices_meta(): Unable to locate indices in status!");
             exit 1;
         }
+        $_indices_meta = $result->{metadata}{indices};
     }
 
     my %copy = %{ $_indices_meta };
@@ -767,56 +767,66 @@ sub es_indices {
     $args{state} = 'close' if $args{state} eq 'closed';
 
     my @indices = ();
+    my %idx = ();
+    my $wildcard = !exists $args{_all} && defined $DEF{BASE} ? sprintf "/*%s*", $DEF{BASE} : '';
 
     # Simplest case, single index
     if( defined $DEF{INDEX} ) {
         push @indices, $DEF{INDEX} if es_index_valid( $DEF{INDEX} );
     }
+    # Next simplest case, open indexes
+    elsif( !exists $args{_all} && $args{check_state} && $args{state} eq 'open' ) {
+        # Use _aliases because it's break neck fast
+        if( my $res = es_request('_alias' . $wildcard) ) {
+            foreach my $idx ( keys %{ $res } ) {
+                $idx{$idx} = 'open';
+            }
+        }
+    }
     else {
-        my $res = es_request('_cat/indices', { uri_param => { h => 'index,status' } });
+        my $res = es_request('_cat/indices' . $wildcard, { uri_param => { h => 'index,status' } });
         foreach my $entry (@{ $res }) {
             my ($index,$status) = is_hashref($entry) ? @{ $entry }{qw(index status)} : split /\s+/, $entry;
-            if(!exists $args{_all}) {
-                # State Check Disqualification
-                if($args{state} ne 'all'  && $args{check_state})  {
-                    my $result = $status eq $args{state};
-                    next unless $result;
-                }
-
-                if( defined $DEF{BASE} ) {
-                    my %bases = map { $_ => 1 } es_index_bases($index);
-                    next unless exists $bases{$DEF{BASE}};
-                }
-                else {
-                    my $p = es_pattern;
-                    next unless $index =~ /$p->{re}/;
-                }
-                debug({indent=>2},"= name checks succeeded");
-
-                if ($args{older} && defined $DEF{DAYS}) {
-                    my $days_old = es_index_days_old( $index );
-                    if ($days_old < $DEF{DAYS}) {
-                        next;
-                    }
-                }
-                elsif( $args{check_dates} && defined $DEF{DAYS} ) {
-
-                    my $days_old = es_index_days_old( $index );
-                    if( !defined $days_old ) {
-                        debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
-                        next;
-                    }
-                    elsif( $DEF{DAYS} >= 0 && $days_old >= $DEF{DAYS} ) {
-                        next;
-                    }
-                }
-            }
-            else {
-                debug({indent=>1}, "Called with _all, all checks skipped.");
-            }
-            debug({indent=>1,color=>"green"}, "+ match!");
-            push @indices, $index;
+            $idx{$index} = $status;
         }
+    }
+
+    foreach my $index (sort keys %idx) {
+        if(!exists $args{_all}) {
+            my $status = $idx{$index};
+            # State Check Disqualification
+            if($args{state} ne 'all' && $args{check_state})  {
+                my $result = $status eq $args{state};
+                next unless $result;
+            }
+
+            my $p = es_pattern;
+            next unless $index =~ /$p->{re}/;
+            debug({indent=>2},"= name checks succeeded");
+
+            if ($args{older} && defined $DEF{DAYS}) {
+                my $days_old = es_index_days_old( $index );
+                if ($days_old < $DEF{DAYS}) {
+                    next;
+                }
+            }
+            elsif( $args{check_dates} && defined $DEF{DAYS} ) {
+
+                my $days_old = es_index_days_old( $index );
+                if( !defined $days_old ) {
+                    debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
+                    next;
+                }
+                elsif( $DEF{DAYS} >= 0 && $days_old >= $DEF{DAYS} ) {
+                    next;
+                }
+            }
+        }
+        else {
+            debug({indent=>1}, "Called with _all, all checks skipped.");
+        }
+        debug({indent=>1,color=>"green"}, "+ match!");
+        push @indices, $index;
     }
 
     # We retrieved these from the cluster, so preserve them here.
@@ -964,6 +974,8 @@ sub es_index_fields {
     my ($index) = @_;
 
     my $result = es_request('_mapping', { index => $index });
+
+    return unless defined $result;
 
     # Handle Version incompatibilities
     my $ref = exists $result->{$index}{mappings} ? $result->{$index}{mappings} : $result->{$index};
