@@ -620,7 +620,7 @@ sub es_request {
     }
 
     # For the cat api, index goes *after* the command
-    if( $url =~ /^_cat/ && $index ) {
+    if( $url =~ /^_(cat|stats)/ && $index ) {
         $url =~ s/\/$//;
         $url = join('/', $url, $index);
         delete $options->{command};
@@ -776,9 +776,9 @@ sub es_indices {
     }
     # Next simplest case, open indexes
     elsif( !exists $args{_all} && $args{check_state} && $args{state} eq 'open' ) {
-        # Use _aliases because it's break neck fast
-        if( my $res = es_request('_alias' . $wildcard) ) {
-            foreach my $idx ( keys %{ $res } ) {
+        # Use _stats because it's break neck fast
+        if( my $res = es_request('_stats/docs') ) {
+            foreach my $idx ( keys %{ $res->{indices} } ) {
                 $idx{$idx} = 'open';
             }
         }
@@ -877,13 +877,9 @@ sub es_index_bases {
         my $sep = index( $stripped, '_' ) >= 0 ? '_' : '-';
 
         my %collected = ();
-        while( my $word = shift @parts ) {
-            my @set=($word);
-            $collected{$word} =1;
-            foreach my $sub ( @parts ) {
-                push @set, $sub;
-                $collected{join($sep,@set)} =1;
-            }
+        foreach my $end ( 0..$#parts ) {
+            my $name = join($sep, @parts[0..$end]);
+            $collected{$name} = 1;
         }
         $_stripped{$stripped} = [ sort keys %collected ]
     }

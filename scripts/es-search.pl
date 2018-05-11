@@ -74,6 +74,12 @@ my $unknown_options = join ', ', grep /^--/, @ARGV;
 pod2usage({-exitval => 1, -sections => 'SYNOPSIS', -msg =>"Unknown option(s): $unknown_options"}) if $unknown_options;
 
 #--------------------------------------------------------------------------#
+# Information Gathering Routines
+if( $OPT{bases} ) {
+    show_bases();
+    exit 0;
+}
+#--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
     size      => (exists $OPT{size}      && $OPT{size} > 0)         ? int($OPT{size})         : 20,
@@ -99,7 +105,12 @@ foreach my $index (sort by_index_age keys %indices) {
 debug_var(\%by_age);
 my @AGES = sort { $ORDER eq 'asc' ? $b <=> $a : $a <=> $b } keys %by_age;
 debug({color=>"cyan"}, "Fields discovered.");
-debug_var(\%FIELDS);
+
+if( $OPT{fields} ) {
+    show_fields();
+    exit 0;
+}
+
 
 # Which fields to show
 my @SHOW = ();
@@ -119,14 +130,6 @@ if( exists $OPT{sort} && length $OPT{sort} ) {
 }
 $q->set_sort($SORT);
 
-if( $OPT{bases} ) {
-    show_bases();
-    exit 0;
-}
-if( $OPT{fields} ) {
-    show_fields();
-    exit 0;
-}
 # Improper Usage
 pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'No search string specified'})
     unless keys %{ $q->query };
@@ -531,7 +534,7 @@ sub show_fields {
 
 sub show_bases {
     output({color=>'cyan'}, 'Bases available for search:' );
-    my @all   = es_indices(_all => 1);
+    my @all   = es_indices(check_date => 0);
     my %bases = ();
 
     foreach my $index (@all) {
