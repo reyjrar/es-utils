@@ -441,7 +441,9 @@ AGES: while( !$DONE && @AGES ) {
                 foreach my $f (@always,@SHOW) {
                     my $v = '-';
                     if( exists $record->{$f} && defined $record->{$f} ) {
-                        $v = is_ref($record->{$f}) ? to_json($record->{$f},{allow_nonref=>1,canonical=>1}) : $record->{$f};
+                        $v = is_arrayref($record->{$f}) && @{ $record->{$f} } == 1 ? $record->{$f}[0]
+                           : is_ref($record->{$f}) ? to_json($record->{$f},{allow_nonref=>1,canonical=>1})
+                           : $record->{$f};
                     }
                     push @cols,$v;
                 }
