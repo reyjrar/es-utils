@@ -28,12 +28,12 @@ foreach my $days_old ( @days_old ) {
             es_index_strip_date => 'type',
         },
         "type-dcid-$date" => {
-            es_index_bases      => 'dcid,type,type-dcid',
+            es_index_bases      => 'type,type-dcid',
             es_index_days_old   => $days_old,
             es_index_strip_date => 'type-dcid',
         },
         "type_dcid_$date" => {
-            es_index_bases      => 'dcid,type,type_dcid',
+            es_index_bases      => 'type,type_dcid',
             es_index_days_old   => $days_old,
             es_index_strip_date => 'type_dcid',
         },
