@@ -196,7 +196,7 @@ if( exists $OPT{top} ) {
             $sub_agg{$id} = {
                 $type => {
                     field => $field,
-                    size  => $size,
+                    $size > 0 ? (size  => $size) :(),
                 }
             };
         }
