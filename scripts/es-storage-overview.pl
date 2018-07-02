@@ -86,13 +86,17 @@ foreach my $row (@{ $result }) {
     verbose({color=>'green'}, "$index - Gathering statistics");
 
     my @bases = es_index_strip_date($index);
-    foreach my $k (keys %{ $row }) {
-        next unless exists $fields{$k};
-        my $dk = $fields{$k};
-        # Grab Overview Data
-        $overview{$dk} += $row->{$k};
-        # Handle bases
-        foreach my $base ( @bases ) {
+    foreach my $base ( @bases ) {
+        # Count Indexes
+        $bases{$base}->{indices} ||= 0;
+        $bases{$base}->{indices}++;
+        # Handle keys
+        foreach my $k (keys %{ $row }) {
+            next unless exists $fields{$k};
+            my $dk = $fields{$k};
+            # Grab Overview Data
+            $overview{$dk} += $row->{$k};
+            # Counts against bases
             $bases{$base} ||=  {};
             $bases{$base}->{$dk} ||= 0;
             $bases{$base}->{$dk} += $row->{$k};
@@ -104,18 +108,21 @@ output({color=>'white'}, "Storage Overview");
 my $displayed = 0;
 foreach my $index (sort indices_by keys %bases) {
     output({color=>"magenta",indent=>1}, $index);
-    output({color=>"cyan",kv=>1,indent=>2}, 'size',   pretty_size( $bases{$index}->{size}));
-    output({color=>"cyan",kv=>1,indent=>2}, 'shards', $bases{$index}->{shards});
-    output({color=>"cyan",kv=>1,indent=>2}, 'docs',   $bases{$index}->{docs});
-    output({color=>"cyan",kv=>1,indent=>2}, 'memory', pretty_size( $bases{$index}->{memory}));
+    output({color=>"cyan",kv=>1,indent=>2}, 'size',    pretty_size( $bases{$index}->{size}));
+    output({color=>"cyan",kv=>1,indent=>2}, 'indices', $bases{$index}->{indices});
+    output({color=>"cyan",kv=>1,indent=>2}, 'avgsize', pretty_size( $bases{$index}->{size} / $bases{$index}->{indices} ));
+    output({color=>"cyan",kv=>1,indent=>2}, 'shards',  $bases{$index}->{shards});
+    output({color=>"cyan",kv=>1,indent=>2}, 'docs',    $bases{$index}->{docs});
+    output({color=>"cyan",kv=>1,indent=>2}, 'memory',  pretty_size( $bases{$index}->{memory}));
     $displayed++;
     last if $opt->limit > 0 && $displayed >= $opt->limit;
 }
 output({color=>'white',clear=>1},"Total for scanned data");
-    output({color=>"cyan",kv=>1,indent=>1}, 'size',   pretty_size( $overview{size}));
-    output({color=>"cyan",kv=>1,indent=>1}, 'shards', $overview{shards});
-    output({color=>"cyan",kv=>1,indent=>1}, 'docs',   $overview{docs});
-    output({color=>"cyan",kv=>1,indent=>1}, 'memory', pretty_size( $overview{memory}));
+    output({color=>"cyan",kv=>1,indent=>1}, 'size',    pretty_size( $overview{size}));
+    output({color=>"cyan",kv=>1,indent=>1}, 'indices', $overview{indices});
+    output({color=>"cyan",kv=>1,indent=>1}, 'shards',  $overview{shards});
+    output({color=>"cyan",kv=>1,indent=>1}, 'docs',    $overview{docs});
+    output({color=>"cyan",kv=>1,indent=>1}, 'memory',  pretty_size( $overview{memory}));
 
 
 exit (0);

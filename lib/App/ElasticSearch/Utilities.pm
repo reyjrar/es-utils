@@ -1222,7 +1222,7 @@ B<MONITORING>:
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
     scripts/es-status.pl - Command line utility for ES Metrics
-    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
     scripts/es-nodes.pl - View node information
 
 B<MAINTENANCE>:
@@ -1235,7 +1235,7 @@ B<MANAGEMENT>:
 
     scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
-    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
 
 B<DEPRECATED>:
 
