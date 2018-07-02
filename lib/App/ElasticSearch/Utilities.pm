@@ -772,12 +772,12 @@ sub es_indices {
 
     # Simplest case, single index
     if( defined $DEF{INDEX} ) {
-        push @indices, $DEF{INDEX} if es_index_valid( $DEF{INDEX} );
+        push @indices, $DEF{INDEX};
     }
     # Next simplest case, open indexes
     elsif( !exists $args{_all} && $args{check_state} && $args{state} eq 'open' ) {
         # Use _stats because it's break neck fast
-        if( my $res = es_request('_stats/docs') ) {
+        if( my $res = es_request($wildcard . '/_stats/docs') ) {
             foreach my $idx ( keys %{ $res->{indices} } ) {
                 $idx{$idx} = 'open';
             }
