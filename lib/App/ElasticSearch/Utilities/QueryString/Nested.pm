@@ -44,6 +44,7 @@ sub handle_token {
     my ($path,$remainder) = split /:"?/, shift @subtokens, 2;
 
     return if exists $Reserved{$path};
+    return unless $remainder;
 
     # If we're nested theres a second colon in there somewhere
     if( $remainder =~ /^[\w\.]+:.+/ ) {

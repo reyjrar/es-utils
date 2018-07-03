@@ -32,6 +32,8 @@ sub handle_token {
     debug(sprintf "%s - evaluating token '%s'", $self->name, $token);
     my ($k,$v) = split /:/, $token, 2;
 
+    return unless $v;
+
     my %sides = ();
     my %range = ();
     foreach my $range (split /\,/, $v) {
