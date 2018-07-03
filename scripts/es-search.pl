@@ -31,6 +31,7 @@ GetOptions(\%OPT, qw(
     desc
     exists=s
     fields
+    filter
     format=s
     help|h
     manual|m
@@ -50,9 +51,10 @@ GetOptions(\%OPT, qw(
 ));
 
 # Search string is the rest of the argument string
-my $qs = App::ElasticSearch::Utilities::QueryString->new();
+my $context = $OPT{filter} ? 'filter' : 'must';
+my $qs = App::ElasticSearch::Utilities::QueryString->new( $OPT{filter} ? (qw(context filter)) : () );
 my $q = exists $OPT{'match-all'} && $OPT{'match-all'}
-            ? App::ElasticSearch::Utilities::Query->new(must => { match_all => {} })
+            ? App::ElasticSearch::Utilities::Query->new($context => { match_all => {} })
             : $qs->expand_query_string(@ARGV);
 
 $q->set_timeout('10s');
@@ -62,7 +64,7 @@ if( exists $OPT{prefix} ){
     foreach my $prefix (@{ $OPT{prefix} }) {
         my ($f,$v) = split /:/, $prefix, 2;
         next unless $f && $v;
-        $q->add_bool( must => { prefix => { $f => $v } } );
+        $q->add_bool( $context => { prefix => { $f => $v } } );
     }
 }
 
@@ -145,7 +147,7 @@ pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Please specif
 # Process extra parameters
 if( exists $OPT{exists} ) {
     foreach my $field (split /[,:]/, $OPT{exists}) {
-        $q->add_bool( must => { exists => { field => $field } } );
+        $q->add_bool( $context => { exists => { field => $field } } );
     }
 }
 if( exists $OPT{missing} ) {
@@ -261,7 +263,7 @@ AGES: while( !$DONE && @AGES ) {
     $last_hit_ts ||= strftime('%Y-%m-%dT%H:%M:%S%z',localtime($start-30));
 
     # If we're tailing, bump the @query with a timestamp range
-    $q->stash( must => {range => { $CONFIG{timestamp} => {gte => $last_hit_ts}}} ) if $OPT{tail};
+    $q->stash( filter => {range => { $CONFIG{timestamp} => {gte => $last_hit_ts}}} ) if $OPT{tail};
 
     # Header
     if( !exists $AGES_SEEN{$age} ) {
@@ -587,6 +589,7 @@ Options:
 
     --help              print help
     --manual            print full manual
+    --filter            Force filter context for all query elements
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --tail              Continue the query until CTRL+C is sent
     --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
@@ -624,6 +627,10 @@ Print this message and exit
 =item B<manual>
 
 Print detailed help with examples
+
+=item B<filter>
+
+Forces filter context for all query parameters, the default is using query context.
 
 =item B<show>
 
