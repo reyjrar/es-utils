@@ -12,7 +12,7 @@ use CLI::Helpers qw(:output);
 use Module::Pluggable::Object;
 use Moo;
 use Ref::Util qw(is_arrayref);
-use Types::Standard qw(ArrayRef);
+use Types::Standard qw(ArrayRef Enum);
 
 use namespace::autoclean;
 
@@ -25,6 +25,20 @@ command-line into complex Elasticsearch queries.
 
 my %LEADING  = map { $_ => 1 } qw( AND OR );
 my %TRAILING = map { $_ => 1 } qw( AND OR NOT );
+
+=attr context
+
+Defaults to 'query', but can also be set to 'filter' so the elements will be
+added to the 'must' or 'filter' parameter.
+
+=cut
+
+has 'context' => (
+    is      => 'rw',
+    isa     => Enum[qw(query filter)],
+    lazy    => 1,
+    default => sub { 'query' },
+);
 
 =attr search_path
 
@@ -89,6 +103,7 @@ sub expand_query_string {
     debug({color=>"magenta"}, "Processed parts");
     debug_var({color=>"magenta"},\@processed);
 
+    my $context = $self->context eq 'query' ? 'must' : 'filter';
     my $invert=0;
     my @dangling=();
     my @qs=();
@@ -101,7 +116,7 @@ sub expand_query_string {
             @dangling=(),
         }
         elsif( exists $part->{condition} ) {
-            my $target = $invert ? 'must_not' : 'must';
+            my $target = $invert ? 'must_not' : $context;
             $query->add_bool( $target => $part->{condition} );
             @dangling=();
         }
@@ -118,7 +133,7 @@ sub expand_query_string {
         shift @qs while @qs && exists $LEADING{$qs[0]};
     }
     # $query->add_aggregation();
-    $query->add_bool(must => { query_string => { query => join(' ', @qs) } }) if @qs;
+    $query->add_bool($context => { query_string => { query => join(' ', @qs) } }) if @qs;
 
     return $query;
 }
