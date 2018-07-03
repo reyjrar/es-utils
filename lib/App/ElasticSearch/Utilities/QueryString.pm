@@ -208,6 +208,8 @@ work to manipulate the query string and provide richer, more complete syntax for
 
 =from_other App::ElasticSearch::Utilities::QueryString::IP / SYNOPSIS
 
+=from_other App::ElasticSearch::Utilities::QueryString::Ranges / SYNOPSIS
+
 =from_other App::ElasticSearch::Utilities::QueryString::Underscored / SYNOPSIS
 
 =from_other App::ElasticSearch::Utilities::QueryString::FileExpansion / SYNOPSIS

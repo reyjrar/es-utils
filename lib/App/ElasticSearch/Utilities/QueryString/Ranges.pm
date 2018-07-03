@@ -84,12 +84,6 @@ Will translate to:
 
 =over 2
 
-=item B<gt> via E<gt>
-
-=item B<gte> via E<gt>=
-
-=item B<lt> via E<lt>
-
-=item B<lte> via E<lt>=
+B<gt> via E<gt>, B<gte> via E<gt>=, B<lt> via E<lt>, B<lte> via E<lt>=
 
 =back

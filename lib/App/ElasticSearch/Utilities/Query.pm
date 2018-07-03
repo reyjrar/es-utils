@@ -443,7 +443,7 @@ except one piece that shifts.  Imagine:
     $query->add_bool(must => { range => { attack_score => { gt => 10 }} });
 
     while( 1 ) {
-        $query->stash( must => { range => { timestamp => { gt => now() } } } );
+        $query->stash( must => { range => { timestamp => { gt => time() } } } );
         my @results = make_es_request( $query->request_body, $query->uri_params );
 
         # Long processing
