@@ -14,12 +14,12 @@ use Pod::Usage;
 #------------------------------------------------------------------------#
 # Argument Collection
 my ($opt,$usage) = describe_options('%c %o',
-    ['sort:s',  "sort by name or size, default: name",
+    ['sort=s',  "sort by name or size, default: name",
             { default => 'name', callbacks => { 'must be name or size' => sub { $_[0] =~ /^name|size$/ } } }
     ],
     ['asc',     "Sort ascending  (default by name)"],
     ['desc',    "Sort descending (default by size)"],
-    ['limit:i', "Limit to showing only this many, ie top N", { default => 0 }],
+    ['limit=i', "Limit to showing only this many, ie top N", { default => 0 }],
     ['raw',     "Display numeric data without rollups"],
     [],
     ['clear-cache', "Clear the _cat/indices cache"],

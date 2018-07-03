@@ -13,10 +13,10 @@ use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 # Option Parsing
 my %OPT=();
 GetOptions(\%OPT,
-    'nodes|n:i',
+    'nodes|n=i',
     'check-indices|c',
     'shard-state',
-    'max-segments:i',
+    'max-segments=i',
     'help|h',
     'manual|m',
 );

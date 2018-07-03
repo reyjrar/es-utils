@@ -27,26 +27,26 @@ GetOptions(\%OPT, qw(
     all
     asc
     bases
-    by:s
+    by=s
     desc
-    exists:s
+    exists=s
     fields
-    format:s
+    format=s
     help|h
     manual|m
     match-all
-    missing:s
+    missing=s
     no-header
-    prefix:s@
+    prefix=s@
     pretty
-    show:s@
-    size|n:i
-    sort:s
+    show=s@
+    size|n=i
+    sort=s
     tail
-    timestamp:s
-    top:s
-    interval:s
-    with:s@
+    timestamp=s
+    top=s
+    interval=s
+    with=s@
 ));
 
 # Search string is the rest of the argument string

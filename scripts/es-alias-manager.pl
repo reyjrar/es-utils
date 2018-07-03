@@ -16,8 +16,8 @@ use App::ElasticSearch::Utilities qw(:default);
 my %opt;
 GetOptions(\%opt,
     'all',
-    'config:s',
-    'skip:s',
+    'config=s',
+    'skip=s',
     # Basic options
     'help|h',
     'manual|m',

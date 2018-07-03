@@ -13,7 +13,7 @@ use Pod::Usage;
 # Argument Parsing
 my %OPT;
 GetOptions(\%OPT,
-    'attributes|attr:s',
+    'attributes|attr=s',
     'help|h',
     'manual|m',
 );

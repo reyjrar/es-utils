@@ -22,13 +22,13 @@ use Time::HiRes qw(time);
 my %OPT;
 GetOptions(\%OPT, qw(
     from=s
-    to:s
+    to=s
     source=s
-    destination:s
+    destination=s
     append|A
-    block:i
-    mapping:s
-    settings:s
+    block=i
+    mapping=s
+    settings=s
     help|h
     manual|m
 ));
