@@ -23,7 +23,7 @@ command-line into complex Elasticsearch queries.
 
 =cut
 
-my %LEADING  = map { $_ => 1 } qw( AND OR );
+my %JOINING  = map { $_ => 1 } qw( AND OR );
 my %TRAILING = map { $_ => 1 } qw( AND OR NOT );
 
 =attr context
@@ -60,6 +60,20 @@ has search_path => (
     is      => 'rw',
     isa     => ArrayRef,
     default => sub {[]},
+);
+
+=attr default_join
+
+When fixing up the query string, if two tokens are found next to eachother
+missing a joining token, join using this token.  Can be either C<AND> or C<OR>,
+and defaults to C<AND>.
+
+=cut
+
+has default_join => (
+    is      => 'rw',
+    isa     => Enum[qw(AND OR)],
+    default => sub { 'AND' },
 );
 
 =attr plugins
@@ -130,7 +144,21 @@ sub expand_query_string {
     }
     if(@qs)  {
         pop   @qs while @qs && exists $TRAILING{$qs[-1]};
-        shift @qs while @qs && exists $LEADING{$qs[0]};
+        shift @qs while @qs && exists $JOINING{$qs[0]};
+
+        # Ensure there's a joining token, otherwise use our default
+        if( @qs > 1 ) {
+            my $prev_query = 0;
+            my @joined = ();
+            foreach my $part ( @qs ) {
+                if( $prev_query ) {
+                    push @joined, $self->default_join() unless exists $JOINING{$part};
+                }
+                push @joined, $part;
+                $prev_query = exists $JOINING{$part} ? 0 : 1;
+            }
+            @qs = @joined;
+        }
     }
     # $query->add_aggregation();
     $query->add_bool($context => { query_string => { query => join(' ', @qs) } }) if @qs;
