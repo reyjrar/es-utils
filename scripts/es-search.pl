@@ -695,6 +695,11 @@ This option is not available when using --tail.
 
     --top src_ip
 
+You can override the default of the C<terms> bucket aggregation by prefixing
+the parameter with the required buck aggregation, i.e.:
+
+    --top significant_terms:src_ip
+
 =item B<by>
 
 Perform a sub aggregation on the top terms aggregation and order by the result of this aggregation.
@@ -770,6 +775,19 @@ Produces:
 
 You may sub aggregate using any L<bucket agggregation|https://www.elastic.co/guide/en/elasticsearch/reference/master/search-aggregations-bucket.html>
 as long as the aggregation provides a B<key> element.  Additionally, doc_count, score, and bg_count will be reported in the output.
+
+Other examples:
+
+    --with significant_terms:crime
+    --with cardinality:accts
+    --with min:out_bytes
+    --with max:out_bytes
+    --with avg:out_bytes
+    --with sum:out_bytes
+    --with stats:out_bytes
+    --with extended_stats:out_bytes
+    --with percentiles:out_bytes
+    --with percentiles:out_bytes:50,95,99
 
 =item B<interval>
 

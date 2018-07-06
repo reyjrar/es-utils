@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 5.6
+version 5.7
 
 # SYNOPSIS
 
@@ -14,6 +14,7 @@ Options:
 
     --help              print help
     --manual            print full manual
+    --filter            Force filter context for all query elements
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --tail              Continue the query until CTRL+C is sent
     --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
@@ -110,6 +111,10 @@ es-search.pl - Search a logging cluster for information
 
     Print detailed help with examples
 
+- **filter**
+
+    Forces filter context for all query parameters, the default is using query context.
+
 - **show**
 
     Comma separated list of fields to display in the dump of the data
@@ -146,6 +151,11 @@ es-search.pl - Search a logging cluster for information
     This option is not available when using --tail.
 
         --top src_ip
+
+    You can override the default of the `terms` bucket aggregation by prefixing
+    the parameter with the required buck aggregation, i.e.:
+
+        --top significant_terms:src_ip
 
 - **by**
 
@@ -221,6 +231,19 @@ es-search.pl - Search a logging cluster for information
 
     You may sub aggregate using any [bucket agggregation](https://www.elastic.co/guide/en/elasticsearch/reference/master/search-aggregations-bucket.html)
     as long as the aggregation provides a **key** element.  Additionally, doc\_count, score, and bg\_count will be reported in the output.
+
+    Other examples:
+
+        --with significant_terms:crime
+        --with cardinality:accts
+        --with min:out_bytes
+        --with max:out_bytes
+        --with avg:out_bytes
+        --with sum:out_bytes
+        --with stats:out_bytes
+        --with extended_stats:out_bytes
+        --with percentiles:out_bytes
+        --with percentiles:out_bytes:50,95,99
 
 - **interval**
 
@@ -315,6 +338,31 @@ The following barewords are transformed:
 If a field is an IP address uses CIDR Notation, it's expanded to a range query.
 
     src_ip:10.0/8 => src_ip:[10.0.0.0 TO 10.255.255.255]
+
+## App::ElasticSearch::Utilities::Range
+
+This plugin translates some special comparison operators so you don't need to
+remember them anymore.
+
+Example:
+
+    price:<100
+
+Will translate into a:
+
+    { range: { price: { lt: 100 } } }
+
+And:
+
+    price:>50,<100
+
+Will translate to:
+
+    { range: { price: { gt: 50, lt: 100 } } }
+
+### Supported Operators
+
+**gt** via >, **gte** via >=, **lt** via <, **lte** via <=
 
 ## App::ElasticSearch::Utilities::Underscored
 

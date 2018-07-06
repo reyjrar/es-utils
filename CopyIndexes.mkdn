@@ -4,7 +4,7 @@ es-copy-index.pl - Copy an index from one cluster to another
 
 # VERSION
 
-version 5.6
+version 5.7
 
 # SYNOPSIS
 
@@ -183,6 +183,31 @@ The following barewords are transformed:
 If a field is an IP address uses CIDR Notation, it's expanded to a range query.
 
     src_ip:10.0/8 => src_ip:[10.0.0.0 TO 10.255.255.255]
+
+## App::ElasticSearch::Utilities::Range
+
+This plugin translates some special comparison operators so you don't need to
+remember them anymore.
+
+Example:
+
+    price:<100
+
+Will translate into a:
+
+    { range: { price: { lt: 100 } } }
+
+And:
+
+    price:>50,<100
+
+Will translate to:
+
+    { range: { price: { gt: 50, lt: 100 } } }
+
+### Supported Operators
+
+**gt** via >, **gte** via >=, **lt** via <, **lte** via <=
 
 ## App::ElasticSearch::Utilities::Underscored
 

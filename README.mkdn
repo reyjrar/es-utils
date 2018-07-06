@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 5.6
+version 5.7
 
 # SYNOPSIS
 
@@ -23,7 +23,7 @@ Included are:
     scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
     scripts/es-status.pl - Command line utility for ES Metrics
-    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
     scripts/es-nodes.pl - View node information
 
 **MAINTENANCE**:
@@ -36,7 +36,7 @@ Included are:
 
     scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
-    scripts/es-storage-data.pl - View how shards/data is aligned on your cluster
+    scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
 
 **DEPRECATED**:
 
@@ -91,6 +91,9 @@ First hash ref contains options, including:
     index               Index name
     type                Index type
     method              Default is GET
+
+If the request is not successful, this function will throw a fatal exception.
+If you'd like to proceed you need to catch that error.
 
 ## es\_nodes
 
