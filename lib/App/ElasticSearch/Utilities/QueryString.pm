@@ -155,7 +155,8 @@ sub expand_query_string {
                     push @joined, $self->default_join() unless exists $JOINING{$part};
                 }
                 push @joined, $part;
-                $prev_query = exists $JOINING{$part} ? 0 : 1;
+                # Here we include AND, NOT, OR
+                $prev_query = exists $TRAILING{$part} ? 0 : 1;
             }
             @qs = @joined;
         }
