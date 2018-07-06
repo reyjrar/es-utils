@@ -187,18 +187,20 @@ if( exists $OPT{top} ) {
         foreach my $with ( @with )  {
             my @attrs = split /:/, $with;
             # Process Args from Right to Left
-            my $size  = $attrs[-1] =~ /^\d+$/ ? pop @attrs : 3;
+            my $pcts  = $attrs[-1] =~ /^\d{1,2}(?:\.\d+)?(?:,\d{1,2}(?:\.\d+)?)*$/ ? pop @attrs : '25,50,75,90,95,99';
+            my $size  = $pcts =~ /^\d+$/ ? $pcts : 3;
             my $field = exists $FIELDS{$attrs[-1]} ? pop @attrs : undef;
             my $type  = @attrs ? pop @attrs : 'terms';
             # Skip invalid elements
             next unless defined $field and defined $size and $size > 0;
 
-            my $id = exists $sub_agg{$field} ? "$field.$type" : $field;
+            my $id = "$type.$field";
 
             $sub_agg{$id} = {
                 $type => {
                     field => $field,
-                    $size > 0 ? (size  => $size) :(),
+                    $type =~ /terms/ ? (size  => $size) : (),
+                    $type eq 'percentiles' ? ( percents => [split /,/, $pcts] ) : (),
                 }
             };
         }
@@ -357,7 +359,7 @@ AGES: while( !$DONE && @AGES ) {
                                         my @elms = ();
                                         next unless exists $subagg->{key};
                                         push @elms, $subagg->{key};
-                                        foreach my $dk (qw(doc_count score bg_count)) {
+                                        foreach my $dk (qw(score doc_count bg_count)) {
                                             next unless exists $subagg->{$dk};
                                             my $v = delete $subagg->{$dk};
                                             push @elms, defined $v ? ($dk eq 'score' ? sprintf "%0.3f", $v : $v ) : '-';
@@ -365,6 +367,30 @@ AGES: while( !$DONE && @AGES ) {
                                         push @sub, \@elms;
                                     }
                                     $subaggs{$k} = \@sub if @sub;
+                                }
+                                # Simple Numeric Aggs
+                                elsif( $agg->{$k}{value} ) {
+                                    $subaggs{$k} = [ [ $agg->{$k}{value} ] ];
+                                }
+                                # Percentiles
+                                elsif( $agg->{$k}{values} ) {
+                                    my @pcts;
+                                    foreach my $pctl (sort { $a <=> $b } keys %{ $agg->{$k}{values} }) {
+                                        push @pcts, "p$pctl", $agg->{$k}{values}{$pctl};
+                                    }
+                                    $subaggs{$k} = [ \@pcts ];
+                                }
+                                # Statistics
+                                elsif( $agg->{$k}{avg} ) {
+                                    my @stats;
+                                    my %alias = qw( variance var std_deviation stdev );
+                                    foreach my $stat (qw(count min avg max sum variance std_deviation)) {
+                                        next unless exists $agg->{$k}{$stat};
+                                        my $v = $agg->{$k}{$stat} =~ /\./ ? sprintf "%0.3f", $agg->{$k}{$stat}
+                                                                          : $agg->{$k}{$stat};
+                                        push @stats, $alias{$stat} || $stat => $v;
+                                    }
+                                    $subaggs{$k} = [ \@stats ];
                                 }
                             }
                         }
