@@ -666,8 +666,21 @@ sub es_request {
 
     # Error handling
     if( !$resp->is_success ) {
-        die sprintf "es_request(%s/%s) failed[%d]: %s",
-                    $index, $options->{command}, $resp->code, $resp->message;
+        my $msg;
+        eval {
+            my @causes = ();
+            foreach my $cause ( @{ $resp->content->{error}{root_cause} } ) {
+                push @causes, $cause->{index} ? "$cause->{index}: $cause->{reason}" : $cause->{reason};
+            }
+            $msg = join("\n", map { "\t$_" } @causes);
+            1;
+        } or do {
+            # Default to the message, though it's usually unhelpful
+            $msg = $resp->{message};
+        };
+        die sprintf "es_request(%s/%s) failed[%d]:\n%s",
+                    $index, $options->{command}, $resp->code, $msg;
+
     } elsif( !defined $resp->content || ( !is_ref($resp->content) && !length $resp->content )) {
         output({color=>'yellow',stderr=>1},
             sprintf "es_request(%s/%s) empty response[%d]: %s",
