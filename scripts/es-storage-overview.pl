@@ -57,8 +57,8 @@ my %overview = (
 
 my %fields = qw(
     index index
-    pri   shards
-    rep   shards
+    pri   primary
+    rep   replica
     docs.count docs
     store.size size
     memory.total memory
@@ -111,7 +111,8 @@ foreach my $index (sort indices_by keys %bases) {
     output({color=>"cyan",kv=>1,indent=>2}, 'size',    pretty_size( $bases{$index}->{size}));
     output({color=>"cyan",kv=>1,indent=>2}, 'indices', $bases{$index}->{indices});
     output({color=>"cyan",kv=>1,indent=>2}, 'avgsize', pretty_size( $bases{$index}->{size} / $bases{$index}->{indices} ));
-    output({color=>"cyan",kv=>1,indent=>2}, 'shards',  $bases{$index}->{shards});
+    output({color=>"cyan",kv=>1,indent=>2}, 'primary', $bases{$index}->{primary});
+    output({color=>"cyan",kv=>1,indent=>2}, 'replica', $bases{$index}->{replica});
     output({color=>"cyan",kv=>1,indent=>2}, 'docs',    $bases{$index}->{docs});
     output({color=>"cyan",kv=>1,indent=>2}, 'memory',  pretty_size( $bases{$index}->{memory}));
     $displayed++;
@@ -120,7 +121,7 @@ foreach my $index (sort indices_by keys %bases) {
 output({color=>'white',clear=>1},"Total for scanned data");
     output({color=>"cyan",kv=>1,indent=>1}, 'size',    pretty_size( $overview{size}));
     output({color=>"cyan",kv=>1,indent=>1}, 'indices', $overview{indices});
-    output({color=>"cyan",kv=>1,indent=>1}, 'shards',  $overview{shards});
+    output({color=>"cyan",kv=>1,indent=>1}, 'shards',  $overview{primary} + $overview{replica});
     output({color=>"cyan",kv=>1,indent=>1}, 'docs',    $overview{docs});
     output({color=>"cyan",kv=>1,indent=>1}, 'memory',  pretty_size( $overview{memory}));
 
