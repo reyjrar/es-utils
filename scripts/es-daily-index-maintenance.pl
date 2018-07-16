@@ -100,18 +100,19 @@ my @indices = es_indices(
 # Loop through the indices and take appropriate actions;
 my @alias_changes=();
 foreach my $index (sort @indices) {
-    verbose({level=>2},"$index being evaluated");
-
     my $days_old = es_index_days_old( $index );
-    debug({color=>"cyan"}, "$index: index is $days_old days old");
+    verbose({color=>"cyan"}, sprintf "%s: index is %s days old",
+            $index, defined $days_old ? $days_old : '(unknown)'
+    );
 
-    if( $days_old < 1 ) {
-        verbose("$index for today, skipping.");
+    # If we can't calculate how old it is, skip it
+    if( !$days_old || $days_old < 1 ) {
+        verbose({color=>'magenta'},"$index for today, skipping.");
         next;
     }
 
     # Delete the Index if it's too old
-    if( $CFG{delete} && $CFG{'delete-days'} < $days_old ) {
+    if( $CFG{delete} && $CFG{'delete-days'} <= $days_old ) {
         output({color=>"red"}, "$index will be deleted.");
         my $rc = es_delete_index($index);
         next;
@@ -177,7 +178,7 @@ foreach my $index (sort @indices) {
     }
 
     # Close the index?
-    if( $CFG{close} && $CFG{'close-days'} < $days_old ) {
+    if( $CFG{close} && $CFG{'close-days'} <= $days_old ) {
         my $status = es_request('_stats/store',{index=>$index});
         if( defined $status ) {
             if( $status->{_shards} && $status->{_shards}{total} && $status->{_shards}{total} > 0 ) {
