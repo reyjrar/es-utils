@@ -86,9 +86,8 @@ if( $OPT{bases} ) {
 my %CONFIG = (
     size      => (exists $OPT{size}      && $OPT{size} > 0)         ? int($OPT{size})         : 20,
     format    => (exists $OPT{format}    && length $OPT{format})    ? lc $OPT{format}         : 'yaml',
-    timestamp => (exists $OPT{timestamp} && length $OPT{timestamp}) ? $OPT{timestamp}         :
-                 defined es_globals('timestamp')                    ? es_globals('timestamp') : '@timestamp',
     summary   => $OPT{top} && ( !$OPT{by} && !$OPT{with} && !$OPT{interval} ),
+    $OPT{timestamp} ? ( timestamp => $OPT{timestamp} ) : (),
 );
 #------------------------------------------------------------------------#
 # Handle Indices
@@ -98,12 +97,19 @@ my %by_age = ();
 my %indices = map { $_ => (es_index_days_old($_) || 0) } es_indices();
 die "# Failed to retrieve any indices using your paramaters." unless keys %indices;
 my %FIELDS = ();
+my $TimeStampCheck=0;
 foreach my $index (sort by_index_age keys %indices) {
     my $age = $indices{$index};
     $by_age{$age} ||= [];
     push @{ $by_age{$age} }, $index;
     @FIELDS{es_index_fields($index)} = ();
+    # Lookup the Index in our local YAML
+    if( !$TimeStampCheck ) {
+        $TimeStampCheck++;
+        $CONFIG{timestamp} ||= es_local_index_meta(timestamp => $index);
+    }
 }
+$CONFIG{timestamp} ||= es_globals('timestamp') || '@timestamp';
 debug_var(\%by_age);
 my @AGES = sort { $ORDER eq 'asc' ? $b <=> $a : $a <=> $b } keys %by_age;
 debug({color=>"cyan"}, "Fields discovered.");
@@ -666,7 +672,7 @@ Comma separated list of fields to display in the dump of the data
 
 =item B<sort>
 
-Use this option to sort your documents on fields other than C<@timestamp>. Fields are given as a comma separated list:
+Use this option to sort your documents on fields other than the timestamp. Fields are given as a comma separated list:
 
     --sort field1,field2
 
@@ -854,6 +860,31 @@ is 'logstash' which will expand to 'logstash-YYYY.MM.DD'
 =item B<timestamp>
 
 The field in your documents that we'll treat as a "date" type in our queries.
+
+May also be specified in the C<~/.es-utils.yaml> file per index, or index base:
+
+    ---
+    host: es-readonly-01
+    port: 9200
+    meta:
+      bro:
+        timestamp: 'record_ts'
+      mayans-2012.12.21:
+        timestamp: 'end_of_the_world'
+
+Then running:
+
+    # timestamp is set to '@timestamp', the default
+    es-search.pl --base logstash --match-all
+
+    # timestamp is set to 'record_ts', from ~/.es-utils.yaml
+    es-search.pl --base bro --match-all
+
+    # timestamp is set to '@timestamp', the default
+    es-search.pl --base mayans --match-all
+
+    # timestamp is set to 'end_of_the_world', from ~/.es-utils.yaml
+    es-search.pl --index mayans-2012.12.21 --match-all
 
 =item B<size>
 

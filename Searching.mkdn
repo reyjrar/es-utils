@@ -123,7 +123,7 @@ es-search.pl - Search a logging cluster for information
 
 - **sort**
 
-    Use this option to sort your documents on fields other than `@timestamp`. Fields are given as a comma separated list:
+    Use this option to sort your documents on fields other than the timestamp. Fields are given as a comma separated list:
 
         --sort field1,field2
 
@@ -311,6 +311,31 @@ es-search.pl - Search a logging cluster for information
 
     The field in your documents that we'll treat as a "date" type in our queries.
 
+    May also be specified in the `~/.es-utils.yaml` file per index, or index base:
+
+        ---
+        host: es-readonly-01
+        port: 9200
+        meta:
+          bro:
+            timestamp: 'record_ts'
+          mayans-2012.12.21:
+            timestamp: 'end_of_the_world'
+
+    Then running:
+
+        # timestamp is set to '@timestamp', the default
+        es-search.pl --base logstash --match-all
+
+        # timestamp is set to 'timestamp', from ~/.es-utils.yaml
+        es-search.pl --base bro --match-all
+
+        # timestamp is set to '@timestamp', the default
+        es-search.pl --base mayans --match-all
+
+        # timestamp is set to 'end_of_the_wolrd', from ~/.es-utils.yaml
+        es-search.pl --index mayans-2012.12.21 --match-all
+
 - **size**
 
     The number of results to show, default is 20.
@@ -440,7 +465,7 @@ Helpful in building queries is the --bases and --fields options which lists the 
 
 # AUTHOR
 
-Brad Lhotsky <brad@divisionbyzero.net>
+Brad Lhotsky &lt;brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 

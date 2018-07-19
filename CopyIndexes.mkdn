@@ -275,7 +275,7 @@ an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch
 
 # AUTHOR
 
-Brad Lhotsky <brad@divisionbyzero.net>
+Brad Lhotsky &lt;brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 

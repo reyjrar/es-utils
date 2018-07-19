@@ -206,6 +206,33 @@ Returns a hashref
 
 Exposes Definitions grabbed by options parsing
 
+## es\_local\_index\_meta(key => 'base' || 'index')
+
+Fetch meta-data from the local config file, i.e. `~/.es-utils.yaml`.
+
+Format is:
+
+    ---
+    meta:
+      index_name:
+        key: value
+      index_basename:
+        key: value
+
+The most specific version is searched first, followed by the index stripped of
+it's date, and then on through all the bases discovered with
+`es_index_bases()`.
+
+This is used by the `es-search.pl` utility to do lookups of the **timestamp**
+field it needs to sort documents, i.e.:
+
+    ---
+    meta:
+      logstash:
+        timestamp: '@timestamp'
+      bro:
+        timestamp: 'timestamp'
+
 # ARGS
 
 From App::ElasticSearch::Utilities:
@@ -453,7 +480,7 @@ regular expressions.  Those patterns are:
 
 # AUTHOR
 
-Brad Lhotsky <brad@divisionbyzero.net>
+Brad Lhotsky &lt;brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
@@ -465,15 +492,15 @@ This is free software, licensed under:
 
 # CONTRIBUTORS
 
-- Alexey Shatlovsky <alexey.shatlovsky@booking.com>
-- Alexey Surikov <ksurent@gmail.com>
-- Daniel Ostermeier <daniel.ostermeier@gmail.com>
-- Jason Rojas <jason.rojas@mgo.com>
-- Kang-min Liu <gugod@gugod.org>
-- Lisa Hare <lhare@inview.co.uk>
+- Alexey Shatlovsky &lt;alexey.shatlovsky@booking.com>
+- Alexey Surikov &lt;ksurent@gmail.com>
+- Daniel Ostermeier &lt;daniel.ostermeier@gmail.com>
+- Jason Rojas &lt;jason.rojas@mgo.com>
+- Kang-min Liu &lt;gugod@gugod.org>
+- Lisa Hare &lt;lhare@inview.co.uk>
 - Markus Linnala <Markus.Linnala@cybercom.com>
 - Samit Badle <Samit.Badle@gmail.com>
-- Takumi Sakamoto <takumi.saka@gmail.com>
+- Takumi Sakamoto &lt;takumi.saka@gmail.com>
 
 # SUPPORT
 
