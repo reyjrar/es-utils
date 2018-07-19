@@ -819,7 +819,7 @@ sub es_indices {
 
             if ($args{older} && defined $DEF{DAYS}) {
                 my $days_old = es_index_days_old( $index );
-                if ($days_old < $DEF{DAYS}) {
+                if (defined $days_old && $days_old < $DEF{DAYS}) {
                     next;
                 }
             }
