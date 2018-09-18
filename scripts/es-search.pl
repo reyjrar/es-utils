@@ -27,6 +27,7 @@ GetOptions(\%OPT, qw(
     all
     asc
     bases
+    bg-filter=s
     by=s
     desc
     exists=s
@@ -215,6 +216,13 @@ if( exists $OPT{top} ) {
     my $field = shift @agg_fields;
     $agg_header = "count\t" . $field;
     $agg{$top_agg} = { field => $field };
+
+    if( $OPT{'bg-filter'} && $top_agg eq 'significant_terms' ) {
+        my $bgf = App::ElasticSearch::Utilities::QueryString->new();
+        my $bgq = $bgf->expand_query_string($OPT{'bg-filter'});
+        $agg{$top_agg}->{background_filter} = $bgq->query;
+
+    }
 
     if( exists $sub_agg{by} ) {
         $agg_header = "$OPT{by}\t" . $agg_header;
@@ -627,6 +635,7 @@ Options:
     --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
     --with              Perform a sub aggregation on the query
+    --bg-filter         Only used if --top aggregation is significant_terms, applies a background filter
     --match-all         Enables the ElasticSearch match_all operator
     --interval          When running aggregations, wrap the aggreation in a date_histogram with this interval
     --prefix            Takes "field:string" and enables the Lucene prefix query for that field
@@ -794,6 +803,13 @@ Other examples:
     --with extended_stats:out_bytes
     --with percentiles:out_bytes
     --with percentiles:out_bytes:50,95,99
+
+=item B<bg-filter>
+
+Only used if the C<--top> aggregation is C<significant_terms>.  Sets the
+background filter for the C<significant_terms> aggregation.
+
+    es-search.pl --top significant_terms:src_ip method:POST file:\/get\/sensitive_data --bg-filter method:POST
 
 =item B<interval>
 
