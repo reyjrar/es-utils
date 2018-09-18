@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 5.9
+version 6.1
 
 # SYNOPSIS
 
@@ -20,6 +20,7 @@ Options:
     --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
     --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
     --with              Perform a sub aggregation on the query
+    --bg-filter         Only used if --top aggregation is significant_terms, applies a background filter
     --match-all         Enables the ElasticSearch match_all operator
     --interval          When running aggregations, wrap the aggreation in a date_histogram with this interval
     --prefix            Takes "field:string" and enables the Lucene prefix query for that field
@@ -245,6 +246,13 @@ es-search.pl - Search a logging cluster for information
         --with percentiles:out_bytes
         --with percentiles:out_bytes:50,95,99
 
+- **bg-filter**
+
+    Only used if the `--top` aggregation is `significant_terms`.  Sets the
+    background filter for the `significant_terms` aggregation.
+
+        es-search.pl --top significant_terms:src_ip method:POST file:\/get\/sensitive_data --bg-filter method:POST
+
 - **interval**
 
     When performing aggregations, wrap those aggregations in a date\_histogram of this interval.  This
@@ -327,13 +335,13 @@ es-search.pl - Search a logging cluster for information
         # timestamp is set to '@timestamp', the default
         es-search.pl --base logstash --match-all
 
-        # timestamp is set to 'timestamp', from ~/.es-utils.yaml
+        # timestamp is set to 'record_ts', from ~/.es-utils.yaml
         es-search.pl --base bro --match-all
 
         # timestamp is set to '@timestamp', the default
         es-search.pl --base mayans --match-all
 
-        # timestamp is set to 'end_of_the_wolrd', from ~/.es-utils.yaml
+        # timestamp is set to 'end_of_the_world', from ~/.es-utils.yaml
         es-search.pl --index mayans-2012.12.21 --match-all
 
 - **size**
@@ -465,7 +473,7 @@ Helpful in building queries is the --bases and --fields options which lists the 
 
 # AUTHOR
 
-Brad Lhotsky &lt;brad@divisionbyzero.net>
+Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 

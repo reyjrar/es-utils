@@ -4,7 +4,7 @@ es-copy-index.pl - Copy an index from one cluster to another
 
 # VERSION
 
-version 5.9
+version 6.1
 
 # SYNOPSIS
 
@@ -275,7 +275,7 @@ an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch
 
 # AUTHOR
 
-Brad Lhotsky &lt;brad@divisionbyzero.net>
+Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 

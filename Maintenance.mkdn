@@ -4,7 +4,7 @@ es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
 
 # VERSION
 
-version 5.9
+version 6.1
 
 # SYNOPSIS
 
@@ -117,7 +117,7 @@ Use with cron:
 
 # AUTHOR
 
-Brad Lhotsky &lt;brad@divisionbyzero.net>
+Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
