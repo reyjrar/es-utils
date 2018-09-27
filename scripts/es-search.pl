@@ -37,6 +37,7 @@ GetOptions(\%OPT, qw(
     help|h
     manual|m
     match-all
+    max-batch-size=i
     missing=s
     no-header
     prefix=s@
@@ -88,6 +89,7 @@ my %CONFIG = (
     size      => (exists $OPT{size}      && $OPT{size} > 0)         ? int($OPT{size})         : 20,
     format    => (exists $OPT{format}    && length $OPT{format})    ? lc $OPT{format}         : 'yaml',
     summary   => $OPT{top} && ( !$OPT{by} && !$OPT{with} && !$OPT{interval} ),
+    'max-batch-size' => $OPT{'max-batch-size'} || 50,
     $OPT{timestamp} ? ( timestamp => $OPT{timestamp} ) : (),
 );
 #------------------------------------------------------------------------#
@@ -253,7 +255,7 @@ elsif(exists $OPT{tail}) {
     @AGES = ($AGES[-1]);
 }
 else {
-    $q->set_size( $CONFIG{size} > 50 ? 50 : $CONFIG{size} );
+    $q->set_size( $CONFIG{'max-batch-size'} );
 }
 
 my %displayed_indices = ();
