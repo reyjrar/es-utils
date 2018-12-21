@@ -4,7 +4,7 @@ es-daily-index-maintenance.pl - Run to prune old indexes and optimize existing
 
 # VERSION
 
-version 6.1
+version 6.2
 
 # SYNOPSIS
 
@@ -121,7 +121,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2012 by Brad Lhotsky.
+This software is Copyright (c) 2018 by Brad Lhotsky.
 
 This is free software, licensed under:
 

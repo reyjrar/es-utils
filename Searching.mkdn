@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 6.1
+version 6.2
 
 # SYNOPSIS
 
@@ -31,9 +31,11 @@ Options:
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
     --sort              List of fields for custom sorting
-    --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
+    --format            When --show isn't used, use this method for outputting the record, supported: json, jsonpretty, yaml
+                        json assumes --no-decorator as we assume you're piping through jq
     --pretty            Where possible, use JSON->pretty
-    --no-header         Do not show the header with field names in the query results
+    --no-decorators     Do not show the header with field names in the query results
+    --no-header         Same as above
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
     --timestamp         Field to use as the date object, default: @timestamp
@@ -477,7 +479,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2012 by Brad Lhotsky.
+This software is Copyright (c) 2018 by Brad Lhotsky.
 
 This is free software, licensed under:
 

@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 6.1
+version 6.2
 
 # SYNOPSIS
 
@@ -491,6 +491,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 - Kang-min Liu <gugod@gugod.org>
 - Lisa Hare <lhare@inview.co.uk>
 - Markus Linnala <Markus.Linnala@cybercom.com>
+- Mohammad S Anwar <mohammad.anwar@yahoo.com>
 - Samit Badle <Samit.Badle@gmail.com>
 - Takumi Sakamoto <takumi.saka@gmail.com>
 
@@ -530,7 +531,7 @@ This module's source code is available by visiting:
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2012 by Brad Lhotsky.
+This software is Copyright (c) 2018 by Brad Lhotsky.
 
 This is free software, licensed under:
 
