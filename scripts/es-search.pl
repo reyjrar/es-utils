@@ -91,6 +91,7 @@ my %CONFIG = (
     'max-batch-size' => $OPT{'max-batch-size'} || 50,
     $OPT{timestamp} ? ( timestamp => $OPT{timestamp} ) : (),
 );
+$OPT{'no-decorators'} = 1 if $CONFIG{format} eq 'json';
 #------------------------------------------------------------------------#
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
@@ -502,7 +503,7 @@ AGES: while( !$DONE && @AGES ) {
                 $output = join("\t",@cols);
             }
             else {
-                $output = $CONFIG{format} eq 'json' ? to_json($record,{allow_nonref=>1,canonical=>1,pretty=>1})
+                $output = $CONFIG{format} =~ /^json/? to_json($record,{allow_nonref=>1,canonical=>1,pretty=>$CONFIG{format} eq 'jsonpretty'})
                         : Dump $record;
             }
 
@@ -655,7 +656,8 @@ Options:
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
     --sort              List of fields for custom sorting
-    --format            When --show isn't used, use this method for outputting the record, supported: json, yaml
+    --format            When --show isn't used, use this method for outputting the record, supported: json, jsonpretty, yaml
+                        json assumes --no-decorator as we assume you're piping through jq
     --pretty            Where possible, use JSON->pretty
     --no-decorators     Do not show the header with field names in the query results
     --no-header         Same as above
