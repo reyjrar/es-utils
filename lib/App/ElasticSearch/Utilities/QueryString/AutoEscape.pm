@@ -8,12 +8,15 @@ use warnings;
 # VERSION
 
 use CLI::Helpers qw(:output);
+use Const::Fast;
 use namespace::autoclean;
 
 use Moo;
 with 'App::ElasticSearch::Utilities::QueryString::Plugin';
 
-sub _build_priority { 1; }
+const my $special_character_class => qr{[/() ]};
+
+sub _build_priority { 75; }
 
 =for Pod::Coverage handle_token
 
@@ -23,7 +26,13 @@ sub handle_token {
     my ($self,$token) = @_;
 
     debug(sprintf "%s - evaluating token '%s'", $self->name, $token);
-    return [{ query_string => $token =~ s{([/ ()])}{\\$1}gr}];
+    my $escaped = $token =~ s/($special_character_class)/\\$1/gr;
+
+    # No escaped characters, skip it
+    return if $escaped eq $token;
+
+    # Modify the token
+    return { query_string => $escaped };
 }
 
 # Return True;
