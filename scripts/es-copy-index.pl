@@ -15,6 +15,7 @@ use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always);
 use Hash::Merge::Simple qw(clone_merge);
 use JSON::MaybeXS;
 use Pod::Usage;
+use Ref::Util qw(is_hashref);
 use Time::HiRes qw(time);
 
 #------------------------------------------------------------------------#
@@ -128,7 +129,7 @@ unless( exists $OPT{append} ) {
         },
         {
             settings => $to_settings,
-            mappings => $mappings,
+            $mappings ? ( mappings => $mappings ) : (),
         }
     );
 

@@ -37,9 +37,11 @@ sub content {
         foreach my $entry (@{ $body }) {
             push @body, ref $entry ? encode_json($entry) : $entry;
         }
-        $body = join("\n", @body);
+        $body = join '', map { "$_\n" } @body;
+        $self->header('Content-Type' => 'application/x-ndjson');
     }
     elsif( is_hashref($body) ) {
+        $self->header('Content-Type' => 'application/json');
         $body = encode_json($body);
     }
     elsif( is_ref($body) ) {
