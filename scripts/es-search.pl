@@ -515,12 +515,15 @@ AGES: while( !$DONE && @AGES ) {
 
         # Scroll forward
         $start = time;
-        $result = es_request('_search/scroll', {
-            uri_param => {
-                scroll    => $q->scroll,
+        $result = es_request('_search/scroll',
+            {
+                method => 'POST',
             },
-            body => $result->{_scroll_id},
-        });
+            {
+                scroll => $q->scroll,
+                scroll_id => $result->{_scroll_id},
+            }
+        );
         $duration += time - $start;
         last unless $result->{hits} && $result->{hits}{hits} && @{ $result->{hits}{hits} } > 0
     }
