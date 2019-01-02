@@ -233,6 +233,8 @@ words to prevent syntax errors.
 The search string is pre-analyzed before being sent to ElasticSearch.  The following plugins
 work to manipulate the query string and provide richer, more complete syntax for CLI applications.
 
+=from_other App::ElasticSearch::Utilities::QueryString::AutoEscape / SYNOPSIS
+
 =from_other App::ElasticSearch::Utilities::QueryString::BareWords / SYNOPSIS
 
 =from_other App::ElasticSearch::Utilities::QueryString::IP / SYNOPSIS
@@ -242,4 +244,6 @@ work to manipulate the query string and provide richer, more complete syntax for
 =from_other App::ElasticSearch::Utilities::QueryString::Underscored / SYNOPSIS
 
 =from_other App::ElasticSearch::Utilities::QueryString::FileExpansion / SYNOPSIS
+
+=from_other App::ElasticSearch::Utilities::QueryString::Nested / SYNOPSIS
 
