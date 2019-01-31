@@ -71,7 +71,7 @@ $q->set_size( $INDEX{block} );
 # Connect to ElasticSearch
 my %ES = ();
 foreach my $dir (qw(from to)) {
-    $ES{$dir} = es_connect( [ "$HOST{$dir}:9200" ] );
+    $ES{$dir} = es_connect( $HOST{$dir} );
 }
 
 die "Invalid index: $INDEX{from}" unless $ES{from}->exists( index => $INDEX{from} );
@@ -122,7 +122,7 @@ unless( exists $OPT{append} ) {
         $mappings = $res->{$INDEX{from}}{mappings};
     }
 
-    $res = es_request('/',
+    $res = es_request($ES{to}, '/',
         {
             method => 'PUT',
             index => $INDEX{to},
@@ -147,6 +147,7 @@ else {
     ) if @ignored;
 } # End Mappings/Settings for Non-existant index.
 
+debug_var($q->request_body);
 $res = es_request($ES{from}, '_search',
     # Search Parameters
     {
@@ -157,7 +158,6 @@ $res = es_request($ES{from}, '_search',
     # Search Body
     $q->request_body,
 );
-debug_var($q->request_body);
 debug_var($res);
 
 while( $res && @{ $res->{hits}{hits} }) {
@@ -176,6 +176,7 @@ while( $res && @{ $res->{hits}{hits} }) {
     my $max_retries = 3;
     my $success = 0;
     while ($max_retries--) {
+        debug("Attempting bulk load of $batch documents");
         my ($s2, $r2) = $ES{to}->bulk(
             index => $INDEX{to},
             body => $body
@@ -191,7 +192,7 @@ while( $res && @{ $res->{hits}{hits} }) {
         unless $success;
     my $took = time - $start;
     show_counts( scalar @{$res->{hits}{hits}} );
-    $res = es_request('_search/scroll', {
+    $res = es_request($ES{from}, '_search/scroll', {
         uri_param => {
             scroll_id => $res->{_scroll_id},
             scroll    => '1m',
