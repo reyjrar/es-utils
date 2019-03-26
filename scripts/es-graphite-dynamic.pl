@@ -124,7 +124,28 @@ sub cluster_health {
             "cluster.shards.unassigned $result->{unassigned_shards}",
             ;
     }
+    push @stats, index_blocks();
     return @stats;
+}
+#------------------------------------------------------------------------#
+# Index Blocks
+sub index_blocks {
+    my $result = es_request('_settings/index.blocks.*', { index => '_all', uri_param => { flat_settings => 'true' } });
+
+    my %collected=();
+    foreach my $idx ( keys %{ $result } ) {
+        if( $result->{$idx}{settings} ) {
+            foreach my $block ( keys %{ $result->{$idx}{settings} } ) {
+                my $value = $result->{$idx}{settings}{$block};
+                if( lc $value eq 'true') {
+                    $collected{$block} ||= 0;
+                    $collected{$block}++;
+                }
+            }
+        }
+    }
+
+    return map { "cluster.$_ $collected{$_}" } sort keys %collected;
 }
 #------------------------------------------------------------------------#
 # Parse Statistics Dynamically
