@@ -4,8 +4,9 @@
 use strict;
 use warnings;
 
-use App::ElasticSearch::Utilities qw(es_request es_node_stats es_index_stats);
+use App::ElasticSearch::Utilities qw(es_request es_node_stats es_index_stats es_index_strip_date);
 use CLI::Helpers qw(:all);
+use Hash::Flatten qw(flatten);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use IO::Socket::INET;
 use Pod::Usage;
@@ -77,6 +78,8 @@ if( !$stats ) {
     exit 1;
 }
 push @metrics, @{ parse_nodes_stats($stats) };
+# Fetch Local Shard Data
+push @metrics, local_shard_data();
 
 # Collect individual indexes names and their own statistics
 if( exists $cfg{'with-indices'} ) {
@@ -130,13 +133,14 @@ sub cluster_health {
 #------------------------------------------------------------------------#
 # Index Blocks
 sub index_blocks {
-    my $result = es_request('_settings/index.blocks.*', { index => '_all', uri_param => { flat_settings => 'true' } });
+    my $result = es_request('_settings/index.blocks.*', { index => '_all' });
 
     my %collected=();
     foreach my $idx ( keys %{ $result } ) {
         if( $result->{$idx}{settings} ) {
-            foreach my $block ( keys %{ $result->{$idx}{settings} } ) {
-                my $value = $result->{$idx}{settings}{$block};
+            my $settings = flatten( $result->{$idx}{settings} );
+            foreach my $block ( keys %{ $settings } ) {
+                my $value = $settings->{$block};
                 if( lc $value eq 'true') {
                     $collected{$block} ||= 0;
                     $collected{$block}++;
@@ -146,6 +150,76 @@ sub index_blocks {
     }
 
     return map { "cluster.$_ $collected{$_}" } sort keys %collected;
+}
+#------------------------------------------------------------------------#
+# Local Shard Data
+sub local_shard_data {
+    # Retrieve our local node id
+    my $result = es_request('_nodes/_local');
+    return unless $result->{nodes};
+
+    my ($id) = keys %{ $result->{nodes} };
+
+    return unless $id;
+
+    my $shardres = es_request('_cat/shards',
+        {
+            uri_param => {
+                local  => 'true',
+                format => 'json',
+                bytes  => 'b',
+                h => join(',', qw( index prirep docs store id state )),
+            }
+        }
+    );
+
+    my %results;
+    foreach my $shard ( @{ $shardres } ) {
+        # Skip unless this shard is allocated to this shard
+        next unless $shard->{id} eq $id;
+
+        # Skip "Special" Indexes
+        next if $shard->{index} =~ /^\./;
+
+        # Get Metadata
+        my $index = es_index_strip_date( $shard->{index} );
+        next unless $index;
+
+        $index =~ s/\./_/g;
+
+        my $type  = $shard->{prirep} eq 'p' ? 'primary' : 'replica';
+
+        # Initialize
+        $results{$index} ||=  { map { $_ => 0 } qw( docs bytes primary replica ) };
+        $results{$index}->{state} ||= {};
+        $results{$index}->{state}{$shard->{state}} ||= 0;
+        $results{$index}->{state}{$shard->{state}}++;
+
+        # Add it up, Add it up
+        $results{$index}->{docs}  += $shard->{docs};
+        $results{$index}->{bytes} += $shard->{store};
+        $results{$index}->{$type}++;
+    }
+
+    my @results;
+    foreach my $idx (sort keys %results) {
+        foreach my $k ( sort keys %{ $results{$idx} } ) {
+            # Skip the complex
+            next if ref $results{$idx}->{$k};
+            push @results,
+                sprintf "node.indices.%s.%s %d",
+                    $idx, $k, $results{$idx}->{$k};
+        }
+        my $states = $results{$idx}->{state} || {};
+
+        foreach my $k ( sort keys %{ $states } ) {
+            push @results,
+                sprintf "node.indices.%s.state.%s %d",
+                    $idx, $k, $states->{$k};
+        }
+    }
+    return @results;
+
 }
 #------------------------------------------------------------------------#
 # Parse Statistics Dynamically

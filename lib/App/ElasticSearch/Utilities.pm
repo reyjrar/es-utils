@@ -1170,8 +1170,7 @@ sub es_index_stats {
     my ($index) = @_;
 
     return es_request('_stats', {
-        index     => $index,
-        uri_param => { all => 'true' },
+        index     => $index
     });
 }
 
