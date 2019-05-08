@@ -13,7 +13,7 @@ use namespace::autoclean;
 use Moo;
 with 'App::ElasticSearch::Utilities::QueryString::Plugin';
 
-sub _build_priority { 75; }
+sub _build_priority { 5; }
 
 =for Pod::Coverage handle_token
 

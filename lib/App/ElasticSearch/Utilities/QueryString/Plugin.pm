@@ -11,7 +11,6 @@ use Moo::Role;
 use Ref::Util qw(is_arrayref is_hashref);
 use Types::Standard qw( Str Int );
 
-
 =attr name
 
 Name of the plugin, used in debug reporting.
