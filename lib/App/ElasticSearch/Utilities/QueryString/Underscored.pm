@@ -45,7 +45,7 @@ __END__
 
 =head1 SYNOPSIS
 
-=head2 App::ElasticSearch::Utilities::Underscored
+=head2 App::ElasticSearch::Utilities::QueryString::Underscored
 
 This plugin translates some special underscore surrounded tokens into
 the Elasticsearch Query DSL.

@@ -38,7 +38,7 @@ __END__
 
 =head1 SYNOPSIS
 
-=head2 App::ElasticSearch::Utilities::Barewords
+=head2 App::ElasticSearch::Utilities::QueryString::Barewords
 
 The following barewords are transformed:
 

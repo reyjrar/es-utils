@@ -58,7 +58,7 @@ __END__
 
 =head1 SYNOPSIS
 
-=head2 App::ElasticSearch::Utilities::Range
+=head2 App::ElasticSearch::Utilities::QueryString::Ranges
 
 This plugin translates some special comparison operators so you don't need to
 remember them anymore.

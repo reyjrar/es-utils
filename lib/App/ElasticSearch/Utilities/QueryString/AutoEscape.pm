@@ -38,7 +38,7 @@ __END__
 
 =head1 SYNOPSIS
 
-=head2 App::ElasticSearch::Utilities::AutoEscape
+=head2 App::ElasticSearch::Utilities::QueryString::AutoEscape
 
 Provide an '=' prefix to a query string parameter to promote that parameter to a C<term> filter.
 
