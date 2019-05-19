@@ -1263,7 +1263,6 @@ sub es_local_index_meta {
         }
     }
 
-
     return;
 }
 
@@ -1322,7 +1321,7 @@ Or if you'd prefer to manually install:
 
     export RELEASE=<CurrentRelease>
 
-    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true -O es-utils.tgz
+    wget "https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true" -O es-utils.tgz
 
     tar -zxvf es-utils.tgz
 
