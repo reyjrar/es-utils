@@ -87,7 +87,7 @@ From App::ElasticSearch::Utilities:
                      (same as --pattern logstash-* or logstash-DATE)
     --datesep       Date separator, default '.' also (--date-separator)
     --pattern       Use a pattern to operate on the indexes
-    --days          If using a pattern or base, how many days back to go, default: all
+    --days          If using a pattern or base, how many days back to go, default: 1
 
 See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections from App::ElasticSearch::Utilities.
 
@@ -281,7 +281,7 @@ my %DEF = (
                    exists $_GLOBALS{base} ? $_GLOBALS{base} : undef,
     PATTERN     => exists $opt{pattern}   ? $opt{pattern} : '*',
     DAYS        => exists $opt{days}      ? $opt{days} :
-                   exists $_GLOBALS{days} ? $_GLOBALS{days} : 7,
+                   exists $_GLOBALS{days} ? $_GLOBALS{days} : 1,
     DATESEP     => exists $opt{datesep}               ? $opt{datesep} :
                    exists $_GLOBALS{datesep}          ? $_GLOBALS{datesep} :
                    exists $_GLOBALS{"date-separator"} ? $_GLOBALS{"date-separator"} :

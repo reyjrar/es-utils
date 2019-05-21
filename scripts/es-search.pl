@@ -646,7 +646,7 @@ Options:
     --show              Comma separated list of fields to display, default is ALL, switches to tab output
     --tail              Continue the query until CTRL+C is sent
     --top               Perform an aggregation on the fields, by a comma separated list of up to 2 items
-    --by                Perform an aggregation using the result of this, example: --by cardinality:@fields.src_ip
+    --by                Perform an aggregation using the result of this, example: --by cardinality:src_ip
     --with              Perform a sub aggregation on the query
     --bg-filter         Only used if --top aggregation is significant_terms, applies a background filter
     --match-all         Enables the ElasticSearch match_all operator
@@ -726,7 +726,7 @@ This option is not available when using --tail.
     --top src_ip
 
 You can override the default of the C<terms> bucket aggregation by prefixing
-the parameter with the required buck aggregation, i.e.:
+the parameter with the required bucket aggregation, i.e.:
 
     --top significant_terms:src_ip
 
@@ -739,7 +739,7 @@ Aggregation syntax is as follows:
 
 A full example might look like this:
 
-    $ es-search.pl --base access dst:www.example.com --top src_ip --by cardinality:@fields.acct
+    $ es-search.pl --base access dst:www.example.com --top src_ip --by cardinality:acct
 
 This will show the top source IP's ordered by the cardinality (count of the distinct values) of accounts logging
 in as each source IP, instead of the source IP with the most records.
@@ -833,7 +833,8 @@ helps flush out "what changed in the last hour."
 
 =item B<match-all>
 
-Apply the ElasticSearch "match_all" search operator to query on all documents in the index.
+Apply the ElasticSearch "match_all" search operator to query on all documents
+in the index.  This is the default with no search parameters.
 
 =item B<prefix>
 
@@ -938,10 +939,10 @@ Examples might include:
     # Search for past 10 days vhost admin.example.com and client IP 1.2.3.4
     es-search.pl --days=10 --size=100 dst:"admin.example.com" AND src_ip:"1.2.3.4"
 
-    # Search for all apache logs past 5 days with status 500
+    # Search for all apache logs past with status 500
     es-search.pl program:"apache" AND crit:500
 
-    # Search for all apache logs past 5 days with status 500 show only file and out_bytes
+    # Search for all apache logs with status 500 show only file and out_bytes
     es-search.pl program:"apache" AND crit:500 --show file,out_bytes
 
     # Search for ip subnet client IP 1.2.3.0 to 1.2.3.255 or 1.2.0.0 to 1.2.255.255
