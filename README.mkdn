@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 6.5
+version 6.6
 
 # SYNOPSIS
 
@@ -252,7 +252,7 @@ From App::ElasticSearch::Utilities:
                      (same as --pattern logstash-* or logstash-DATE)
     --datesep       Date separator, default '.' also (--date-separator)
     --pattern       Use a pattern to operate on the indexes
-    --days          If using a pattern or base, how many days back to go, default: all
+    --days          If using a pattern or base, how many days back to go, default: 1
 
 See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections from App::ElasticSearch::Utilities.
 
@@ -445,7 +445,7 @@ Or if you'd prefer to manually install:
 
     export RELEASE=<CurrentRelease>
 
-    wget --no-check-certificate https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true -O es-utils.tgz
+    wget "https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true" -O es-utils.tgz
 
     tar -zxvf es-utils.tgz
 

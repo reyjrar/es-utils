@@ -35,7 +35,7 @@ sub handle_token {
     if( my ($term,$match) = split /\:/, $token, 2 ) {
         if( defined $match && $match =~ /(.*\.(\w{3,4}))(?:\[([^\]]+)\])?$/) {
             my($file,$type,$col) = ($1,$2,$3);
-            $col ||= -1;
+            $col //= -1;
             $type = lc $type;
             verbose({level=>2,color=>'magenta'}, sprintf "# %s attempt of %s type, %s[%s] %s",
                 $self->name, $type, $file, $col, -f $file ? 'exists' : 'does not exist'
