@@ -361,7 +361,7 @@ es-search.pl - Search a logging cluster for information
 The search string is pre-analyzed before being sent to ElasticSearch.  The following plugins
 work to manipulate the query string and provide richer, more complete syntax for CLI applications.
 
-## App::ElasticSearch::Utilities::AutoEscape
+## App::ElasticSearch::Utilities::QueryString::AutoEscape
 
 Provide an '=' prefix to a query string parameter to promote that parameter to a `term` filter.
 
@@ -381,7 +381,7 @@ Is translated into:
 
 Which provides an exact match to the term in the query.
 
-## App::ElasticSearch::Utilities::Barewords
+## App::ElasticSearch::Utilities::QueryString::Barewords
 
 The following barewords are transformed:
 
@@ -395,7 +395,7 @@ If a field is an IP address uses CIDR Notation, it's expanded to a range query.
 
     src_ip:10.0/8 => src_ip:[10.0.0.0 TO 10.255.255.255]
 
-## App::ElasticSearch::Utilities::Range
+## App::ElasticSearch::Utilities::QueryString::Ranges
 
 This plugin translates some special comparison operators so you don't need to
 remember them anymore.
@@ -420,7 +420,7 @@ Will translate to:
 
 **gt** via >, **gte** via >=, **lt** via <, **lte** via <=
 
-## App::ElasticSearch::Utilities::Underscored
+## App::ElasticSearch::Utilities::QueryString::Underscored
 
 This plugin translates some special underscore surrounded tokens into
 the Elasticsearch Query DSL.
@@ -439,7 +439,7 @@ Translates into:
 
 ## App::ElasticSearch::Utilities::QueryString::FileExpansion
 
-If the match ends in .dat, .txt, or .csv, then we attempt to read a file with that name and OR the condition:
+If the match ends in .dat, .txt, .csv, or .json then we attempt to read a file with that name and OR the condition:
 
     $ cat test.dat
     50  1.2.3.4
@@ -463,14 +463,23 @@ Or
     1.2.3.6
     1.2.3.7
 
+Or
+    $ cat test.json
+    { "ip": "1.2.3.4" }
+    { "ip": "1.2.3.5" }
+    { "ip": "1.2.3.6" }
+    { "ip": "1.2.3.7" }
+
 We can source that file:
 
-    src_ip:test.dat => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
+    src_ip:test.dat      => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
+    src_ip:test.json[ip] => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
 
 This make it simple to use the --data-file output options and build queries
 based off previous queries. For .txt and .dat file, the delimiter for columns
 in the file must be either a tab, comma, or a semicolon.  For files ending in
-.csv, Text::CSV\_XS is used to accurate parsing of the file format.
+.csv, Text::CSV\_XS is used to accurate parsing of the file format.  Files
+ending in .json are considered to be newline-delimited JSON.
 
 You can also specify the column of the data file to use, the default being the last column or (-1).  Columns are
 **zero-based** indexing. This means the first column is index 0, second is 1, ..  The previous example can be rewritten
@@ -480,6 +489,21 @@ as:
 
 or:
     src\_ip:test.dat\[-1\]
+
+For newline delimited JSON files, you need to specify the key path you want to extract from the file.  If we have a
+JSON source file with:
+
+    { "first": { "second": { "third": [ "bob", "alice" ] } } }
+    { "first": { "second": { "third": "ginger" } } }
+    { "first": { "second": { "nope":  "fred" } } }
+
+We could search using:
+
+    actor:test.json[first.second.third]
+
+Which would expand to:
+
+    { "terms": { "actor": [ "alice", "bob", "ginger" ] } }
 
 This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
 an appropriate [terms query](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html).
