@@ -116,6 +116,9 @@ foreach my $index (sort by_index_age keys %indices) {
         $CONFIG{timestamp} ||= es_local_index_meta(timestamp => $index);
     }
 }
+
+#------------------------------------------------------------------------#
+# Figure out the timestamp
 $CONFIG{timestamp} ||= es_globals('timestamp') || '@timestamp';
 debug_var(\%by_age);
 my @AGES = sort { $ORDER eq 'asc' ? $b <=> $a : $a <=> $b } keys %by_age;
@@ -127,7 +130,27 @@ if( $OPT{fields} ) {
     show_fields();
     exit 0;
 }
-
+# Attempt date autodiscovery
+if( !exists $FIELDS{$CONFIG{timestamp}} ) {
+    my @dates = grep { $FIELDS{$_}->{type} eq 'date' } keys %FIELDS;
+    if( @dates == 0 ) {
+        output({color=>'red',stderr=>1},"FATAL: No date fields found in the indices specified" );
+        exit 1;
+    }
+    elsif( @dates == 1 ) {
+        output({color=>'yellow',stderr=>1}, "WARNING: Timestamp field '$CONFIG{timestamp}' not found, using '$dates[0]' instead");
+        $CONFIG{timestamp} = $dates[0];
+    }
+    else {
+        output({color=>'red',stderr=>1},
+            sprintf "FATAL: Timestamp field '%s' not found and discovered multiple date fields: %s",
+                $CONFIG{timestamp},
+                join(', ', sort @dates)
+        );
+        output({color=>'yellow',indent=>1}, "Try again with '--timestamp $dates[0]' for example.");
+        exit 1;
+    }
+}
 
 # Which fields to show
 my @SHOW = ();
