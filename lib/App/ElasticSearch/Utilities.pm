@@ -997,48 +997,65 @@ sub es_index_fields {
         _find_fields(\%fields,$ref->{$mapping});
     }
     # Return the results
-    return wantarray ? sort keys %fields : [ sort keys %fields ];
+    return \%fields;
 }
 
-my $x=0;
-sub _add_fields {
-    my ($f,@path) = @_;
+{
+    # Closure for field metadata
+    my $nested_path;
 
-    return unless @path;
+    sub _add_fields {
+        my ($f,$type,@path) = @_;
 
-    # Store the full path
-    my $key = join('.', @path);
-    $f->{$key} = 1;
-}
+        return unless @path;
 
-sub _find_fields {
-    my ($f,$ref,@path) = @_;
+        my %i = (
+            type   => $type,
+            subkey => $f,
+        );
 
-    # Handle things with properties
-    if( exists $ref->{properties} && is_hashref($ref->{properties}) ) {
-        foreach my $k (sort keys %{ $ref->{properties} }) {
-            _find_fields($f,$ref->{properties}{$k},@path,$k);
+        # Store the full path
+        my $key = join('.', @path);
+
+        if( $nested_path ) {
+            $i{nested_path} = $nested_path;
+            $i{nested_key}  = substr( $key, length($nested_path)+1 );
         }
+
+        $f->{$key} = \%i;
     }
-    # Handle elements that contain data
-    elsif( exists $ref->{type} ) {
-        _add_fields($f,@path);
-        # Handle multifields
-        if( exists $ref->{fields} && is_hashref($ref->{fields}) ) {
-            foreach my $k (sort keys %{ $ref->{fields} } ) {
-                _add_fields($f,@path,$k);
+
+    sub _find_fields {
+        my ($f,$ref,@path) = @_;
+
+        # Handle things with properties
+        if( exists $ref->{properties} && is_hashref($ref->{properties}) ) {
+            $nested_path = join('.', @path) if $ref->{type} and $ref->{type} eq 'nested';
+            foreach my $k (sort keys %{ $ref->{properties} }) {
+                _find_fields($f,$ref->{properties}{$k},@path,$k);
+            }
+            undef($nested_path);
+        }
+        # Handle elements that contain data
+        elsif( exists $ref->{type} ) {
+            _add_fields($f,$ref->{type},@path);
+            # Handle multifields
+            if( exists $ref->{fields} && is_hashref($ref->{fields}) ) {
+                foreach my $k (sort keys %{ $ref->{fields} } ) {
+                    _add_fields($f,$ref->{type},@path,$k);
+                }
             }
         }
-    }
-    # Unknown data, throw an error if we care that deeply.
-    else {
-        debug({stderr=>1,color=>'red'},
-            sprintf "_find_fields(): Invalid property at: %s ref info: %s",
-                join('.', @path),
-                join(',', is_hashref($ref) ? sort keys %{$ref} :
-                          ref $ref         ? ref $ref : 'unknown ref'
-                ),
-        );
+        # Unknown data, throw an error if we care that deeply.
+        else {
+            debug({stderr=>1,color=>'red'},
+                sprintf "_find_fields(): Invalid property at: %s ref info: %s",
+                    join('.', @path),
+                    join(',', is_hashref($ref) ? sort keys %{$ref} :
+                            ref $ref         ? ref $ref : 'unknown ref'
+                    ),
+            );
+        }
     }
 }
 

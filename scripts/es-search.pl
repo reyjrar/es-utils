@@ -105,7 +105,11 @@ foreach my $index (sort by_index_age keys %indices) {
     my $age = $indices{$index};
     $by_age{$age} ||= [];
     push @{ $by_age{$age} }, $index;
-    @FIELDS{es_index_fields($index)} = ();
+    my $fields = es_index_fields($index);
+    foreach my $k ( keys %{ $fields } ) {
+        $FIELDS{$k} = $fields->{$k}
+            unless $FIELDS{$k};
+    }
     # Lookup the Index in our local YAML
     if( !$TimeStampCheck ) {
         $TimeStampCheck++;
@@ -575,14 +579,34 @@ sub document_lookdown {
 sub show_fields {
     output({color=>'cyan'}, 'Fields available for search:' );
     my $total = 0;
+    my %types = ();
     foreach my $field (sort keys %FIELDS) {
         $total++;
-        output(" - $field");
+        my $type = $FIELDS{$field}->{type};
+        $types{$type} ||= 0;
+        $types{$type}++;
+        my $color = $type eq 'ip' ? 'magenta'
+                  : $type eq 'text' ? 'red'
+                  : $type =~ /float|integer|short|byte|double/ ? 'cyan'
+                  : $type =~ /^geo/ ? 'green'
+                  : $type =~ /^date/ ? 'yellow'
+                  : 'white';
+        output({indent=>1,kv=>1,color=>$color}, $field => $type);
+        output({indent=>2}, sprintf "nested: %s - %s",
+                @{ $FIELDS{$field} }{qw(nested_path nested_key)}
+        ) if exists $FIELDS{$field}->{nested_path};
     }
     output({color=>"yellow"},
         sprintf("# Fields: %d from a combined %d indices.\n",
             $total,
             scalar(keys %indices),
+        )
+    );
+    # Type Meta Roll Up
+    output({indent=>1}, join(', ',
+            map  { "$types{$_} $_ fields" }
+            sort { $types{$b} <=> $types{$a} }
+            keys %types
         )
     );
 }
