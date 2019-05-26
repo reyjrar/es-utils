@@ -976,7 +976,13 @@ sub es_index_valid {
 
 =func es_index_fields('index-name')
 
-Returns a list of the fields in a given index.
+Returns a hash reference with the following data:
+
+    key_name:
+      type: field_data_type
+      # If the field is nested
+      nested_path: nested_path
+      nested_key: nested_key
 
 =cut
 
