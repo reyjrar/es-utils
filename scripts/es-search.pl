@@ -35,6 +35,7 @@ GetOptions(\%OPT, qw(
     filter
     format=s
     help|h
+    json|jq
     manual|m
     match-all
     max-batch-size=i
@@ -86,8 +87,10 @@ if( $OPT{bases} ) {
 #--------------------------------------------------------------------------#
 # App Config
 my %CONFIG = (
-    size      => (exists $OPT{size}      && $OPT{size} > 0)         ? int($OPT{size})         : 20,
-    format    => (exists $OPT{format}    && length $OPT{format})    ? lc $OPT{format}         : 'yaml',
+    size      => ($OPT{size} && $OPT{size} > 0) ? int($OPT{size}) : 20,
+    format    => $OPT{json}   ? 'json'
+               : $OPT{format} ? lc $OPT{format}
+               : 'yaml',
     'max-batch-size' => $OPT{'max-batch-size'} || 50,
     $OPT{timestamp} ? ( timestamp => $OPT{timestamp} ) : (),
 );
@@ -210,7 +213,7 @@ if( exists $OPT{top} ) {
 
     my %agg     = ();
     my %sub_agg = ();
-    if(exists $OPT{by}) {
+    if( $OPT{by}) {
         my ($type,$field) = split /\:/, $OPT{by};
         if( exists $SUPPORTED_AGGREGATIONS{$type} ) {
             $SUBAGG = $type;
@@ -220,7 +223,7 @@ if( exists $OPT{top} ) {
             output({color=>'red'}, "Aggregation '$type' is not currently supported, ignoring.");
         }
     }
-    if( exists $OPT{with} ) {
+    if( $OPT{with} ) {
         my @with = is_arrayref($OPT{with}) ? @{ $OPT{with} } : ( $OPT{with} );
         foreach my $with ( @with )  {
             my @attrs = split /:/, $with;
