@@ -273,6 +273,7 @@ if( exists $OPT{top} ) {
         $agg{$top_agg}->{size} = $CONFIG{size};
     }
     $q->add_aggregations( top => \%agg );
+    $q->add_aggregations( out_of => { cardinality => { field => $field  } } );
 
     if( $OPT{interval} ) {
         $q->wrap_aggregations( step => {
@@ -293,6 +294,7 @@ else {
 
 my %displayed_indices = ();
 my $TOTAL_HITS        = 0;
+my $OUT_OF            = 0;
 my $last_hit_ts       = undef;
 my $duration          = 0;
 my $displayed         = 0;
@@ -371,6 +373,8 @@ AGES: while( !$DONE && @AGES ) {
 
         # Handle Aggregations
         if( exists $result->{aggregations} ) {
+            my $out_of =  $result->{aggregations}{out_of}{value};
+            $OUT_OF = $out_of if $out_of > $OUT_OF;
             my $steps = exists $result->{aggregations}{step} ? $result->{aggregations}{step}{buckets}
                       : [ $result->{aggregations} ];
             my $indent = exists $result->{aggregations}{step} ? 1 : 0;
@@ -380,6 +384,8 @@ AGES: while( !$DONE && @AGES ) {
                     output({color=>'cyan',clear=>1}, sprintf "%d\t%s", @{$step}{qw(doc_count key_as_string)});
                 }
                 if( @$aggs ) {
+                    # For top the N of T needs to represent maximums
+                    $displayed = scalar(@$aggs) if scalar(@$aggs) > $displayed;
                     output({color=>'cyan',indent=>$indent},$agg_header) unless $OPT{'no-decorators'};
                     foreach my $agg ( @$aggs ) {
                         $AGGS_TOTALS{$agg->{key}} ||= 0;
@@ -456,9 +462,7 @@ AGES: while( !$DONE && @AGES ) {
                             # Simple output
                             output({indent=>$indent,data=>!$CONFIG{summary}}, join("\t",@out));
                         }
-                        $displayed++;
                     }
-                    $TOTAL_HITS = exists $result->{aggegrations}{top}{other} ? $result->{aggregations}{top}{other} + $displayed : $TOTAL_HITS;
                 }
                 elsif(exists $result->{aggregations}{top}) {
                     output({indent=>1,color=>'red'}, "= No results.");
@@ -560,7 +564,12 @@ AGES: while( !$DONE && @AGES ) {
 output({stderr=>1,color=>'yellow'},
     "# Search Parameters:",
     (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>exists $OPT{pretty}})),
-    "# Displaying $displayed of $TOTAL_HITS in $duration seconds.",
+    sprintf("# Displaying %d of %d results%s took %0.2f seconds.",
+        $displayed,
+        $OUT_OF || $TOTAL_HITS,
+        $OUT_OF ? " in $TOTAL_HITS documents" : '',
+        $duration,
+    ),
     sprintf("# Indexes (%d of %d) searched: %s\n",
             scalar(keys %displayed_indices),
             scalar(keys %indices),
