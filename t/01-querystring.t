@@ -17,8 +17,9 @@ my ($fh,$tempfile) = tempfile(SUFFIX => '.dat');
 my @csv_data=();
 while(<DATA>) {
     chomp;
-    print $fh "$_\n";
-    push @csv_data, [ split /\s+/, $_ ];
+    my @cols = split /\s+/, $_;
+    printf $fh "%s\n", join("\t", @cols);
+    push @csv_data, [ @cols ];
 }
 close($fh);
 my ($csv,$csvfile) = tempfile( SUFFIX => '.csv' );
