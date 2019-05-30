@@ -95,6 +95,9 @@ my %CONFIG = (
     $OPT{timestamp} ? ( timestamp => $OPT{timestamp} ) : (),
 );
 $OPT{'no-decorators'} = 1 if $CONFIG{format} eq 'json';
+$CONFIG{pretty} = $OPT{pretty} ? 1
+                : $CONFIG{format} =~ /pretty/ ? 1
+                : 0;
 #------------------------------------------------------------------------#
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
@@ -537,7 +540,7 @@ AGES: while( !$DONE && @AGES ) {
                 $output = join("\t",@cols);
             }
             else {
-                $output = $CONFIG{format} =~ /^json/? to_json($record,{allow_nonref=>1,canonical=>1,pretty=>$CONFIG{format} eq 'jsonpretty'})
+                $output = $CONFIG{format} =~ /^json/? to_json($record,{allow_nonref=>1,canonical=>1,pretty=>$CONFIG{pretty}})
                         : Dump $record;
             }
 
@@ -566,7 +569,7 @@ AGES: while( !$DONE && @AGES ) {
 
 output({stderr=>1,color=>'yellow'},
     "# Search Parameters:",
-    (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>exists $OPT{pretty}})),
+    (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>$CONFIG{pretty}})),
     sprintf("# Displaying %d of %d results%s took %0.2f seconds.",
         $displayed,
         $OUT_OF || $TOTAL_HITS,
