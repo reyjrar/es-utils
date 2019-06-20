@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 6.8
+version 6.9
 
 # SYNOPSIS
 
@@ -36,6 +36,7 @@ Options:
     --pretty            Where possible, use JSON->pretty
     --no-decorators     Do not show the header with field names in the query results
     --no-header         Same as above
+    --no-implications   Don't attempt to imply filters from statistical aggregations
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
     --timestamp         Field to use as the date object, default: @timestamp
