@@ -41,6 +41,7 @@ GetOptions(\%OPT, qw(
     max-batch-size=i
     missing=s
     no-decorators|no-header
+    no-implications|no-imply
     prefix=s@
     pretty
     show=s@
@@ -229,11 +230,14 @@ if( exists $OPT{top} ) {
     if( $OPT{with} ) {
         my @with = is_arrayref($OPT{with}) ? @{ $OPT{with} } : ( $OPT{with} );
         foreach my $with ( @with )  {
-            my @attrs = split /:/, $with;
+            my @attrs = split /:/, $with, 3;
             # Process Args from Right to Left
-            my $pcts  = $attrs[-1] =~ /^\d{1,2}(?:\.\d+)?(?:,\d{1,2}(?:\.\d+)?)*$/ ? pop @attrs : '25,50,75,90,95,99';
-            my $size  = $pcts =~ /^\d+$/ ? $pcts : 3;
-            my $hi    = @attrs == 3 ? $attrs[-1] : '0.1';
+            my $arg   = @attrs == 3 ? pop @attrs
+                      : $attrs[-1] =~ /^\d/ ? pop @attrs
+                      : '';
+            my $pcts  = $arg =~ /^\d{1,2}(?:\.\d+)?(?:,\d{1,2}(?:\.\d+)?)*$/ ? $arg : '25,50,75,90,95,99';
+            my $size  = $arg =~ /^\d+$/ ? $arg : 3;
+            my $hi    = $arg || 0.1;
             my $field = exists $FIELDS{$attrs[-1]} ? pop @attrs : undef;
             my $type  = @attrs ? pop @attrs : 'terms';
             # Skip invalid elements
@@ -243,6 +247,11 @@ if( exists $OPT{top} ) {
             # If a term agg and we haven't used this field name, simplify it
             if( $type =~ /terms$/ && !$sub_agg{$field} ) {
                 $id = $field;
+            }
+
+            if( $type =~ /histogram|stats|percentiles/ && !$OPT{'no-implications'} ) {
+                output({color=>'magenta',sticky=>1}, "* Using a statistical aggregation implies an exists filter on $field, use --no-implications to disable this");
+                $q->add_bool( must => { exists => { field => $field } } );
             }
 
             $sub_agg{$id} = {
@@ -728,6 +737,7 @@ Options:
     --pretty            Where possible, use JSON->pretty
     --no-decorators     Do not show the header with field names in the query results
     --no-header         Same as above
+    --no-implications   Don't attempt to imply filters from statistical aggregations
     --fields            Display the field list for this index!
     --bases             Display the index base list for this cluster.
     --timestamp         Field to use as the date object, default: @timestamp
