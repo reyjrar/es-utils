@@ -45,7 +45,7 @@ GetOptions(\%OPT, qw(
     prefix=s@
     pretty
     show=s@
-    size|n=i
+    size|n|limit=i
     sort=s
     tail
     timestamp=s
@@ -727,7 +727,7 @@ Options:
     --prefix            Takes "field:string" and enables the Lucene prefix query for that field
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
-    --size              Result size, default is 20
+    --size              Result size, default is 20, aliased to -n and --limit
     --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
