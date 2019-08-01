@@ -31,7 +31,7 @@ GetOptions(\%opt,
     'index-basename=s',
     'date-separator=s',
     'timezone=s',
-    'allocation-exclude=s%',
+    'skip-alias=s@',
     # Basic options
     'help|h',
     'manual|m',
@@ -55,8 +55,7 @@ my %CFG = (
     bloom                => 0,
     optimize             => 0,
     replicas             => 0,
-    'allocation-exclude' => 0,
-    'allocation-require' => 0,
+    'skip-alias'         => [],
 );
 # Extract from our options if we've overridden defaults
 foreach my $setting (keys %CFG) {
@@ -78,6 +77,10 @@ else {
     }
     pod2usage(-message => "No operation selected, use --close, --delete, --optimize, or --replicas.", -exitval => 1) unless $operate;
 }
+# Set skip alias hash
+push @{ $CFG{'skip-alias'} }, qw( _hold _do_not_erase );
+my %SKIP = map { $_ => 1 } @{ $CFG{'skip-alias'} };
+
 # Can't have replicas-min below 0
 $CFG{'replicas-min'} = 0 if $CFG{'replicas-min'} < 0;
 
@@ -108,6 +111,19 @@ foreach my $index (sort @indices) {
     # If we can't calculate how old it is, skip it
     if( !$days_old || $days_old < 1 ) {
         verbose({color=>'magenta'},"$index for today, skipping.");
+        next;
+    }
+
+    # Get aliases from index root
+    my %aliases  = ();
+    my $idx_meta = es_request($index);
+    if( exists $idx_meta->{$index}{aliases} ) {
+        my $skipped;
+        foreach my $alias ( keys %{ $idx_meta->{$index}{aliases} } ) {
+            $skipped = $alias if exists $SKIP{$alias};
+            last if $skipped;
+        }
+        verbose({color=>'blue'},"$index contains a skipped alias: $skipped");
         next;
     }
 
@@ -234,6 +250,7 @@ Options:
     --replicas-age      Age of the index to reach the minimum replicas (default:60)
     --replicas-min      Minimum number of replicas this index may have (default:0)
     --replicas-max      Maximum number of replicas this index may have (default:1)
+    --skip-alias        Indexes with these aliases will be skipped from all maintenance, can be set more than once
 
 =from_other App::ElasticSearch::Utilities / ARGS / all
 
@@ -287,6 +304,16 @@ The maximum number of replicas to allow replica aging to set.  The default is 1
 
     --replicas-max=2
 
+=item B<skip-alias>
+
+Can be set more than once.  Any indexes with an alias that matches this list is
+skipped from operations.  This is a useful, lightweight mechanism to preserve
+indexes.
+
+    --skip-alias preserve --skip-alias pickle
+
+In addition to user specified aliases, the aliases C<_hold> and
+C<_do_not_erase> will always be excluded.
 
 =back
 

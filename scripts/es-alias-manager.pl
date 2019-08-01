@@ -79,7 +79,15 @@ my %PARTS = (
     }
 );
 
+my %IGNORE = ();
+
 foreach my $base (keys %{ $ALIAS }) {
+    # Index Aliases Managed Manually
+    if( not $ALIAS->{$base} ) {
+        $IGNORE{$base};
+        next;
+    }
+
     my $re = $ALIAS->{$base}{pattern};
     $re =~ s/[^\w{}*?-]+//g;
 
@@ -120,7 +128,10 @@ debug_var($ALIAS);
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $indices }) {
     debug("$index being evaluated");
-    my %current = %{ $indices->{$index}{aliases}};
+    my %current = map { $_ => 1 }
+                  grep { !/^[._]/ }
+                  grep { not exists $IGNORE{$_} }
+                  keys %{ $indices->{$index}{aliases} };
     my $managed = 0;
 
     my %desired = ();
@@ -150,7 +161,7 @@ foreach my $index (sort keys %{ $indices }) {
         }
     }
     my @updates = ();
-    my %checks = map { $_ => 1 } keys(%desired),keys(%current);
+    my %checks = map { $_ => 1 } keys(%desired), keys(%current);
     if( $managed ) {
         foreach my $alias (keys %checks) {
             if( exists $desired{$alias} && exists $current{$alias} ) {
@@ -221,6 +232,7 @@ to a homogenous index that standard LogStash/Kibana interfaces will understand.
 If I create the following in /etc/elasticsearch/aliases.yml
 
     ---
+    pickle: ~
     logstash:
       pattern: \*-logstash-{{DATE}}
       daily: logstash-{{DATE}}
@@ -237,6 +249,10 @@ If I create the following in /etc/elasticsearch/aliases.yml
               days: 14
             to:
               days: 7
+
+The C<pickle> alias is flagged as an alias to ignore in the addition/removal
+process. This script will automatically ignore any alias that begins with a '.'
+or '_'.
 
 Assuming today is the 2013.07.18 and I have 3 datacenters (IAD, NYC, AMS) with the following indices:
 
