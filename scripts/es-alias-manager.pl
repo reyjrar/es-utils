@@ -4,12 +4,13 @@
 use strict;
 use warnings;
 
+use App::ElasticSearch::Utilities qw(:default);
+use CLI::Helpers qw(:all);
 use DateTime;
-use YAML;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
-use CLI::Helpers qw(:all);
-use App::ElasticSearch::Utilities qw(:default);
+use Ref::Util qw( is_ref );
+use YAML;
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -83,8 +84,9 @@ my %IGNORE = ();
 
 foreach my $base (keys %{ $ALIAS }) {
     # Index Aliases Managed Manually
-    if( not $ALIAS->{$base} ) {
-        $IGNORE{$base};
+    if( ! is_ref($ALIAS->{$base}) ) {
+        $IGNORE{$base} = 1;
+        delete $ALIAS->{$base};
         next;
     }
 
@@ -129,7 +131,7 @@ debug_var($ALIAS);
 foreach my $index (sort keys %{ $indices }) {
     debug("$index being evaluated");
     my %current = map { $_ => 1 }
-                  grep { !/^[._]/ }
+                  grep { !/^\./ }
                   grep { not exists $IGNORE{$_} }
                   keys %{ $indices->{$index}{aliases} };
     my $managed = 0;
@@ -251,8 +253,7 @@ If I create the following in /etc/elasticsearch/aliases.yml
               days: 7
 
 The C<pickle> alias is flagged as an alias to ignore in the addition/removal
-process. This script will automatically ignore any alias that begins with a '.'
-or '_'.
+process. This script will automatically ignore any alias that begins with a '.'.
 
 Assuming today is the 2013.07.18 and I have 3 datacenters (IAD, NYC, AMS) with the following indices:
 

@@ -78,7 +78,7 @@ else {
     pod2usage(-message => "No operation selected, use --close, --delete, --optimize, or --replicas.", -exitval => 1) unless $operate;
 }
 # Set skip alias hash
-push @{ $CFG{'skip-alias'} }, qw( _hold _do_not_erase );
+push @{ $CFG{'skip-alias'} }, qw( .hold .do_not_erase );
 my %SKIP = map { $_ => 1 } @{ $CFG{'skip-alias'} };
 
 # Can't have replicas-min below 0
@@ -123,8 +123,10 @@ foreach my $index (sort @indices) {
             $skipped = $alias if exists $SKIP{$alias};
             last if $skipped;
         }
-        verbose({color=>'blue'},"$index contains a skipped alias: $skipped");
-        next;
+        if( $skipped ) {
+            verbose({color=>'blue'},"$index contains a skipped alias: $skipped");
+            next;
+        }
     }
 
     # Delete the Index if it's too old
@@ -312,8 +314,8 @@ indexes.
 
     --skip-alias preserve --skip-alias pickle
 
-In addition to user specified aliases, the aliases C<_hold> and
-C<_do_not_erase> will always be excluded.
+In addition to user specified aliases, the aliases C<.hold> and
+C<.do_not_erase> will always be excluded.
 
 =back
 
