@@ -662,10 +662,11 @@ sub show_fields {
 
 sub show_bases {
     output({color=>'cyan'}, 'Bases available for search:' );
-    my @all   = es_indices(check_date => 0);
+    my @all   = es_indices(_all => 1);
     my %bases = ();
 
     foreach my $index (@all) {
+        next if $index =~ /^\./;
         my $days_old = es_index_days_old( $index ) || 0;
         next unless defined $days_old;
         $days_old = 0 if $days_old < 0;
