@@ -124,7 +124,7 @@ foreach my $index (sort @indices) {
             last if $skipped;
         }
         if( $skipped ) {
-            verbose({color=>'blue'},"$index contains a skipped alias: $skipped");
+            output("$index contains a skipped alias: $skipped");
             next;
         }
     }
