@@ -63,6 +63,8 @@ my $q = exists $OPT{'match-all'} && $OPT{'match-all'}
 
 $q->set_timeout('10s');
 $q->set_scroll('30s');
+$q->set_rest_total_hits_as_int('true');
+$q->set_track_total_hits('true');
 
 if( exists $OPT{prefix} ){
     foreach my $prefix (@{ $OPT{prefix} }) {

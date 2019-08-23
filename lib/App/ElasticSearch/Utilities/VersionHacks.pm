@@ -3,6 +3,7 @@ package App::ElasticSearch::Utilities::VersionHacks;
 
 use strict;
 use warnings;
+use version;
 
 # VERSION
 
@@ -43,6 +44,9 @@ const my %SIMPLE => (
 my %CALLBACKS = (
     '_cluster/state' => {
         default => \&_cluster_state_1_0,
+    },
+    '_search' => {
+        default => \&_search_params,
     },
 );
 
@@ -97,7 +101,7 @@ sub _fix_version_request {
             }
             elsif(exists $CALLBACKS{$url}->{default}) {
                 debug({indent=>1,color=>'yellow'}, "+ Callback dispatched for $url by default rule");
-                ($url,$options,$data) = $CALLBACKS{$url}->{default}->($url,$options,$data);
+                ($url,$options,$data) = $CALLBACKS{$url}->{default}->($url,$options,$data,$version);
             }
         }
     }
@@ -147,6 +151,22 @@ sub _cluster_state_1_0 {
         verbose("~ Cluster State rewritten from $url to $new_url");
         $url=$new_url;
     }
+    return ($url,$options,$data);
+}
+
+sub _search_params {
+    my ($url,$options,$data,$version) = @_;
+
+    # Handle the API Changes in version 7.0.0
+    if( qv($version) < qv("7.0.0") ) {
+        if( exists $options->{uri_param} ) {
+            foreach my $invalid ( qw(track_total_hits rest_total_hits_as_int) ) {
+                delete $options->{uri_param}{$invalid}
+                    if exists $options->{uri_param}{$invalid};
+            }
+        }
+    }
+
     return ($url,$options,$data);
 }
 

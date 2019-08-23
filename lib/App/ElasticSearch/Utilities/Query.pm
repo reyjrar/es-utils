@@ -137,6 +137,8 @@ my %PARAMS = (
     scroll          => { isa => Maybe[TimeConstant] },
     timeout         => { isa => TimeConstant },
     terminate_after => { isa => Int },
+    rest_total_hits_as_int => { isa => Str, default => sub { 'false' } },
+    track_total_hits  => { isa => Str, default => sub { 'false' } }
 );
 
 # Dynamically build our attributes

@@ -998,10 +998,11 @@ sub es_index_fields {
         # Handle Version incompatibilities
         my $ref = exists $result->{$idx}{mappings} ? $result->{$idx}{mappings} : $result->{$idx};
 
-        # Loop through the mappings, skipping _default_
-        my @mappings = grep { $_ ne '_default_' } keys %{ $ref };
+        # Loop through the mappings, skipping _default_, except on 7.x where we notice "properties"
+        my @mappings = exists $ref->{properties} ? ($ref)
+                     : map { $ref->{$_} } grep { $_ ne '_default_' } keys %{ $ref };
         foreach my $mapping (@mappings) {
-            _find_fields(\%fields,$ref->{$mapping});
+            _find_fields(\%fields,$mapping);
         }
     }
     # Return the results
@@ -1035,6 +1036,7 @@ sub es_index_fields {
     sub _find_fields {
         my ($f,$ref,@path) = @_;
 
+        return unless is_hashref($ref);
         # Handle things with properties
         if( exists $ref->{properties} && is_hashref($ref->{properties}) ) {
             $nested_path = join('.', @path) if $ref->{type} and $ref->{type} eq 'nested';
