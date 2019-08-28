@@ -7,7 +7,6 @@ use warnings;
 use App::ElasticSearch::Utilities qw(:all);
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
-use Hash::Flatten qw(flatten);
 use Pod::Usage;
 use POSIX qw(ceil);
 

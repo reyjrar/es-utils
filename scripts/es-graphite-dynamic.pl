@@ -4,9 +4,8 @@
 use strict;
 use warnings;
 
-use App::ElasticSearch::Utilities qw(es_request es_node_stats es_index_stats es_index_strip_date);
+use App::ElasticSearch::Utilities qw(es_request es_node_stats es_index_stats es_index_strip_date es_flatten_hash);
 use CLI::Helpers qw(:all);
-use Hash::Flatten qw(flatten);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use IO::Socket::INET;
 use Pod::Usage;
@@ -138,7 +137,7 @@ sub index_blocks {
     my %collected=();
     foreach my $idx ( keys %{ $result } ) {
         if( $result->{$idx}{settings} ) {
-            my $settings = flatten( $result->{$idx}{settings} );
+            my $settings = es_flatten_hash( $result->{$idx}{settings} );
             foreach my $block ( keys %{ $settings } ) {
                 my $value = $settings->{$block};
                 if( lc $value eq 'true') {
@@ -355,7 +354,7 @@ you could:
 
 Or with the file collector, you could cron this:
 
-    es-graphite-dynamic.pl --loocal --prefix elasticsearch --data-file /tmp/diamond/elasticsearch.out --quiet
+    es-graphite-dynamic.pl --local --prefix elasticsearch --data-file /tmp/diamond/elasticsearch.out --quiet
 
 
 If not specified, the assumption is data will be going directly to graphite and the metric path will be set as:

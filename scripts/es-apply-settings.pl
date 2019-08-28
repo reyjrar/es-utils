@@ -4,18 +4,22 @@
 use strict;
 use warnings;
 
-use App::ElasticSearch::Utilities qw(:default es_apply_index_settings es_open_index es_close_index es_index_days_old);
+use App::ElasticSearch::Utilities qw(:all);
 use CLI::Helpers qw(:all);
 use JSON::MaybeXS;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
+use Test::Deep qw( cmp_details deep_diag subhashof );
 
 #------------------------------------------------------------------------#
 # Argument Collection
 my %opt;
 GetOptions(\%opt,
+    'skip-alias=s@',
     'close',
     'older',
+    'no-skip|noskip',
+    'no-diff|nodiff',
     # Basic options
     'help|h',
     'manual|m',
@@ -27,6 +31,12 @@ pod2usage(1) if $opt{help};
 pod2usage(-exitstatus => 0, -verbose => 2) if $opt{manual};
 
 #------------------------------------------------------------------------#
+
+# Figure out the skipped aliases
+my %SKIP = map { $_ => 1 } (
+    qw( .hold .do_not_erase ),
+    $opt{'skip-alias'} ? ( @{ $opt{'skip-alias'} } ) : (),
+);
 
 # Read JSON Settings
 my $RawJSON = '';
@@ -54,9 +64,36 @@ if ( !@indices ) {
 foreach my $index (sort @indices) {
     verbose("$index:  evaluated");
 
-    my $current = es_request('_settings', {index=>$index});
-    if( !defined $current ) {
-        output({color=>'magenta'}, " + Unable to fetch index settings, applying blind!");
+    my $info = es_request($index);
+    next unless $info->{$index};
+    my $meta = $info->{$index};
+
+    # Only safety check when not forced
+    if( !$opt{'no-skip'} ) {
+        my $skipped;
+        foreach my $alias ( keys %{ $meta->{aliases} } ) {
+            $skipped = $alias if exists $SKIP{$alias};
+            last if defined $skipped;
+        }
+        if( defined $skipped ) {
+            output({color=>'magenta'}, " ~ Skipped $index due to protected alias '$skipped', use --no-skip to skip this safety check");
+            next;
+        }
+    }
+
+    # Check for settings first
+    if( !$opt{'no-diff'} ) {
+        # Since both, either, or neither can be flattened, flatten
+        my $current = es_flatten_hash( $meta->{settings} );
+        my $desired = es_flatten_hash( $settings );
+        my ($ok,$stack) = cmp_details($desired, subhashof($current));
+        if( $ok ) {
+            output({color=>'cyan'}, " ~ Skipped $index as it already contains those settings, use --no-diff to apply without this check");
+            next;
+        }
+        else {
+            debug(deep_diag($stack));
+        }
     }
 
     # Close the index first
@@ -73,7 +110,7 @@ foreach my $index (sort @indices) {
     if( !defined $result ) {
         output({color=>'red'}, "Unable to update settings on $index");
         debug("Current");
-        debug_var($current);
+        debug_var($meta->{settings});
     }
     else {
         output({color=>'green'}, " + Settings applied successfully!");
@@ -132,6 +169,24 @@ When this option is used along with the --days option the the setting will only 
 to indexs that are older than the days specified.
 
     es-apply-settings.pl --older --days 30 --pattern logstash-*
+
+=item B<skip-alias>
+
+Protected aliases, which if present will cause the application of settings to
+be skipped for a particular index.  The aliases C<.hold> and C<.do_not_erase>
+will always be skipped.
+
+=item B<no-skip>
+
+Apply settings to all matching indexes, regardless of the protected aliases.
+
+=item B<no-diff>
+
+During a normal run, the settings you're requesting will be checked against the
+indices and only indices with settings out of line with the desired settings
+will be applied.  If for some reason you want to apply settings regardless of
+the current state, using C<--no-diff> will disable the check and apply the
+settings to every index in scope.
 
 =back
 

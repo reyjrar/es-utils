@@ -57,6 +57,7 @@ use Sub::Exporter -setup => {
         es_optimize_index
         es_apply_index_settings
         es_local_index_meta
+        es_flatten_hash
     )],
     groups => {
         config  => [qw(es_globals)],
@@ -1229,6 +1230,19 @@ sub es_node_stats {
     push @cmd, 'stats';
 
     return es_request(join('/',@cmd));
+}
+
+=func es_flatten_hash
+
+Performs flattening that's compatible with Elasticsearch's flattening.
+
+=cut
+
+sub es_flatten_hash {
+    my $hash = shift;
+    my $_flat = flatten($hash, { HashDelimiter=>':', ArrayDelimiter=>':' });
+    my %compat = map { s/:/./gr => $_flat->{$_} } keys %{ $_flat };
+    return \%compat;
 }
 
 =func def('key')

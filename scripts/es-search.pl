@@ -12,7 +12,6 @@ use App::ElasticSearch::Utilities::QueryString;
 use Carp;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
-use Hash::Flatten qw(flatten);
 use JSON::MaybeXS qw(:legacy);
 use Pod::Usage;
 use POSIX qw(strftime);
@@ -502,7 +501,7 @@ AGES: while( !$DONE && @AGES ) {
             $last_batch_id{$hit->{_id}}=1;
             my $record = {};
             if( @SHOW ) {
-                my $flat = flatten( $hit->{_source}, { HashDelimiter=>'.',ArrayDelimiter=>'.' } );
+                my $flat = es_flatten_hash( $hit->{_source} );
                 debug_var($flat);
                 foreach my $f (@always) {
                     $record->{$f} = $flat->{$f};
