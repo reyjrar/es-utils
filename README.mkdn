@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 7.1
+version 7.2
 
 # SYNOPSIS
 
@@ -207,6 +207,10 @@ Returns a hashref
 Exposes GET /\_nodes/stats
 
 Returns a hashref
+
+## es\_flatten\_hash
+
+Performs flattening that's compatible with Elasticsearch's flattening.
 
 ## def('key')
 
