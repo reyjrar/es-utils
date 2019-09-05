@@ -160,7 +160,7 @@ sub _search_params {
     # Handle the API Changes in version 7.0.0
     if( qv($version) < qv("7.0.0") ) {
         if( exists $options->{uri_param} ) {
-            foreach my $invalid ( qw(track_total_hits rest_total_hits_as_int) ) {
+            foreach my $invalid ( qw(rest_total_hits_as_int) ) {
                 delete $options->{uri_param}{$invalid}
                     if exists $options->{uri_param}{$invalid};
             }

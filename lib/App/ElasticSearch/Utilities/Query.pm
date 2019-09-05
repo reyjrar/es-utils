@@ -134,11 +134,13 @@ Can be set with B<set_terminateafter>.  Cannot be an init_arg.
 =cut
 
 my %PARAMS = (
-    scroll          => { isa => Maybe[TimeConstant] },
-    timeout         => { isa => TimeConstant },
-    terminate_after => { isa => Int },
+    scroll           => { isa => Maybe[TimeConstant] },
+    timeout          => { isa => TimeConstant },
+    terminate_after  => { isa => Int },
+    track_total_hits => { isa => Str, default => sub { 'false' } },
+    track_scores     => { isa => Str, default => sub { 'false' } },
+    search_type      => { isa => Str, default => sub { 'query_then_fetch' } },
     rest_total_hits_as_int => { isa => Str, default => sub { 'false' } },
-    track_total_hits  => { isa => Str, default => sub { 'false' } }
 );
 
 # Dynamically build our attributes
@@ -410,23 +412,37 @@ sub set_match_all {
     $self;
 }
 
-=method add_bool( section => condition )
+=method add_bool( section => conditions .. )
 
 Appends a search condition to a section in the query body.  Valid query body
 points are: must, must_not, should, and filter.
 
+    $q->add_bool( must => { term => { http_status => 200 } } );
+
+    # or
+
+    $q->add_bool(
+        must => [
+            { term => { http_method => 'GET' } }
+            { term => { client_ip   => '10.10.10.1' } }
+        ]
+        must_not => { term => { http_status => 400 } },
+    );
+
 =cut
 
 sub add_bool {
-    my $self      = shift;
-    my $section   = shift;
-    my $condition = shift;
-
-    if( exists $QUERY{$section} ) {
+    my $self  = shift;
+    my %bools = @_;
+    foreach my $section ( sort keys %bools ) {
+        next unless exists $QUERY{$section};
+        # Handle one or more conditional
+        my @conditions = is_arrayref($bools{$section}) ? @{ $bools{$section} }
+                       : ( $bools{$section} );
         ## no critic
         no strict 'refs';
         my $set = $self->$section;
-        push @{ $set }, $condition;
+        push @{ $set }, @conditions;
         my $setter = "set_$section";
         $self->$setter($set);
         ## use critic
