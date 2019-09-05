@@ -10,7 +10,7 @@ use CLI::Helpers qw(:output);
 use Clone qw(clone);
 use Moo;
 use Ref::Util qw(is_arrayref is_hashref);
-use Types::Standard qw(ArrayRef HashRef Int Maybe Str);
+use Types::Standard qw(ArrayRef Enum HashRef Int Str);
 use Types::ElasticSearch qw(TimeConstant is_TimeConstant);
 use namespace::autoclean;
 
@@ -64,12 +64,13 @@ The path by being nested, only used in nested queries.
 =cut
 
 my %QUERY = (
-    must        => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'must'     },
-    must_not    => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'must_not' },
-    should      => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'should'   },
-    filter      => { default => sub {undef}, isa => Maybe[ArrayRef], coerce => $TO{array_ref}, init_arg => 'filter'   },
-    nested      => { default => sub {undef}, isa => Maybe[HashRef], init_arg => 'nested' },
-    nested_path => { default => sub {undef}, isa => Maybe[Str],     init_arg => 'nested_path' },
+    must        => { isa => ArrayRef, coerce => $TO{array_ref} },
+    must_not    => { isa => ArrayRef, coerce => $TO{array_ref} },
+    should      => { isa => ArrayRef, coerce => $TO{array_ref} },
+    filter      => { isa => ArrayRef, coerce => $TO{array_ref} },
+    nested      => { isa => HashRef },
+    nested_path => { isa => Str },
+    minimum_should_match => { isa => Str },
 );
 
 =attr from
@@ -104,11 +105,11 @@ Aliased as B<aggs>.
 =cut
 
 my %REQUEST_BODY = (
-    from         => { isa => Maybe[Int] },
+    from         => { isa => Int },
     size         => { default => sub {50},    isa => Int },
-    fields       => { isa => Maybe[ArrayRef], coerce => $TO{array_ref} },
-    sort         => { isa => Maybe[ArrayRef], coerce => $TO{array_ref} },
-    aggregations => { isa => Maybe[HashRef] },
+    fields       => { isa => ArrayRef, coerce => $TO{array_ref} },
+    sort         => { isa => ArrayRef, coerce => $TO{array_ref} },
+    aggregations => { isa => HashRef },
 );
 
 =attr scroll
@@ -134,13 +135,13 @@ Can be set with B<set_terminateafter>.  Cannot be an init_arg.
 =cut
 
 my %PARAMS = (
-    scroll           => { isa => Maybe[TimeConstant] },
+    scroll           => { isa => TimeConstant },
     timeout          => { isa => TimeConstant },
     terminate_after  => { isa => Int },
-    track_total_hits => { isa => Str, default => sub { 'false' } },
-    track_scores     => { isa => Str, default => sub { 'false' } },
-    search_type      => { isa => Str, default => sub { 'query_then_fetch' } },
-    rest_total_hits_as_int => { isa => Str, default => sub { 'false' } },
+    track_total_hits => { isa => Enum[qw( true false )], default => sub { 'true' } },
+    track_scores     => { isa => Enum[qw( true false )] },
+    search_type      => { isa => Enum[qw( dfs_query_then_fetch query_then_fetch )] },
+    rest_total_hits_as_int => { isa => Enum[qw( true false )], default => sub { 'true' } },
 );
 
 # Dynamically build our attributes
@@ -149,7 +150,6 @@ foreach my $attr (keys %QUERY) {
         is       => 'rw',
         lazy     => 1,
         writer   => "set_$attr",
-        init_arg => undef,
         %{ $QUERY{$attr} },
     );
 }
@@ -167,7 +167,6 @@ foreach my $attr (keys %PARAMS) {
         is       => 'rw',
         lazy     => 1,
         writer   => "set_$attr",
-        init_arg => undef,
         %{ $PARAMS{$attr} },
     );
 }
@@ -184,13 +183,17 @@ sub uri_params {
 
     my %params=();
     foreach my $field (keys %PARAMS) {
-        my $v = eval {
-            debug({color=>'magenta'}, "uri_params() - retrieving param '$field'");
+        my $v;
+        eval {
             ## no critic
             no strict 'refs';
-            $self->$field();
+            $v = $self->$field();
             ## user critic
         };
+        debug({color=>'magenta'}, sprintf "uri_params() - retrieving param '%s' got '%s'",
+                $field, ( defined $v ? $v : '' ),
+        );
+
         next unless defined $v;
         $params{$field} = $v;
     }
@@ -268,7 +271,7 @@ sub query {
             if($self->stash($k)) {
                 push @{ $bool{$k} }, $self->stash($k);
             }
-            delete $bool{$k} if exists $bool{$k} and not @{ $bool{$k} };
+            delete $bool{$k} if exists $bool{$k} and is_arrayref($bool{$k}) and not @{ $bool{$k} };
         }
         $qref = { bool => \%bool };
     }
@@ -436,13 +439,10 @@ sub add_bool {
     my %bools = @_;
     foreach my $section ( sort keys %bools ) {
         next unless exists $QUERY{$section};
-        # Handle one or more conditional
-        my @conditions = is_arrayref($bools{$section}) ? @{ $bools{$section} }
-                       : ( $bools{$section} );
         ## no critic
         no strict 'refs';
         my $set = $self->$section;
-        push @{ $set }, @conditions;
+        push @{ $set }, $bools{$section};
         my $setter = "set_$section";
         $self->$setter($set);
         ## use critic

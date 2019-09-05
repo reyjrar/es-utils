@@ -62,8 +62,6 @@ my $q = exists $OPT{'match-all'} && $OPT{'match-all'}
 
 $q->set_timeout('10s');
 $q->set_scroll('30s');
-$q->set_rest_total_hits_as_int('true');
-$q->set_track_total_hits('true');
 
 if( exists $OPT{prefix} ){
     foreach my $prefix (@{ $OPT{prefix} }) {
@@ -303,11 +301,11 @@ if( exists $OPT{top} ) {
     }
 }
 elsif(exists $OPT{tail}) {
-    $q->set_size(20);
+    $q->set_size($CONFIG{'max-batch-size'});
     @AGES = ($AGES[-1]);
 }
 else {
-    $q->set_size( $CONFIG{'max-batch-size'} );
+    $q->set_size( $CONFIG{size} < $CONFIG{'max-batch-size'} ? $CONFIG{size} : $CONFIG{'max-batch-size'} );
 }
 
 my %displayed_indices = ();
@@ -345,6 +343,7 @@ AGES: while( !$DONE && @AGES ) {
 
     debug("== Query");
     debug_var($q->request_body);
+    debug_var($q->uri_params);
 
     my $result = es_request('_search',
         # Search Parameters
