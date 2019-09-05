@@ -10,12 +10,12 @@ use CLI::Helpers qw(:output);
 use Clone qw(clone);
 use Moo;
 use Ref::Util qw(is_arrayref is_hashref);
-use Types::Standard qw(ArrayRef Enum HashRef Int Str);
+use Types::Standard qw(ArrayRef Enum HashRef Int Maybe Str);
 use Types::ElasticSearch qw(TimeConstant is_TimeConstant);
 use namespace::autoclean;
 
 my %TO = (
-    array_ref => sub { defined $_[0] && ref($_[0]) eq 'ARRAY' ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0] },
+    array_ref => sub { defined $_[0] && is_arrayref($_[0]) ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0] },
 );
 
 =attr query_stash
@@ -46,6 +46,11 @@ Can be set using set_must_not and is a valid init_arg.
 
 The should section of a bool query as an array reference.  See: L<add_bool>
 Can be set using set_should and is a valid init_arg.
+
+=attr minimum_should_match
+
+A string defining the minimum number of should conditions to qualify a match.
+See L<https://www.elastic.co/guide/en/elasticsearch/reference/7.3/query-dsl-minimum-should-match.html>
 
 =attr filter
 
@@ -132,10 +137,32 @@ large queries where you are protecting against OOM Errors. The B<size> attribute
 truncation occurs after the reduce operation, where B<terminate_after> occurs during the map phase of the query.
 Can be set with B<set_terminateafter>.  Cannot be an init_arg.
 
+=attr track_total_hits
+
+Should the query attempt to calculate the number of hits the query would match.
+Defaults to C<true>.
+
+=attr track_scores
+
+Set to true to score every hit in the search results, set to false to not
+report scores.  Defaults to unset, i.e., use the ElasticSearch default.
+
+=attr rest_total_hits_as_int
+
+In ElasticSearch 7.0, the total hits element became a hash reference with more
+details.  Since most of the tooling relies on the old behavior, this defaults
+to C<true>.
+
+=attr search_type
+
+Choose an execution path for the query.  This is null by default, but you can
+set it to a valid `search_type` setting, see:
+L<https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-body.html#request-body-search-search-type>
+
 =cut
 
 my %PARAMS = (
-    scroll           => { isa => TimeConstant },
+    scroll           => { isa => Maybe[TimeConstant] },
     timeout          => { isa => TimeConstant },
     terminate_after  => { isa => Int },
     track_total_hits => { isa => Enum[qw( true false )], default => sub { 'true' } },
@@ -285,7 +312,7 @@ The value being the hash reference representation of the aggregation itself.
 It will silently replace a previously named aggregation with the most recent
 call.
 
-Calling this function overrides the L<size> element to B<0> and L<scroll> to undef.
+Calling this function overrides the L<size> element to B<0> and disables L<scroll>.
 
 Aliased as B<add_aggs>.
 
