@@ -157,13 +157,14 @@ sub _cluster_state_1_0 {
 sub _search_params {
     my ($url,$options,$data,$version) = @_;
 
-    # Handle the API Changes in version 7.0.0
-    if( qv($version) < qv("7.0.0") ) {
-        if( exists $options->{uri_param} ) {
-            foreach my $invalid ( qw(rest_total_hits_as_int) ) {
-                delete $options->{uri_param}{$invalid}
-                    if exists $options->{uri_param}{$invalid};
-            }
+    my @invalid = ();
+    push @invalid, "track_total_hits"       if qv($version) < qv("6.0.0");
+    push @invalid, "rest_total_hits_as_int" if qv($version) < qv("7.0.0");
+
+    if( @invalid && exists $options->{uri_param} ) {
+        foreach my $invalid ( @invalid ) {
+            delete $options->{uri_param}{$invalid}
+                if exists $options->{uri_param}{$invalid};
         }
     }
 
