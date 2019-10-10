@@ -4,8 +4,6 @@
 use strict;
 use warnings;
 
-$|=1;           # Flush STDOUT
-
 use App::ElasticSearch::Utilities qw(:all);
 use App::ElasticSearch::Utilities::Query;
 use App::ElasticSearch::Utilities::QueryString;
@@ -202,8 +200,6 @@ if( exists $OPT{missing} ) {
         $q->add_bool( must_not => { exists => { field => $field } } );
     }
 }
-my $DONE = 0;
-local $SIG{INT} = sub { $DONE=1 };
 
 my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max avg);
 my $SUBAGG = undef;
@@ -322,6 +318,9 @@ my $age               = undef;
 my %last_batch_id     = ();
 my %AGGS_TOTALS       = ();
 my %AGES_SEEN         = ();
+# Handle CTRL+C During the Loop
+my $DONE              = 0;
+local $SIG{INT}       = sub { $DONE=1 };
 
 verbose({color=>'green'}, "= Query setup complete, beginning request.");
 AGES: while( !$DONE && @AGES ) {
@@ -376,8 +375,7 @@ AGES: while( !$DONE && @AGES ) {
         output({stderr=>1,color=>'red'},
             "# Received an error from the cluster. $simple_error"
         );
-        last if $DONE;
-        next;
+        last;
     }
     $displayed_indices{$_} = 1 for @{ $by_age{$age} };
     $TOTAL_HITS += $result->{hits}{total} if $result->{hits}{total};
