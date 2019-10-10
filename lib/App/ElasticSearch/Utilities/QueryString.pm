@@ -89,6 +89,18 @@ has plugins => (
     lazy    => 1,
 );
 
+=attr fields
+
+A hash reference with the field data from L<App::ElasticSearch::Utilities::es_index_fields>.
+
+=cut
+
+has fields => (
+    is => 'rw',
+    isa => HashRef,
+    default => sub { {} },
+);
+
 =method expand_query_string(@tokens)
 
 This function takes a list of tokens, often from the command line via @ARGV.  Uses
@@ -101,7 +113,9 @@ Returns: L<App::ElasticSearch::Utilities::Query> object
 sub expand_query_string {
     my $self = shift;
 
-    my $query  = App::ElasticSearch::Utilities::Query->new();
+    my $query  = App::ElasticSearch::Utilities::Query->new(
+        fields => $self->fields,
+    );
     my @processed = ();
     TOKEN: foreach my $token (@_) {
         foreach my $p (@{ $self->plugins }) {

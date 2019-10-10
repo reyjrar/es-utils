@@ -123,6 +123,9 @@ foreach my $index (sort by_index_age keys %indices) {
     }
 }
 
+# Set fields so we know how to construct complex aggs
+$q->fields( \%FIELDS );
+
 #------------------------------------------------------------------------#
 # Figure out the timestamp
 $CONFIG{timestamp} ||= es_globals('timestamp') || '@timestamp';

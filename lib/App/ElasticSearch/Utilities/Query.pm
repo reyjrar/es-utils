@@ -18,6 +18,18 @@ my %TO = (
     array_ref => sub { defined $_[0] && is_arrayref($_[0]) ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0] },
 );
 
+=attr fields
+
+A hash reference with the field data from L<App::ElasticSearch::Utilities::es_index_fields>.
+
+=cut
+
+has fields => (
+    is => 'rw',
+    isa => HashRef,
+    default => sub { {} },
+);
+
 =attr query_stash
 
 Hash reference containing replaceable query elements.  See L<stash>.
