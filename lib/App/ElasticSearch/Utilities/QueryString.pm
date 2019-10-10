@@ -12,7 +12,7 @@ use CLI::Helpers qw(:output);
 use Module::Pluggable::Object;
 use Moo;
 use Ref::Util qw(is_arrayref);
-use Types::Standard qw(ArrayRef Enum);
+use Types::Standard qw(ArrayRef Enum HashRef);
 
 use namespace::autoclean;
 
@@ -89,13 +89,13 @@ has plugins => (
     lazy    => 1,
 );
 
-=attr fields
+=attr fields_meta
 
 A hash reference with the field data from L<App::ElasticSearch::Utilities::es_index_fields>.
 
 =cut
 
-has fields => (
+has fields_meta => (
     is => 'rw',
     isa => HashRef,
     default => sub { {} },
@@ -114,7 +114,7 @@ sub expand_query_string {
     my $self = shift;
 
     my $query  = App::ElasticSearch::Utilities::Query->new(
-        fields => $self->fields,
+        fields_meta => $self->fields_meta,
     );
     my @processed = ();
     TOKEN: foreach my $token (@_) {

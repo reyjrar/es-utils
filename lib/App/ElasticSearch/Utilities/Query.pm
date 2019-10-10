@@ -18,13 +18,13 @@ my %TO = (
     array_ref => sub { defined $_[0] && is_arrayref($_[0]) ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0] },
 );
 
-=attr fields
+=attr fields_meta
 
 A hash reference with the field data from L<App::ElasticSearch::Utilities::es_index_fields>.
 
 =cut
 
-has fields => (
+has fields_meta => (
     is => 'rw',
     isa => HashRef,
     default => sub { {} },

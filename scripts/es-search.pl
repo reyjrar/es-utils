@@ -122,7 +122,7 @@ foreach my $index (sort by_index_age keys %indices) {
 }
 
 # Set fields so we know how to construct complex aggs
-$q->fields( \%FIELDS );
+$q->fields_meta( \%FIELDS );
 
 #------------------------------------------------------------------------#
 # Figure out the timestamp
