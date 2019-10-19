@@ -1,13 +1,22 @@
 # Sample ES Utils Options
 ---
-host: searchproxy-01.example.com
-keep-proxy: 1
-days: 7
-facet_whitelist:
-  - src_ip
-  - dst_ip
-  - program
-  - method
-  - status
-  - file
-  - filetype
+# Host to connect to, defaults to localhost
+host: es-gateway.corp.company.com
+# Port, defaults to 9200
+port: 9200
+# Protocol, defaults to http, also supports https
+proto: http
+# If using HTTP Basic Auth
+#http-username: bob
+#http-password: notRecommended
+#password-exec: ~/bin/get-me-es-password-from-keychain.sh
+
+# Default Index Settings
+base: log
+days: 1
+timestamp: timestamp
+
+# Per Index Base Settings
+meta:
+  logstash:
+    timestamp: '@timestamp'
