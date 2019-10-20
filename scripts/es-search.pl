@@ -49,11 +49,15 @@ GetOptions(\%OPT, qw(
     top=s
     interval=s
     with=s@
+    or
 ));
 
 # Search string is the rest of the argument string
 my $context = $OPT{filter} ? 'filter' : 'must';
-my $qs = App::ElasticSearch::Utilities::QueryString->new( $OPT{filter} ? (qw(context filter)) : () );
+my $qs = App::ElasticSearch::Utilities::QueryString->new(
+            $OPT{filter} ?  (context => 'filter') : (),
+            default_join => $OPT{or} ? 'OR' : 'AND',
+);
 my $q = exists $OPT{'match-all'} && $OPT{'match-all'}
             ? App::ElasticSearch::Utilities::Query->new($context => { match_all => {} })
             : $qs->expand_query_string(@ARGV);
@@ -322,7 +326,7 @@ my %AGES_SEEN         = ();
 my $DONE              = 0;
 local $SIG{INT}       = sub { $DONE=1 };
 
-verbose({color=>'green'}, "= Query setup complete, beginning request.");
+verbose({color=>'green',level=>1}, "= Query setup complete, beginning request.");
 AGES: while( !$DONE && @AGES ) {
     # With --tail, we don't want to deplete @AGES
     $age = $OPT{tail} ? $AGES[0] : shift @AGES;

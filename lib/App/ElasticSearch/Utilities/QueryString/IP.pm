@@ -12,6 +12,8 @@ use namespace::autoclean;
 use Moo;
 with 'App::ElasticSearch::Utilities::QueryString::Plugin';
 
+sub _build_priority { 25 }
+
 =for Pod::Coverage handle_token
 
 =cut
@@ -19,13 +21,14 @@ with 'App::ElasticSearch::Utilities::QueryString::Plugin';
 sub handle_token {
     my ($self,$token) = @_;
     if( my ($term,$match) = split /\:/, $token, 2 ) {
-        if($term =~ /_ip$/ ) {
-            if($match =~ m|^\d{1,3}(\.\d{1,3}){1,3}(/\d+)$|) {
-                my $cidr = Net::CIDR::Lite->new();
-                $cidr->add($match);
-                my @range = split /-/, ($cidr->list_range)[0];
-                return { query_string => sprintf("%s:[%s TO %s]", $term, @range) };
-            }
+        # These are not 100% accurate IP matchers, but they are fast
+        if(     $match =~ m|^\d{1,3}(?:\.\d{1,3}){1,3}(?:/\d+)$|
+            or  $match =~ m|^[0-9a-fA-F:]+(?:/\d+)$|
+        ) {
+            my $cidr = Net::CIDR::Lite->new();
+            $cidr->add($match);
+            my @range = split /-/, ($cidr->list_range)[0];
+            return { condition => { range => { $term => { gte => $range[0], lte => $range[1] } } } };
         }
     }
     return;

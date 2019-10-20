@@ -175,7 +175,6 @@ sub expand_query_string {
             @qs = @joined;
         }
     }
-    # $query->add_aggregation();
     $query->add_bool($context => { query_string => { query => join(' ', @qs) } }) if @qs;
 
     return $query;
