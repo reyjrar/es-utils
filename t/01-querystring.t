@@ -55,8 +55,8 @@ my %tests = (
           'bool' => {
             'must' => [
               {
-                'query_string' => {
-                  'query' => 'src_ip:[10.0.0.0 TO 10.255.255.255]'
+                'range' => {
+                  'src_ip' => { gte => '10.0.0.0', lte => '10.255.255.255' }
                 }
               }
             ]
