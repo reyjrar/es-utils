@@ -6,6 +6,7 @@ use warnings;
 
 # VERSION
 
+use App::ElasticSearch::Utilities qw(es_request);
 use CLI::Helpers qw(:output);
 use Clone qw(clone);
 use Moo;
@@ -43,6 +44,22 @@ has query_stash => (
     init_arg => undef,
     default  => sub {{}},
 );
+
+=attr scroll_id
+
+The scroll id for the last executed query.  You shouldn't mess with this
+directly. It's best to use the L<execute()> and L<scroll_results()> methods.
+
+=cut
+
+has scroll_id => (
+    is       => 'rw',
+    isa      => Str,
+    init_arg => undef,
+    writer   => 'set_scroll_id',
+    clearer  => 1,
+);
+
 
 =attr must
 
@@ -208,6 +225,70 @@ foreach my $attr (keys %PARAMS) {
         writer   => "set_$attr",
         %{ $PARAMS{$attr} },
     );
+}
+
+=method as_search( [ 'index1', 'index2' ] )
+
+Returns a list of parameters to pass directly to C<es_request()>.
+
+=cut
+
+sub as_search {
+    my ($self,$indexes) = @_;
+    return (
+        _search => {
+            index     => $indexes,
+            uri_param => $self->uri_params,
+            method    => 'POST',
+        },
+        $self->request_body,
+    );
+}
+
+=method execute( [ $index1, $index2 ] )
+
+Uses `es_request()` to return the result, stores any relevant scroll data.
+
+=cut
+
+sub execute {
+    my($self,$indexes) = @_;
+
+    my $result = es_request( $self->as_search($indexes) );
+
+    if( $result->{_scroll_id} ) {
+        $self->set_scroll_id($result->{_scroll_id})
+    }
+
+    return $result;
+}
+
+=method scroll_results()
+
+If a scroll has been set, this will construct and run the requisite scroll
+search, otherwise it returns undef.
+
+=cut
+
+sub scroll_results {
+    my($self) = @_;
+    my $result;
+    if( $self->scroll_id ) {
+        $result = es_request( '_search/scroll',
+                { method => 'POST' },
+                {
+                    scroll => $self->scroll,
+                    scroll_id => $self->scroll_id,
+                }
+        );
+        if( $result && $result->{_scroll_id} ) {
+            $self->set_scroll_id($result->{_scroll_id})
+        }
+        else {
+            $self->clear_scroll_id();
+        }
+    }
+    return $result ? $result : ();
 }
 
 =method uri_params()
@@ -518,6 +599,8 @@ sub stash {
         if( defined $condition ) {
             debug({color=>exists $stash->{$section} ? 'green' : 'red' }, "setting $section in stash");
             $stash->{$section} = $condition;
+            # Reset Scroll ID
+            $self->clear_scroll_id();
         }
     }
     return exists $stash->{$section} ? $stash->{$section} : undef;
