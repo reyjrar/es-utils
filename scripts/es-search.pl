@@ -280,7 +280,7 @@ if( exists $OPT{top} ) {
 
     if( exists $sub_agg{by} ) {
         $agg_header = "$OPT{by}\t" . $agg_header;
-        $agg{$top_agg}->{order} = { by => $ORDER };
+        $agg{$top_agg}->{order} = [ { by => $ORDER }, { "_count" => "desc" } ];
     }
     $agg{aggregations} = \%sub_agg if keys %sub_agg;
 
