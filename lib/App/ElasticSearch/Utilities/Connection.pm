@@ -237,7 +237,7 @@ sub request {
     my $req = App::ElasticSearch::Utilities::HTTPRequest->new( $method => $uri->as_string );
     $req->content($body) if defined $body;
 
-    return $self->ua->simple_request( $req );
+    return $self->ua->request( $req );
 }
 
 
