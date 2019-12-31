@@ -681,7 +681,7 @@ sub es_request {
             $msg = $resp->{message};
         };
         die sprintf "es_request(%s/%s) failed[%d]:\n%s",
-                    $index, $options->{command}, $resp->code, $msg;
+                    $index, $options->{command}, $resp->code, $msg || 'missing error message';
 
     } elsif( !defined $resp->content || ( !is_ref($resp->content) && !length $resp->content )) {
         output({color=>'yellow',stderr=>1},
