@@ -245,7 +245,7 @@ if( exists $OPT{top} ) {
             # Skip invalid elements
             next unless defined $field and defined $size and $size > 0;
 
-            my $id = "$type.$field";
+            my $id = "$type-$field";
             # If a term agg and we haven't used this field name, simplify it
             if( $type =~ /terms$/ && !$sub_agg{$field} ) {
                 $id = $field;
@@ -347,9 +347,10 @@ AGES: while( !$DONE && @AGES ) {
         $header=0;
     }
 
-    debug("== Query");
-    debug_var($q->request_body);
+    debug("== Request Parameters");
     debug_var($q->uri_params);
+    debug("== Query");
+    debug(to_json $q->request_body,{allow_nonref=>1,canonical=>1,pretty=>1});
 
     # Execute the query
     my $result = $q->execute( $by_age{$age} );
