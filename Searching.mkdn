@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 7.5
+version 7.6
 
 # SYNOPSIS
 
@@ -357,6 +357,12 @@ es-search.pl - Search a logging cluster for information
 
     The number of results to show, default is 20.
 
+- **max-batch-size**
+
+    When building result sets, this tool uses scroll searches.  This parameter
+    controls how many docs are in each scroll.  It defaults to 50, but will be
+    scaled down lower if `size` is smaller.
+
 - **all**
 
     If specified, ignore the --size parameter and show me everything within the date range I specified.
@@ -537,7 +543,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2019 by Brad Lhotsky.
+This software is Copyright (c) 2020 by Brad Lhotsky.
 
 This is free software, licensed under:
 

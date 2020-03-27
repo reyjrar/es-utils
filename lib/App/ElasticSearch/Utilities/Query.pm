@@ -331,19 +331,22 @@ sub request_body {
     my $self = shift;
 
     my %body = ();
+    my %map  = qw( fields _source );
     foreach my $section (keys %REQUEST_BODY) {
+        my $val;
         eval {
-            debug({color=>'yellow'}, "request_body() - retrieving section '$section'");
             ## no critic
             no strict 'refs';
-            $body{$section} = $self->$section;
+            $val = $self->$section;
             ## use critic
-            delete $body{$section} unless defined $body{$section};
-            debug_var({color=>'cyan'},$body{$section}) if defined $body{$section} and ref $body{$section};
             1;
         } or do {
             debug({color=>'red'}, "request_body() - Failed to retrieve '$section'");
         };
+        next unless $val;
+        my $data = { $section => $val };
+        my $param = $map{$section} || $section;
+        $body{$param} = $val;
     }
     $body{query} = $self->query;
     return \%body;
