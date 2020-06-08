@@ -11,8 +11,6 @@ our %_GLOBALS = ();
 our @_CONFIGS = (
     '/etc/es-utils.yaml',
     '/etc/es-utils.yml',
-    "$ENV{HOME}/.es-utils.yaml",
-    "$ENV{HOME}/.es-utils.yml",
 );
 if( $ENV{HOME} ) {
     push @_CONFIGS, map { "$ENV{HOME}/.es-utils.$_" } qw( yaml yml );
