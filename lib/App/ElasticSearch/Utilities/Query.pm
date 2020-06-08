@@ -343,7 +343,7 @@ sub request_body {
         } or do {
             debug({color=>'red'}, "request_body() - Failed to retrieve '$section'");
         };
-        next unless $val;
+        next unless defined $val;
         my $data = { $section => $val };
         my $param = $map{$section} || $section;
         $body{$param} = $val;
@@ -433,7 +433,7 @@ sub add_aggregations {
 
 Use this to wrap an aggregation in another aggregation.  For example:
 
-    $q->add_aggregation(ip => { terms => { field => src_ip } });
+    $q->add_aggregations(ip => { terms => { field => src_ip } });
 
 Creates:
 

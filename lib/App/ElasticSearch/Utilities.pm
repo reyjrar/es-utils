@@ -14,6 +14,9 @@ our @_CONFIGS = (
     "$ENV{HOME}/.es-utils.yaml",
     "$ENV{HOME}/.es-utils.yml",
 );
+if( $ENV{HOME} ) {
+    push @_CONFIGS, map { "$ENV{HOME}/.es-utils.$_" } qw( yaml yml );
+}
 
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(:config pass_through);
@@ -633,7 +636,6 @@ sub es_request {
     else {
         $index = '';
     }
-
 
     # Figure out if we're modifying things
     my $modification = $url eq '_search' && $options->{method} eq 'POST' ? 0
