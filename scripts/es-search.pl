@@ -268,7 +268,7 @@ if( exists $OPT{top} ) {
     }
 
     my $field = shift @agg_fields;
-    $agg_header = "count\t" . $field;
+    $agg_header = "count\tpct\t" . $field;
     $agg{$top_agg} = { field => $field };
 
     if( $OPT{'bg-filter'} && $top_agg eq 'significant_terms' ) {
@@ -384,7 +384,7 @@ AGES: while( !$DONE && @AGES ) {
     my @always = ();
     push @always, $CONFIG{timestamp} unless $OPT{'no-decorators'};
     if(!$header && @SHOW) {
-        output({color=>'cyan'}, join("\t", @always,@SHOW));
+        output({color=>'cyan'}, join("\t", @always, @SHOW));
         $header++;
     }
 
@@ -411,11 +411,15 @@ AGES: while( !$DONE && @AGES ) {
                         $AGGS_TOTALS{$agg->{key}} ||= 0;
                         $AGGS_TOTALS{$agg->{key}} += $agg->{doc_count};
                         my @out = ();
-
+                        my $top_docs;
                         foreach my $k (qw(score doc_count bg_count key)) {
                             next unless exists $agg->{$k};
                             my $value = delete $agg->{$k};
                             push @out, defined $value ? ($k eq 'score' ? sprintf "%0.3f", $value : $value ) : '-';
+                            if( $k eq 'doc_count' ) {
+                                push @out, sprintf "%0.4f", $value ? $value / $result->{hits}{total} : 0;
+                                $top_docs = $value;
+                            }
                         }
                         if(exists $agg->{by} ) {
                             my $by = delete $agg->{by};
@@ -438,6 +442,8 @@ AGES: while( !$DONE && @AGES ) {
                                             next unless exists $subagg->{$dk};
                                             my $v = delete $subagg->{$dk};
                                             push @elms, defined $v ? ($dk eq 'score' ? sprintf "%0.3f", $v : $v ) : '-';
+                                            push @elms, sprintf "%0.4f", $v / $top_docs
+                                                if $dk eq 'doc_count' and $top_docs;
                                         }
                                         push @sub, \@elms;
                                     }
