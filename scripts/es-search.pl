@@ -39,6 +39,7 @@ GetOptions(\%OPT, qw(
     missing=s@
     no-decorators|no-header
     no-implications|no-imply
+    precision=i
     prefix=s@
     pretty
     show=s@
@@ -94,12 +95,14 @@ my %CONFIG = (
                : $OPT{format} ? lc $OPT{format}
                : 'yaml',
     'max-batch-size' => $OPT{'max-batch-size'} || 50,
+    precision => $OPT{precision} || 3,
     $OPT{timestamp} ? ( timestamp => $OPT{timestamp} ) : (),
 );
 $OPT{'no-decorators'} = 1 if $CONFIG{format} eq 'json';
 $CONFIG{pretty} = $OPT{pretty} ? 1
                 : $CONFIG{format} =~ /pretty/ ? 1
                 : 0;
+$CONFIG{decimal_format} = "%0.$CONFIG{precision}f";
 #------------------------------------------------------------------------#
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
@@ -415,9 +418,9 @@ AGES: while( !$DONE && @AGES ) {
                         foreach my $k (qw(score doc_count bg_count key)) {
                             next unless exists $agg->{$k};
                             my $value = delete $agg->{$k};
-                            push @out, defined $value ? ($k eq 'score' ? sprintf "%0.3f", $value : $value ) : '-';
+                            push @out, defined $value ? ($k eq 'score' ? sprintf $CONFIG{decimal_format}, $value : $value ) : '-';
                             if( $k eq 'doc_count' ) {
-                                push @out, sprintf "%0.4f", $value ? $value / $result->{hits}{total} : 0;
+                                push @out, sprintf $CONFIG{decimal_format}, $value ? $value / $result->{hits}{total} : 0;
                                 $top_docs = $value;
                             }
                         }
@@ -441,8 +444,8 @@ AGES: while( !$DONE && @AGES ) {
                                         foreach my $dk (qw(score doc_count bg_count)) {
                                             next unless exists $subagg->{$dk};
                                             my $v = delete $subagg->{$dk};
-                                            push @elms, defined $v ? ($dk eq 'score' ? sprintf "%0.3f", $v : $v ) : '-';
-                                            push @elms, sprintf "%0.4f", $v / $top_docs
+                                            push @elms, defined $v ? ($dk eq 'score' ? sprintf $CONFIG{decimal_format}, $v : $v ) : '-';
+                                            push @elms, sprintf $CONFIG{decimal_format}, $v / $top_docs
                                                 if $dk eq 'doc_count' and $top_docs;
                                         }
                                         push @sub, \@elms;
@@ -467,7 +470,7 @@ AGES: while( !$DONE && @AGES ) {
                                     my %alias = qw( variance var std_deviation stdev );
                                     foreach my $stat (qw(count min avg max sum variance std_deviation)) {
                                         next unless exists $agg->{$k}{$stat};
-                                        my $v = $agg->{$k}{$stat} =~ /\./ ? sprintf "%0.3f", $agg->{$k}{$stat}
+                                        my $v = $agg->{$k}{$stat} =~ /\./ ? sprintf $CONFIG{decimal_format}, $agg->{$k}{$stat}
                                                                           : $agg->{$k}{$stat};
                                         push @stats, $alias{$stat} || $stat => $v;
                                     }
@@ -603,7 +606,9 @@ if($CONFIG{summary} && keys %AGGS_TOTALS) {
         output({color=>'cyan'},$agg_header);
     }
     foreach my $k (sort { $AGGS_TOTALS{$b} <=> $AGGS_TOTALS{$a} } keys %AGGS_TOTALS) {
-        output({data=>1,color=>'green'},"$AGGS_TOTALS{$k}\t$k");
+        output({data=>1,color=>'green'}, join "\t",
+                $AGGS_TOTALS{$k}, sprintf($CONFIG{decimal_format}, $AGGS_TOTALS{$k} / $TOTAL_HITS), $k
+        );
     }
 }
 
@@ -732,6 +737,7 @@ Options:
     --exists            Field which must be present in the document
     --missing           Field which must not be present in the document
     --size              Result size, default is 20, aliased to -n and --limit
+    --max-batch-size    When making requests to ES, retrieve this many docs in a single request, defaults to 50
     --all               Don't consider result size, just give me *everything*
     --asc               Sort by ascending timestamp
     --desc              Sort by descending timestamp (Default)
@@ -739,6 +745,7 @@ Options:
     --format            When --show isn't used, use this method for outputting the record, supported: json, jsonpretty, yaml
                         json assumes --no-decorator as we assume you're piping through jq
     --pretty            Where possible, use JSON->pretty
+    --precision         For floating point values, use this many digits of precision, defaults to 3
     --no-decorators     Do not show the header with field names in the query results
     --no-header         Same as above
     --no-implications   Don't attempt to imply filters from statistical aggregations
@@ -789,6 +796,11 @@ Using this option together with C<--asc>, C<--desc> or C<--tail> is not possible
 Output format to use when the full record is dumped.  The default is 'yaml', but 'json' is also supported.
 
     --format json
+
+=item B<precision>
+
+For output involving floating point numbers, use this many places to the right of the decimal point.  The default is 3.
+
 
 =item B<tail>
 
@@ -850,18 +862,18 @@ distinct host) of hosts showing the top 5 hosts
 
 Without the --with, the results might look like this:
 
-    112314 sshd
-    21224  ntp
+    112314 0.151 sshd
+    21224  0.151 ntp
 
 The B<--with> option would expand that output to look like this:
 
-    112314   host   bastion-804   12431   sshd
-    112314   host   bastion-803   10009   sshd
-    112314   host   bastion-805   9768    sshd
-    112314   host   bastion-801   8789    sshd
-    112314   host   bastion-802   4121    sshd
-    21224    host   webapp-324    21223   ntp
-    21224    host   mail-42       1       ntp
+    112314   0.151 host   bastion-804   12431  0.111 sshd
+    112314   0.151 host   bastion-803   10009  0.089 sshd
+    112314   0.151 host   bastion-805   9768   0.087 sshd
+    112314   0.151 host   bastion-801   8789   0.078 sshd
+    112314   0.151 host   bastion-802   4121   0.037 sshd
+    21224    0.016 host   webapp-324    21223  0.999 ntp
+    21224    0.016 host   mail-42       1      0.000 ntp
 
 This may be specified multiple times, the result is more I<rows>, not more I<columns>, e.g.
 
@@ -870,16 +882,16 @@ This may be specified multiple times, the result is more I<rows>, not more I<col
 
 Produces:
 
-    112314   dc     arlington     112314  sshd
-    112314   host   bastion-804   12431   sshd
-    112314   host   bastion-803   10009   sshd
-    112314   host   bastion-805   9768    sshd
-    112314   host   bastion-801   8789    sshd
-    112314   host   bastion-802   4121    sshd
-    21224    dc     amsterdam     21223   ntp
-    21224    dc     la            1       ntp
-    21224    host   webapp-324    21223   ntp
-    21224    host   mail-42       1       ntp
+    112314 0.151  dc     arlington     112314 1.000 sshd
+    112314 0.151  host   bastion-804   12431  0.111 sshd
+    112314 0.151  host   bastion-803   10009  0.089 sshd
+    112314 0.151  host   bastion-805   9768   0.087 sshd
+    112314 0.151  host   bastion-801   8789   0.078 sshd
+    112314 0.151  host   bastion-802   4121   0.037 sshd
+    21224  0.016  dc     amsterdam     21223  0.999 ntp
+    21224  0.016  dc     la            1      0.000 ntp
+    21224  0.016  host   webapp-324    21223  0.999 ntp
+    21224  0.016  host   mail-42       1      0.000 ntp
 
 You may sub aggregate using any L<bucket agggregation|https://www.elastic.co/guide/en/elasticsearch/reference/master/search-aggregations-bucket.html>
 as long as the aggregation provides a B<key> element.  Additionally, doc_count, score, and bg_count will be reported in the output.
