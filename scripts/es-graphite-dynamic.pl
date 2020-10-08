@@ -174,6 +174,9 @@ sub local_shard_data {
 
     my %results;
     foreach my $shard ( @{ $shardres } ) {
+        # Skip unallocated shards
+        next unless $shard->{id};
+
         # Skip unless this shard is allocated to this shard
         next unless $shard->{id} eq $id;
 
