@@ -609,16 +609,16 @@ sub es_request {
     my $index;
 
     if( exists $options->{index} ) {
-        my $index_in = delete $options->{index};
-
-        # No need to validate _all
-        if( $index_in eq '_all') {
-            $index = $index_in;
-        }
-        else {
-            # Validate each included index
-            my @indexes = is_arrayref($index_in) ? @{ $index_in } : split /\,/, $index_in;
-            $index = join(',', @indexes);
+        if( my $index_in = delete $options->{index} ) {
+            # No need to validate _all
+            if( $index_in eq '_all') {
+                $index = $index_in;
+            }
+            else {
+                # Validate each included index
+                my @indexes = is_arrayref($index_in) ? @{ $index_in } : split /\,/, $index_in;
+                $index = join(',', @indexes);
+            }
         }
     }
 
