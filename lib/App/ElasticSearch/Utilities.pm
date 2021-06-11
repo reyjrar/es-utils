@@ -14,6 +14,9 @@ our @_CONFIGS = (
 );
 if( $ENV{HOME} ) {
     push @_CONFIGS, map { "$ENV{HOME}/.es-utils.$_" } qw( yaml yml );
+
+    my $xdg_config_home = $ENV{XDG_CONFIG_HOME} || "$ENV{HOME}/.config";
+    push @_CONFIGS, map { "${xdg_config_home}/es-utils/config.$_" } qw( yaml yml );
 }
 
 use CLI::Helpers qw(:all);
@@ -95,7 +98,8 @@ See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections fro
 
 =head1 ARGUMENT GLOBALS
 
-Some options may be specified in the B</etc/es-utils.yaml> or B<$HOME/.es-utils.yaml> file:
+Some options may be specified in the B</etc/es-utils.yaml>, B<$HOME/.es-utils.yaml>
+or B<$HOME/.config/es-utils/config.yaml> file:
 
     ---
     base: logstash
