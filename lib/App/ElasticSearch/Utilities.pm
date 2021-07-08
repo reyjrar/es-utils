@@ -291,8 +291,6 @@ my %DEF = (
 );
 CLI::Helpers::override(verbose => 1) if $DEF{NOOP};
 
-my $BASE_URL = URI->new(sprintf "%s://%s:%d", @DEF{qw(PROTO HOST PORT)});
-
 if( $DEF{NOPROXY} ) {
     debug("Removing any active HTTP Proxies from ENV.");
     delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
@@ -497,7 +495,7 @@ sub es_pattern {
 sub _get_es_version {
     return $CURRENT_VERSION if defined $CURRENT_VERSION;
     my $conn = es_connect();
-    my $resp = $conn->ua->get( $BASE_URL->as_string );
+    my $resp = $conn->ua->get( sprintf "%s://%s:%d", $conn->proto, $conn->host, $conn->port );
     if( $resp->is_success ) {
         eval {
             $CURRENT_VERSION = join('.', (split /\./,$resp->content->{version}{number})[0,1]);
@@ -524,9 +522,11 @@ my $ES = undef;
 sub es_connect {
     my ($override_servers) = @_;
 
-    my $server = $DEF{HOST};
-    my $port   = $DEF{PORT};
-    my $proto  = $DEF{PROTO};
+    my %conn = (
+        host  => $DEF{HOST},
+        port  => $DEF{PORT},
+        proto => $DEF{PROTO},
+    );
 
     # If we're overriding, return a unique handle
     if(defined $override_servers) {
@@ -534,7 +534,7 @@ sub es_connect {
         my @servers;
         foreach my $entry ( @overrides ) {
             my ($s,$p) = split /\:/, $entry;
-            $p ||= $port;
+            $p ||= $conn{port};
             push @servers, { host => $s, port => $p };
         }
 
@@ -543,13 +543,21 @@ sub es_connect {
             return App::ElasticSearch::Utilities::Connection->new(%{$pick});
         }
     }
+    else {
+        # Check for index metadata
+        foreach my $k ( keys %conn ) {
+            foreach my $name ( $DEF{INDEX}, $DEF{BASE} ) {
+                next unless $name;
+                if( my $v = es_local_index_meta($k => $name) ) {
+                    $conn{$k} = $v;
+                    last;
+                }
+            }
+        }
+    }
 
     # Otherwise, cache our handle
-    $ES ||= App::ElasticSearch::Utilities::Connection->new(
-        host  => $server,
-        port  => $port,
-        proto => $proto,
-    );
+    $ES ||= App::ElasticSearch::Utilities::Connection->new(%conn);
 
     return $ES;
 }
@@ -1282,6 +1290,7 @@ field it needs to sort documents, i.e.:
     meta:
       logstash:
         timestamp: '@timestamp'
+        host: es-cluster-01.int.example.com
       bro:
         timestamp: 'timestamp'
 
