@@ -419,9 +419,20 @@ sub es_basic_auth {
     if( $DEF{HOST} eq $host ) {
         %auth = map { lc($_) => $DEF{$_} } qw(USERNAME PASSWORD);
     }
+    my %meta = ();
+    foreach my $k (qw( http-username password-exec )) {
+        foreach my $name ( $DEF{INDEX}, $DEF{BASE} ) {
+            next unless $name;
+            if( my $v = es_local_index_meta($k, $name) ) {
+                $meta{$k} = $v;
+                last;
+            }
+        }
+    }
 
     # Get the Username
-    $auth{username} ||= defined $DEF{USERNAME} ? $DEF{USERNAME}
+    $auth{username} ||= $meta{'http-username'} ? $meta{'http-username'}
+                      : defined $DEF{USERNAME} ? $DEF{USERNAME}
                       : defined $netrc         ? $netrc->login
                       : prompt("Username for '$host': ",
                             defined $DEF{USERNAME} ? (default => $DEF{USERNAME}) : ()
@@ -429,7 +440,7 @@ sub es_basic_auth {
 
     # Prompt for the password
     $auth{password} ||= defined $netrc ? $netrc->password
-                      : (es_pass_exec($host,$auth{username})
+                      : (es_pass_exec($host,$auth{username},$meta{'password-exec'})
                             || prompt(sprintf "Password for '%s' at '%s': ", $auth{username}, $host)
                         );
 
@@ -447,19 +458,20 @@ and keychains.
 =cut
 
 sub es_pass_exec {
-    my ($host,$username) = @_;
+    my ($host,$username,$exec) = @_;
     # Simplest case we can't run
-    return unless $DEF{PASSEXEC} and -x $DEF{PASSEXEC};
+    $exec ||= $DEF{PASSEXEC};
+    return unless -x $exec;
 
     my(@out,@err);
     # Run the password command captue out, error and RC
-    run3 [ $DEF{PASSEXEC}, $host, $username ], \undef, \@out, \@err;
+    run3 [ $exec, $host, $username ], \undef, \@out, \@err;
     my $rc = $?;
 
     # Record the error
     if( @err or $rc != 0 ) {
         output({color=>'red',stderr=>1},
-            sprintf("es_pass_exec() called '%s' and met with an error code '%d'", $DEF{PASSEXEC}, $rc),
+            sprintf("es_pass_exec() called '%s' and met with an error code '%d'", $exec, $rc),
             @err
         );
         return;
