@@ -395,108 +395,8 @@ AGES: while( !$DONE && @AGES ) {
         my $hits = is_arrayref($result->{hits}{hits}) ? $result->{hits}{hits} : [];
 
         # Handle Aggregations
-        if( exists $result->{aggregations} ) {
-            my $out_of =  $result->{aggregations}{out_of}{value};
-            $OUT_OF = $out_of if $out_of > $OUT_OF;
-            my $steps = exists $result->{aggregations}{step} ? $result->{aggregations}{step}{buckets}
-                      : [ $result->{aggregations} ];
-            my $indent = exists $result->{aggregations}{step} ? 1 : 0;
-            foreach my $step ( @$steps ) {
-                my $aggs = exists $step->{top} ? $step->{top}{buckets} : [];
-                if( exists $step->{key_as_string} ) {
-                    output({color=>'cyan',clear=>1}, sprintf "%d\t%s", @{$step}{qw(doc_count key_as_string)});
-                }
-                if( @$aggs ) {
-                    # For top the N of T needs to represent maximums
-                    $displayed = scalar(@$aggs) if scalar(@$aggs) > $displayed;
-                    output({color=>'cyan',indent=>$indent},$agg_header) unless $OPT{'no-decorators'};
-                    foreach my $agg ( @$aggs ) {
-                        $AGGS_TOTALS{$agg->{key}} ||= 0;
-                        $AGGS_TOTALS{$agg->{key}} += $agg->{doc_count};
-                        my @out = ();
-                        my $top_docs;
-                        foreach my $k (qw(score doc_count bg_count key)) {
-                            next unless exists $agg->{$k};
-                            my $value = delete $agg->{$k};
-                            push @out, defined $value ? ($k eq 'score' ? sprintf $CONFIG{decimal_format}, $value : $value ) : '-';
-                            if( $k eq 'doc_count' ) {
-                                push @out, sprintf $CONFIG{decimal_format}, $value ? $value / $result->{hits}{total} : 0;
-                                $top_docs = $value;
-                            }
-                        }
-                        if(exists $agg->{by} ) {
-                            my $by = delete $agg->{by};
-                            if( exists $by->{value} ) {
-                                unshift @out, $by->{value};
-                            }
-                        }
-                        # Handle the --with elements
-                        my %subaggs = ();
-                        if( keys %{ $agg } ) {
-                            foreach my $k (sort keys %{ $agg }) {
-                                next unless is_hashref($agg->{$k});
-                                if( exists $agg->{$k}{buckets} ) {
-                                    my @sub;
-                                    foreach my $subagg (@{ $agg->{$k}{buckets} }) {
-                                        my @elms = ();
-                                        next unless exists $subagg->{key};
-                                        push @elms, $subagg->{key};
-                                        foreach my $dk (qw(score doc_count bg_count)) {
-                                            next unless exists $subagg->{$dk};
-                                            my $v = delete $subagg->{$dk};
-                                            push @elms, defined $v ? ($dk eq 'score' ? sprintf $CONFIG{decimal_format}, $v : $v ) : '-';
-                                            push @elms, sprintf $CONFIG{decimal_format}, $v / $top_docs
-                                                if $dk eq 'doc_count' and $top_docs;
-                                        }
-                                        push @sub, \@elms;
-                                    }
-                                    $subaggs{$k} = \@sub if @sub;
-                                }
-                                # Simple Numeric Aggs
-                                elsif( $agg->{$k}{value} ) {
-                                    $subaggs{$k} = [ [ $agg->{$k}{value} ] ];
-                                }
-                                # Percentiles
-                                elsif( $agg->{$k}{values} ) {
-                                    my @pcts;
-                                    foreach my $pctl (sort { $a <=> $b } keys %{ $agg->{$k}{values} }) {
-                                        push @pcts, "p$pctl", $agg->{$k}{values}{$pctl};
-                                    }
-                                    $subaggs{$k} = [ \@pcts ];
-                                }
-                                # Statistics
-                                elsif( $agg->{$k}{avg} ) {
-                                    my @stats;
-                                    my %alias = qw( variance var std_deviation stdev );
-                                    foreach my $stat (qw(count min avg max sum variance std_deviation)) {
-                                        next unless exists $agg->{$k}{$stat};
-                                        my $v = $agg->{$k}{$stat} =~ /\./ ? sprintf $CONFIG{decimal_format}, $agg->{$k}{$stat}
-                                                                          : $agg->{$k}{$stat};
-                                        push @stats, $alias{$stat} || $stat => $v;
-                                    }
-                                    $subaggs{$k} = [ \@stats ];
-                                }
-                            }
-                        }
-                        if( keys %subaggs ) {
-                            foreach my $subagg (sort keys %subaggs) {
-                                foreach my $extra ( @{ $subaggs{$subagg} } ) {
-                                    output({indent=>$indent,data=>1},
-                                        join "\t", @out, $subagg, @{ $extra }
-                                    );
-                                }
-                            }
-                        }
-                        else {
-                            # Simple output
-                            output({indent=>$indent,data=>!$CONFIG{summary}}, join("\t",@out));
-                        }
-                    }
-                }
-                elsif(exists $result->{aggregations}{top}) {
-                    output({indent=>1,color=>'red'}, "= No results.");
-                }
-            }
+        if( my $aggregations = $result->{aggregations} ) {
+            display_aggregations($aggregations, $result->{hits}{total});
             next AGES;
         }
 
@@ -703,6 +603,113 @@ sub show_bases {
             scalar(@all),
         )
     );
+}
+
+sub display_aggregations {
+    my ($aggregations,$total_docs) = (@_);
+
+    my $out_of =  $aggregations->{out_of}{value};
+    $OUT_OF = $out_of if $out_of > $OUT_OF;
+    my $steps = exists $aggregations->{step} ? $aggregations->{step}{buckets}
+                : [ $aggregations ];
+    my $indent = exists $aggregations->{step} ? 1 : 0;
+
+    foreach my $step ( @$steps ) {
+        my $aggs = exists $step->{top} ? $step->{top}{buckets} : [];
+        if( exists $step->{key_as_string} ) {
+            output({color=>'cyan',clear=>1}, sprintf "%d\t%s", @{$step}{qw(doc_count key_as_string)});
+        }
+        if( @$aggs ) {
+            # For top the N of T needs to represent maximums
+            $displayed = scalar(@$aggs) if scalar(@$aggs) > $displayed;
+            output({color=>'cyan',indent=>$indent},$agg_header) unless $OPT{'no-decorators'};
+            foreach my $agg ( @$aggs ) {
+                $AGGS_TOTALS{$agg->{key}} ||= 0;
+                $AGGS_TOTALS{$agg->{key}} += $agg->{doc_count};
+                my @out = ();
+                my $top_docs;
+                foreach my $k (qw(score doc_count bg_count key)) {
+                    next unless exists $agg->{$k};
+                    my $value = delete $agg->{$k};
+                    push @out, defined $value ? ($k eq 'score' ? sprintf $CONFIG{decimal_format}, $value : $value ) : '-';
+                    if( $k eq 'doc_count' ) {
+                        push @out, sprintf $CONFIG{decimal_format}, $value ? $value / $total_docs : 0;
+                        $top_docs = $value;
+                    }
+                }
+                if(exists $agg->{by} ) {
+                    my $by = delete $agg->{by};
+                    if( exists $by->{value} ) {
+                        unshift @out, $by->{value};
+                    }
+                }
+                # Handle the --with elements
+                my %subaggs = ();
+                if( keys %{ $agg } ) {
+                    foreach my $k (sort keys %{ $agg }) {
+                        next unless is_hashref($agg->{$k});
+                        if( exists $agg->{$k}{buckets} ) {
+                            my @sub;
+                            foreach my $subagg (@{ $agg->{$k}{buckets} }) {
+                                my @elms = ();
+                                next unless exists $subagg->{key};
+                                push @elms, $subagg->{key};
+                                foreach my $dk (qw(score doc_count bg_count)) {
+                                    next unless exists $subagg->{$dk};
+                                    my $v = delete $subagg->{$dk};
+                                    push @elms, defined $v ? ($dk eq 'score' ? sprintf $CONFIG{decimal_format}, $v : $v ) : '-';
+                                    push @elms, sprintf $CONFIG{decimal_format}, $v / $top_docs
+                                        if $dk eq 'doc_count' and $top_docs;
+                                }
+                                push @sub, \@elms;
+                            }
+                            $subaggs{$k} = \@sub if @sub;
+                        }
+                        # Simple Numeric Aggs
+                        elsif( exists $agg->{$k}{value} ) {
+                            $subaggs{$k} = [ [ $agg->{$k}{value} ] ];
+                        }
+                        # Percentiles
+                        elsif( exists $agg->{$k}{values} ) {
+                            my @pcts;
+                            foreach my $pctl (sort { $a <=> $b } keys %{ $agg->{$k}{values} }) {
+                                push @pcts, "p$pctl", sprintf $CONFIG{decimal_format}, $agg->{$k}{values}{$pctl};
+                            }
+                            $subaggs{$k} = [ \@pcts ];
+                        }
+                        # Statistics
+                        elsif( exists $agg->{$k}{avg} ) {
+                            my @stats;
+                            my %alias = qw( variance var std_deviation stdev );
+                            foreach my $stat (qw(count min avg max sum variance std_deviation)) {
+                                next unless exists $agg->{$k}{$stat};
+                                my $v = $agg->{$k}{$stat} =~ /\./ ? sprintf $CONFIG{decimal_format}, $agg->{$k}{$stat}
+                                                                    : $agg->{$k}{$stat};
+                                push @stats, $alias{$stat} || $stat => $v;
+                            }
+                            $subaggs{$k} = [ \@stats ];
+                        }
+                    }
+                }
+                if( keys %subaggs ) {
+                    foreach my $subagg (sort keys %subaggs) {
+                        foreach my $extra ( @{ $subaggs{$subagg} } ) {
+                            output({indent=>$indent,data=>1},
+                                join "\t", @out, $subagg, @{ $extra }
+                            );
+                        }
+                    }
+                }
+                else {
+                    # Simple output
+                    output({indent=>$indent,data=>!$CONFIG{summary}}, join("\t",@out));
+                }
+            }
+        }
+        elsif(exists $aggregations->{top}) {
+            output({indent=>1,color=>'red'}, "= No results.");
+        }
+    }
 }
 
 sub by_index_age {
