@@ -132,6 +132,7 @@ sub _build_ua {
         keep_alive        => 3,
         agent             => sprintf("%s/%0.1f (Perl %s)", __PACKAGE__, $local_version, $^V),
         protocols_allowed => [qw(http https)],
+        timeout           => $self->timeout,
     );
     debug({color=>'cyan'}, sprintf "Initialized a UA: %s", $ua->agent);
 

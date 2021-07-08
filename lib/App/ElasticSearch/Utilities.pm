@@ -535,9 +535,10 @@ sub es_connect {
     my ($override_servers) = @_;
 
     my %conn = (
-        host  => $DEF{HOST},
-        port  => $DEF{PORT},
-        proto => $DEF{PROTO},
+        host    => $DEF{HOST},
+        port    => $DEF{PORT},
+        proto   => $DEF{PROTO},
+        timeout => $DEF{TIMEOUT},
     );
 
     # If we're overriding, return a unique handle
