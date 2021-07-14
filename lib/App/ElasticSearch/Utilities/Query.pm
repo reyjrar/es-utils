@@ -7,14 +7,17 @@ use warnings;
 # VERSION
 
 use App::ElasticSearch::Utilities qw(es_request);
+use App::ElasticSearch::Utilities::Aggregations;
 use CLI::Helpers qw(:output);
 use Clone qw(clone);
+use Const::Fast;
 use Moo;
 use Ref::Util qw(is_arrayref is_hashref);
 use Types::Standard qw(ArrayRef Enum HashRef Int Maybe Str);
 use Types::ElasticSearch qw(TimeConstant is_TimeConstant);
 use namespace::autoclean;
 
+const my $AGG_KEY => 'aggregations';
 my %TO = (
     array_ref => sub { defined $_[0] && is_arrayref($_[0]) ? $_[0] : defined $_[0] ? [ $_[0] ] : $_[0] },
 );
@@ -477,10 +480,59 @@ Which translates the query into:
 sub wrap_aggregations {
     my $self = shift;
     my %wrapper = @_;
-    foreach my $a (keys %wrapper) {
-        $wrapper{$a}->{aggs} = clone $self->aggregations;
+    my $aggs = $self->aggregations;
+
+    if( keys %{ $aggs } ) {
+        foreach my $a (keys %wrapper) {
+            $wrapper{$a}->{$AGG_KEY} = clone $aggs;
+        }
     }
+
     $self->set_aggregations(\%wrapper);
+}
+
+=method aggregations_by( [asc | desc] => aggregation_string )
+
+Applies a sort to all aggregations at the current level based on the
+aggregation string.
+
+Aggregation strings are parsed with the
+L<App::ElasticSearch::Utilities::Aggregations> C<expand_aggregate_string()>
+functions.
+
+Examples:
+
+    $q->aggregations_by( desc => [ qw( sum:bytes ) ] );
+    $q->aggregations_by( desc => [ qw( sum:bytes cardinality:user_agent ) ] );
+
+=cut
+
+sub aggregations_by {
+    my ($self,$dir,$aggs) = @_;
+
+    my @sort = ();
+    my %aggs = ();
+    foreach my $def (@{ $aggs }) {
+        my ($name,$agg) = %{ expand_aggregate_string($def) };
+        next unless is_single_stat(keys %{ $agg });
+        $aggs{$name} = $agg;
+        push @sort, { $name => $dir };
+    }
+    if( @sort ) {
+        push @sort, { '_count' => 'desc' };
+
+        my $ref_aggs = $self->aggregations;
+        foreach my $name ( keys %{ $ref_aggs } ) {
+            foreach my $k ( keys %{ $ref_aggs->{$name} } ) {
+                next if $k eq $AGG_KEY;
+                $ref_aggs->{$name}{$k}{order} = \@sort;
+                foreach my $agg (keys %aggs) {
+                    $ref_aggs->{$name}{$AGG_KEY}{$agg} = $aggs{$agg};
+                }
+            }
+        }
+        $self->set_aggregations( $ref_aggs );
+    }
 }
 
 # Support Short-hand like ES
@@ -488,11 +540,13 @@ sub wrap_aggregations {
 *set_aggs  = \&set_aggregations;
 *add_aggs  = \&add_aggregations;
 *wrap_aggs = \&wrap_aggregations;
+*aggs_by   = \&aggregations_by;
 
 =for Pod::Coverage aggs
 =for Pod::Coverage set_aggs
 =for Pod::Coverage add_aggs
 =for Pod::Coverage wrap_aggs
+=for Pod::Coverage aggs_by
 =cut
 
 

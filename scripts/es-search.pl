@@ -209,7 +209,6 @@ foreach my $presence ( qw( exists missing ) ) {
 }
 
 my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max avg);
-my $SUBAGG = undef;
 my $agg_header = '';
 if( exists $OPT{top} ) {
     my @top = split /:/, $OPT{top};
@@ -225,7 +224,6 @@ if( exists $OPT{top} ) {
     if( $OPT{by}) {
         my ($type,$field) = split /\:/, $OPT{by};
         if( exists $SUPPORTED_AGGREGATIONS{$type} ) {
-            $SUBAGG = $type;
             $sub_agg{by} = { $type => {field => $field} };
         }
         else {
