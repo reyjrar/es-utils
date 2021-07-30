@@ -48,7 +48,7 @@ my %Aggregations = (
 
 );
 
-=function is_single_stat()
+=func is_single_stat()
 
 =cut
 
@@ -61,7 +61,7 @@ sub is_single_stat {
 }
 
 
-=function expand_aggregate_string( token )
+=func expand_aggregate_string( token )
 
 =cut
 

@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 7.8
+version 7.9
 
 # SYNOPSIS
 
@@ -240,6 +240,7 @@ field it needs to sort documents, i.e.:
     meta:
       logstash:
         timestamp: '@timestamp'
+        host: es-cluster-01.int.example.com
       bro:
         timestamp: 'timestamp'
 
@@ -268,7 +269,8 @@ See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections fro
 
 # ARGUMENT GLOBALS
 
-Some options may be specified in the **/etc/es-utils.yaml** or **$HOME/.es-utils.yaml** file:
+Some options may be specified in the **/etc/es-utils.yaml**, **$HOME/.es-utils.yaml**
+or **$HOME/.config/es-utils/config.yaml** file:
 
     ---
     base: logstash
@@ -495,16 +497,18 @@ Brad Lhotsky <brad@divisionbyzero.net>
 # CONTRIBUTORS
 
 - Alexey Shatlovsky <alexey.shatlovsky@booking.com>
+- Samit Badle <Samit.Badle@gmail.com>
+- Takumi Sakamoto <takumi.saka@gmail.com>
 - Vitaly Shupak <vitaly.shupak@deshaw.com>
 - Alexey Surikov <ksurent@gmail.com>
+- Andrei Grechkin <andrei.grechkin@booking.com>
 - Daniel Ostermeier <daniel.ostermeier@gmail.com>
 - Jason Rojas <jason.rojas@mgo.com>
 - Kang-min Liu <gugod@gugod.org>
 - Lisa Hare <lhare@inview.co.uk>
 - Markus Linnala <Markus.Linnala@cybercom.com>
+- Matthew Feinberg <mattf@intex.com>
 - Mohammad S Anwar <mohammad.anwar@yahoo.com>
-- Samit Badle <Samit.Badle@gmail.com>
-- Takumi Sakamoto <takumi.saka@gmail.com>
 
 # SUPPORT
 
@@ -542,7 +546,7 @@ This module's source code is available by visiting:
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2020 by Brad Lhotsky.
+This software is Copyright (c) 2021 by Brad Lhotsky.
 
 This is free software, licensed under:
 
