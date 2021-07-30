@@ -409,6 +409,12 @@ AGES: while( !$DONE && @AGES ) {
             $last_hit_ts = $hit->{_source}{$CONFIG{timestamp}};
             $last_batch_id{$hit->{_id}}=1;
             my $record = {};
+
+            # Add the _id field to the source so that it is listed
+            # when showing full records and can be and can be
+            # used in @SHOW
+            $hit->{_source}->{_id} = $hit->{_id} unless defined($hit->{_source}->{_id});
+
             if( @SHOW ) {
                 my $flat = es_flatten_hash( $hit->{_source} );
                 debug_var($flat);
