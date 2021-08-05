@@ -4,13 +4,20 @@ package App::ElasticSearch::Utilities::Aggregations;
 use strict;
 use warnings;
 
+use Storable qw(dclone);
+
 use Sub::Exporter -setup => {
     exports => [ qw(
         expand_aggregate_string
+        es_flatten_aggregations es_flatten_aggs
         is_single_stat
     )],
     groups => {
-        default => [qw(expand_aggregate_string is_single_stat)],
+        default => [qw(
+            expand_aggregate_string
+            es_flatten_aggregations es_flatten_aggs
+            is_single_stat
+        )],
     },
 };
 
@@ -56,6 +63,8 @@ my %Aggregations = (
 
 =func is_single_stat()
 
+Returns true if an aggregation returns a single value.
+
 =cut
 
 sub is_single_stat {
@@ -69,6 +78,68 @@ sub is_single_stat {
 
 =func expand_aggregate_string( token )
 
+Takes a simplified aggregation grammar and expands it the full aggregation hash.
+
+Simple Terms:
+
+    field_name
+
+To
+
+    {
+        field_name => {
+            terms => {
+                field => 'field_name',
+                size  => 20,
+            }
+        }
+    }
+
+Alias expansion:
+
+    alias=field_name
+
+To
+
+    {
+        alias => {
+            terms => {
+                field => 'field_name',
+                size  => 20,
+            }
+        }
+    }
+
+Parameters:
+
+    alias=field_name:10
+
+To
+
+    {
+        alias => {
+            terms => {
+                field => 'field_name',
+                size  => 10,
+            }
+        }
+    }
+
+Parameters, k/v:
+
+    alias=field_name:size=13
+
+To
+
+    {
+        alias => {
+            terms => {
+                field => 'field_name',
+                size  => 13,
+            }
+        }
+    }
+
 =cut
 
 sub expand_aggregate_string {
@@ -79,7 +150,8 @@ sub expand_aggregate_string {
         my $alias = $def =~ s/^(\w+)=// ? $1 : undef;
         my @parts = split /:/, $def, 3;
         if( @parts == 1 ) {
-            $aggs{$def} = { terms => { field => $def, size => 20 } };
+            $alias ||= $def;
+            $aggs{$alias} = { terms => { field => $def, size => 20 } };
             next;
         }
         my ($agg, $field);
@@ -111,5 +183,107 @@ sub expand_aggregate_string {
     }
     return \%aggs;
 }
+
+=func es_flatten_agggregations()
+
+Takes the B<aggregations> section of the query result and parses it into a flat
+structure so each row contains all the sub aggregation information.
+
+It returns an array reference, containing arrray references.  The individual
+rows of the array are ordered in a depth first fashion.  The array does include
+a key for every value, so the array can be cast to a hash safely.
+
+=cut
+
+sub es_flatten_aggregations {
+    my ($result,$field,$parent) = @_;
+
+    $parent ||= [];
+    my @rows = ();
+
+    my @remove = qw(
+        doc_count_error_upper_bound
+        sum_other_doc_count
+    );
+
+    my $row = dclone($parent);
+    my $extract = sub {
+        my ($key, $hash) = @_;
+
+        if( $hash->{value} ) {
+            push @{ $row }, $key, $hash->{value};
+        }
+        elsif( $hash->{values} ) {
+            foreach my $k ( sort keys %{ $hash->{values} } ) {
+                push @{ $row }, "$key.$k", $hash->{values}{$k}
+                    if $hash->{values}{$k};
+            }
+        }
+        else {
+            foreach my $k (sort keys %{ $hash }) {
+                last if $k eq 'buckets';
+                push @{ $row }, "$key.$k", $hash->{$k}
+                    if defined $hash->{values}{$k};
+            }
+        }
+    };
+
+    if( $field ) {
+        delete $result->{$_} for @remove;
+        if( $result->{key} and exists $result->{doc_count} ) {
+            push @{ $row }, $field, delete $result->{key};
+            push @{ $row }, "$field.hits", delete $result->{doc_count} || 0;
+        }
+        my %buckets = ();
+        foreach my $k ( sort keys %{ $result } ) {
+            if( ref $result->{$k} eq 'HASH' ) {
+                $extract->($k, $result->{$k});
+
+                if( my $buckets = delete $result->{$k}{buckets} ) {
+                    $buckets{$k} = $buckets;
+                }
+            }
+        }
+        if( keys %buckets ) {
+            foreach my $k ( sort keys %buckets ) {
+                if( @{ $buckets{$k} } ) {
+                    foreach my $bucket ( @{ $buckets{$k} } ) {
+                        push @rows, @{ es_flatten_aggregations($bucket, $k, $row) };
+                    }
+                }
+                else {
+                    push @rows, $row;
+                }
+            }
+        }
+        else {
+            push @rows, $row;
+        }
+    }
+    else {
+        foreach my $k ( sort keys %{ $result } ) {
+            delete $result->{$k}{$_} for @remove;
+            $extract->($k, $result->{$k});
+            my $buckets = delete $result->{$k}{buckets};
+            if( $buckets and @{ $buckets } ) {
+                foreach my $bucket ( @{ $buckets } ) {
+                    push @rows, @{ es_flatten_aggregations($bucket,$k,$row) };
+                }
+            }
+            else {
+                push @rows, $row;
+            }
+        }
+    }
+
+    return \@rows;
+}
+
+# Setup Aliases
+=for es_flatten_aggs
+
+=cut
+
+*es_flatten_aggs = \&es_flatten_aggregations;
 
 1;

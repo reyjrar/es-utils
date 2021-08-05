@@ -6,7 +6,7 @@ use warnings;
 
 # VERSION
 
-use App::ElasticSearch::Utilities qw(es_request);
+use App::ElasticSearch::Utilities qw(es_request es_indices);
 use App::ElasticSearch::Utilities::Aggregations;
 use CLI::Helpers qw(:output);
 use Clone qw(clone);
@@ -256,6 +256,9 @@ Uses `es_request()` to return the result, stores any relevant scroll data.
 
 sub execute {
     my($self,$indexes) = @_;
+
+    # Default to context based indexes
+    $indexes ||= es_indices();
 
     my $result = es_request( $self->as_search($indexes) );
 
