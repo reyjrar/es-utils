@@ -130,7 +130,7 @@ sub _build_ua {
     ## use critic
     my $ua = LWP::UserAgent->new(
         keep_alive        => 3,
-        agent             => sprintf("%s/%0.1f (Perl %s)", __PACKAGE__, $local_version, $^V),
+        agent             => sprintf("%s/%s (Perl %s)", __PACKAGE__, $local_version, $^V),
         protocols_allowed => [qw(http https)],
         timeout           => $self->timeout,
     );
