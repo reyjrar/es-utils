@@ -184,7 +184,7 @@ sub expand_aggregate_string {
     return \%aggs;
 }
 
-=func es_flatten_agggregations()
+=func es_flatten_aggregations()
 
 Takes the B<aggregations> section of the query result and parses it into a flat
 structure so each row contains all the sub aggregation information.
@@ -280,10 +280,10 @@ sub es_flatten_aggregations {
 }
 
 # Setup Aliases
-=for es_flatten_aggs
+*es_flatten_aggs = \&es_flatten_aggregations;
+
+=for Pod::Coverage es_flatten_aggs
 
 =cut
-
-*es_flatten_aggs = \&es_flatten_aggregations;
 
 1;
