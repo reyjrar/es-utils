@@ -513,13 +513,22 @@ sub _get_es_version {
     my $conn = es_connect();
     my $resp = $conn->ua->get( sprintf "%s://%s:%d", $conn->proto, $conn->host, $conn->port );
     if( $resp->is_success ) {
+        my $ver;
         eval {
-            $CURRENT_VERSION = join('.', (split /\./,$resp->content->{version}{number})[0,1]);
+            $ver = $resp->content->{version};
+        };
+        if( $ver ) {
+            if( $ver->{distribution} and $ver->{distribution} eq 'opensearch' ) {
+                $CURRENT_VERSION = '7.10';
+            }
+            else {
+                $CURRENT_VERSION = join('.', (split /\./,$ver->{number})[0,1]);
+            }
         }
     };
     if( !defined $CURRENT_VERSION || $CURRENT_VERSION <= 0 ) {
         output({color=>'red',stderr=>1}, sprintf "[%d] Unable to determine Elasticsearch version, something has gone terribly wrong: aborting.", $resp->code);
-        output({color=>'red',stderr=>1}, $resp->content) if $resp->content;
+        output({color=>'red',stderr=>1}, ref $resp->content ? YAML::Dump($resp->content) : $resp->content) if $resp->content;
         exit 1;
     }
     debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");
