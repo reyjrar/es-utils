@@ -1,5 +1,5 @@
 package App::ElasticSearch::Utilities::Aggregations;
-# ABSTRACT: Code to simplify creating and working with Elasticsearh aggregations
+# ABSTRACT: Code to simplify creating and working with Elasticsearch aggregations
 
 use strict;
 use warnings;
