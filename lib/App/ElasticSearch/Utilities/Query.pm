@@ -79,11 +79,6 @@ Can be set using set_must_not and is a valid init_arg.
 The should section of a bool query as an array reference.  See: L<add_bool>
 Can be set using set_should and is a valid init_arg.
 
-=attr minimum_should_match
-
-A string defining the minimum number of should conditions to qualify a match.
-See L<https://www.elastic.co/guide/en/elasticsearch/reference/7.3/query-dsl-minimum-should-match.html>
-
 =attr filter
 
 The filter section of a bool query as an array reference.  See: L<add_bool>
@@ -98,7 +93,17 @@ on the nested queries.
 
 The path by being nested, only used in nested queries.
 
+=attr minimum_should_match
+
+A string defining the minimum number of should conditions to qualify a match.
+See L<https://www.elastic.co/guide/en/elasticsearch/reference/7.3/query-dsl-minimum-should-match.html>
+
 =cut
+
+has 'minimum_should_match' => (
+    is  => 'rw',
+    isa => Str,
+);
 
 my %QUERY = (
     must        => { isa => ArrayRef, coerce => $TO{array_ref} },
@@ -107,8 +112,8 @@ my %QUERY = (
     filter      => { isa => ArrayRef, coerce => $TO{array_ref} },
     nested      => { isa => HashRef },
     nested_path => { isa => Str },
-    minimum_should_match => { isa => Str },
 );
+
 
 =attr from
 
@@ -380,7 +385,9 @@ sub query {
         };
     }
     else {
-        my %bool = ();
+        my %bool = (
+            $self->minimum_should_match ? ( minimum_should_match => $self->minimum_should_match ) : (),
+        );
         foreach my $k (keys %QUERY) {
             next if $k =~ /^nested/;
             $bool{$k} = [];
