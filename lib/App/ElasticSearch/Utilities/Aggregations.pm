@@ -35,9 +35,9 @@ These aggregations will support sub aggregations.
 =cut
 
 $Aggregations{terms} = {
-	params    => sub { $_[0] && $_[0] =~ /^\d+$/ ? { size => $_[0] } : {} },
-	type      => 'bucket',
-	composite => 1,
+    params    => sub { $_[0] && $_[0] =~ /^\d+$/ ? { size => $_[0] } : {} },
+    type      => 'bucket',
+    composite => 1,
 };
 
 =item B<terms>
@@ -76,8 +76,8 @@ Results in
 =cut
 
 $Aggregations{significant_terms} = {
-	params => sub { $_[0] =~ /^\d+$/ ? { size => $_[0] } : {} },
-	type   => 'bucket',
+    params => sub { $_[0] =~ /^\d+$/ ? { size => $_[0] } : {} },
+    type   => 'bucket',
 };
 
 =item B<significant_terms>
@@ -100,8 +100,8 @@ Results in:
 =cut
 
 $Aggregations{rare_terms} = {
-	params => sub { $_[0] =~ /^\d+$/ ? { max_doc_count => $_[0] } : {} },
-	type   => 'bucket',
+    params => sub { $_[0] =~ /^\d+$/ ? { max_doc_count => $_[0] } : {} },
+    type   => 'bucket',
 };
 
 =item B<rare_terms>
@@ -124,12 +124,12 @@ Results in:
 =cut
 
 $Aggregations{histogram} = {
-	params => sub {
-		return unless $_[0] > 0;
-		return { interval => $_[0] };
-	},
-	type      => 'bucket',
-	composite => 1,
+    params => sub {
+        return unless $_[0] > 0;
+        return { interval => $_[0] };
+    },
+    type      => 'bucket',
+    composite => 1,
 };
 
 =item B<histogram>
@@ -152,9 +152,9 @@ Results in:
 =cut
 
 $Aggregations{date_histogram} = {
-	params    => sub { { calendar_interval => $_[0] || '1h' } },
-	type      => 'bucket',
-	composite => 1,
+    params    => sub { { calendar_interval => $_[0] || '1h' } },
+    type      => 'bucket',
+    composite => 1,
 };
 
 =item B<date_histogram>
@@ -177,9 +177,9 @@ Results in:
 =cut
 
 $Aggregations{geohash_grid} = {
-	params    => sub { $_[0] =~ /^\d+$/ ? { precision => $_[0] } : {} },
-	type      => 'bucket',
-	composite => 1,
+    params    => sub { $_[0] =~ /^\d+$/ ? { precision => $_[0] } : {} },
+    type      => 'bucket',
+    composite => 1,
 };
 
 =item B<geohash_grid>
@@ -238,17 +238,17 @@ $Aggregations{sum} = { single_stat => 1, type => 'metric' };
 
 Single stat metric aggregations to generate the various single statistics over the enclosing bucket.
 
-	sum:field_name
+    sum:field_name
 
 Results in
 
-	{
-		"sum.field_names": {
-			"sum": {
-				"field": "field_name"
-			}
-		}
-	}
+    {
+        "sum.field_names": {
+            "sum": {
+                "field": "field_name"
+            }
+        }
+    }
 
 =cut
 
@@ -258,17 +258,17 @@ $Aggregations{cardinality} = { single_stat => 1, type => 'metric' };
 
 Computes the unique count of terms in a field.
 
-	cardinality:field_name
+    cardinality:field_name
 
 Results in
 
-	{
-		"cardinality.field_names": {
-			"cardinality": {
-				"field": "field_name"
-			}
-		}
-	}
+    {
+        "cardinality.field_names": {
+            "cardinality": {
+                "field": "field_name"
+            }
+        }
+    }
 
 =cut
 
@@ -278,17 +278,17 @@ $Aggregations{stats} = { type => 'metric' };
 
 Runs the stats aggregation that returns min, max, avg, sum, and count.
 
-	stats:field_name
+    stats:field_name
 
 Results in
 
-	{
-		"stats.field_names": {
-			"stats": {
-				"field": "field_name"
-			}
-		}
-	}
+    {
+        "stats.field_names": {
+            "stats": {
+                "field": "field_name"
+            }
+        }
+    }
 
 =cut
 
@@ -299,25 +299,25 @@ $Aggregations{extended_stats} = { type => 'metric' };
 Runs the stats aggregation that returns the same data as the C<sum> aggregation
 plus variance, sum of squares, and standard deviation.
 
-	extended_stats:field_name
+    extended_stats:field_name
 
 Results in
 
-	{
-		"extended_stats.field_names": {
-			"extended_stats": {
-				"field": "field_name"
-			}
-		}
-	}
+    {
+        "extended_stats.field_names": {
+            "extended_stats": {
+                "field": "field_name"
+            }
+        }
+    }
 
 =cut
 
 $Aggregations{percentiles} = {
-	params => sub {
-		my @pcts = $_[0] ? split /,/, $_[0] : qw(25 50 75 90);
-		return { percents => \@pcts };
-	},
+    params => sub {
+        my @pcts = $_[0] ? split /,/, $_[0] : qw(25 50 75 90);
+        return { percents => \@pcts };
+    },
 };
 
 =item B<percentiles>
@@ -326,18 +326,18 @@ Computes percentiles for the enclosing bucket. The positional parameter is
 interpretted at the percents computed.  If ommitted, the percentiles computed
 will be: 25, 50, 75, 90.
 
-	percentiles:field_name:75,95,99
+    percentiles:field_name:75,95,99
 
 Results in
 
-	{
-		"percentiles.field_names": {
-			"percentiles": {
-				"field": "field_name",
-				"percents": [ 75, 95, 99 ]
-			}
-		}
-	}
+    {
+        "percentiles.field_names": {
+            "percentiles": {
+                "field": "field_name",
+                "percents": [ 75, 95, 99 ]
+            }
+        }
+    }
 
 =cut
 
@@ -348,17 +348,17 @@ $Aggregations{geo_centroid} = { type => 'metric' };
 
 Computes center of a group of geo points. No positional parameters supported.
 
-	geo_centroid:field_name
+    geo_centroid:field_name
 
 Results in
 
-	{
-		"geo_centroid.field_names": {
-			"geo_centroid": {
-				"field": "field_name"
-			}
-		}
-	}
+    {
+        "geo_centroid.field_names": {
+            "geo_centroid": {
+                "field": "field_name"
+            }
+        }
+    }
 
 =cut
 
