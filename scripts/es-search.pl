@@ -209,7 +209,7 @@ foreach my $presence ( qw( exists missing ) ) {
     }
 }
 
-my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max avg);
+my %SUPPORTED_AGGREGATIONS = map {$_=>'simple_value'} qw(cardinality sum min max avg value_count);
 my $agg_header = '';
 if( exists $OPT{top} ) {
     my @top = split /:/, $OPT{top};

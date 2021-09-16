@@ -629,7 +629,7 @@ sub add_bool {
         ## no critic
         no strict 'refs';
         my $set = $self->$section;
-        push @{ $set }, $bools{$section};
+        push @{ $set }, is_arrayref($bools{$section}) ? @{ $bools{$section} } : $bools{$section};
         my $setter = "set_$section";
         $self->$setter($set);
         ## use critic
