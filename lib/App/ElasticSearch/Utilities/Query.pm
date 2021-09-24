@@ -404,8 +404,8 @@ sub query {
                 debug({color=>'red'}, "query() - Failed to retrieve '$k'");
             };
             $bool{$k} = clone $v if defined $v;
-            if($self->stash($k)) {
-                push @{ $bool{$k} }, $self->stash($k);
+            if(my $stash = $self->stash($k)) {
+                push @{ $bool{$k} }, is_arrayref($stash) ? @{ $stash } : $stash;
             }
             delete $bool{$k} if exists $bool{$k} and is_arrayref($bool{$k}) and not @{ $bool{$k} };
         }
