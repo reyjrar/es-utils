@@ -533,7 +533,9 @@ sub es_flatten_aggregations {
     if( $field ) {
         delete $result->{$_} for @remove;
         if( $result->{key} and exists $result->{doc_count} ) {
-            push @{ $row }, $field, delete $result->{key};
+            my $k = delete $result->{key};
+            my $ks = delete $result->{key_as_string};
+            push @{ $row }, $field, $ks || $k;
             push @{ $row }, "$field.hits", delete $result->{doc_count} || 0;
         }
         my %buckets = ();
