@@ -32,9 +32,34 @@ my %parsers = (
 sub handle_token {
     my($self,$token) = @_;
 
+    my $makeMatcher = sub {
+        my ($matcher,$field,$patterns)  = @_;
+        my @tests;
+        foreach my $pattern (@{ $patterns }) {
+            push @tests, { $matcher => { $field => { value => $pattern } } };
+        }
+        return {
+            bool => {
+                should => \@tests,
+                minimum_should_match => 1,
+            }
+        }
+    };
+    my %make = (
+        terms => sub {
+            my ($field, $uniq) = @_;
+            return { terms => { $field => $uniq } };
+        },
+        regexp   => sub { $makeMatcher->(regexp   => @_) },
+        wildcard => sub { $makeMatcher->(wildcard => @_) },
+    );
     if( my ($term,$match) = split /\:/, $token, 2 ) {
         if( defined $match && $match =~ /(.*\.(\w{3,4}))(?:\[([^\]]+)\])?$/) {
             my($file,$type,$col) = ($1,$2,$3);
+            # Support Wildcards
+            my $matcher = $file =~ s/^\~// ? 'regexp'
+                        : $file =~ s/^\*// ? 'wildcard'
+                        : 'terms';
             $col //= -1;
             $type = lc $type;
             verbose({level=>2,color=>'magenta'}, sprintf "# %s attempt of %s type, %s[%s] %s",
@@ -49,7 +74,8 @@ sub handle_token {
                         $col,
                         scalar(keys %$uniq),
                     );
-                    return [{condition => {terms => {$term => [sort keys %$uniq]}}}];
+                    my $qs = [ sort keys %{ $uniq } ];
+                    return [{condition => $make{$matcher}->($term,$qs) }];
                 }
             }
         }
@@ -176,6 +202,7 @@ Or
     { "ip": "1.2.3.6" }
     { "ip": "1.2.3.7" }
 
+
 We can source that file:
 
     src_ip:test.dat      => src_ip:(1.2.3.4 1.2.3.5 1.2.3.6 1.2.3.7)
@@ -213,3 +240,55 @@ Which would expand to:
 
 This option will iterate through the whole file and unique the elements of the list.  They will then be transformed into
 an appropriate L<terms query|http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html>.
+
+=head3 Wildcards
+
+We can also have a group of wildcard or regexp in a file:
+
+    $ cat wildcards.dat
+    *@gmail.com
+    *@yahoo.com
+
+To enable wildcard parsing, prefix the filename with a C<*>.
+
+    es-search.pl to_address:*wildcards.dat
+
+Which expands the query to:
+
+    {
+      "bool": {
+        "minimum_should_match":1,
+        "should": [
+           {"wildcard":{"to_outbound":{"value":"*@gmail.com"}}},
+           {"wildcard":{"to_outbound":{"value":"*@yahoo.com"}}}
+        ]
+      }
+    }
+
+No attempt is made to verify or validate the wildcard patterns.
+
+=head3 Regular Expressions
+
+If you'd like to specify a file full of regexp, you can do that as well:
+
+    $ cat regexp.dat
+    .*google\.com$
+    .*yahoo\.com$
+
+To enable regexp parsing, prefix the filename with a C<~>.
+
+    es-search.pl to_address:~regexp.dat
+
+Which expands the query to:
+
+    {
+      "bool": {
+        "minimum_should_match":1,
+        "should": [
+          {"regexp":{"to_outbound":{"value":".*google\\.com$"}}},
+          {"regexp":{"to_outbound":{"value":".*yahoo\\.com$"}}}
+        ]
+      }
+    }
+
+No attempt is made to verify or validate the regexp expressions.
