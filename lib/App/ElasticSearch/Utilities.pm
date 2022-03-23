@@ -89,7 +89,7 @@ From App::ElasticSearch::Utilities:
     --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
     --password-exec Script to run to get the users password
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
-    --timeout       Timeout to ElasticSearch, default 30
+    --timeout       Timeout to ElasticSearch, default 10
     --keep-proxy    Do not remove any proxy settings from %ENV
     --index         Index to run commands against
     --base          For daily indexes, reference only those starting with "logstash"
@@ -294,6 +294,13 @@ my $PATTERN;
     }
 }
 
+=func es_utils_initialize()
+
+Takes an optional reference to an C<@ARGV> like array. Performs environment and
+argument parsing.
+
+=cut
+
 sub es_utils_initialize {
     my ($argv) = @_;
 
@@ -341,7 +348,7 @@ sub es_utils_initialize {
                      : 'http',
         TIMEOUT     => exists $opts->{timeout}   ? $opts->{timeout}
                      : exists $_GLOBALS{timeout} ? $_GLOBALS{timeout}
-                     : 30,
+                     : 10,
         NOOP        => exists $opts->{noop}   ? $opts->{noop}
                      : exists $_GLOBALS{noop} ? $_GLOBALS{noop}
                      : undef,
