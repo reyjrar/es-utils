@@ -40,7 +40,7 @@ use JSON::MaybeXS;
 use LWP::UserAgent;
 use Module::Load;
 use Ref::Util qw(is_ref is_arrayref is_hashref);
-use Types::Standard qw( Enum InstanceOf Int Str );
+use Types::Standard qw( Enum HashRef InstanceOf Int Str );
 use URI;
 use URI::QueryParam;
 
@@ -80,7 +80,7 @@ basic authentication.
 =cut
 
 has 'proto' => (
-    is      => 'ro',
+    is      => 'rw',
     isa     => Enum[qw(http https)],
     default => sub { 'http' },
 );
@@ -95,6 +95,42 @@ has 'timeout' => (
     is      => 'ro',
     isa     => Int,
     default => sub { 10 },
+);
+
+=attr username
+
+HTTP Basic Authorization username, defaults to C<$ENV{USER}>.
+
+=cut
+
+has 'username' => (
+    is      => 'ro',
+    isa     => Str,
+    default => sub { $ENV{USER} },
+);
+
+=attr password
+
+HTTP Basic Authorization password, if set, we'll try authentication.
+
+=cut
+
+has 'password' => (
+    is      => 'ro',
+    isa     => Str,
+    default => sub { $ENV{USER} },
+);
+
+=attr ssl_opts
+
+SSL Options for L<LWP::UserAgent/ssl_opts>.
+
+=cut
+
+has 'ssl_opts' => (
+    is      => 'ro',
+    isa     => HashRef,
+    default => sub { {} },
 );
 
 =attr ua
@@ -133,6 +169,7 @@ sub _build_ua {
         agent             => sprintf("%s/%s (Perl %s)", __PACKAGE__, $local_version, $^V),
         protocols_allowed => [qw(http https)],
         timeout           => $self->timeout,
+        ssl_opts          => $self->ssl_opts,
     );
     debug({color=>'cyan'}, sprintf "Initialized a UA: %s", $ua->agent);
 
@@ -236,6 +273,11 @@ sub request {
 
     # Make the request
     my $req = App::ElasticSearch::Utilities::HTTPRequest->new( $method => $uri->as_string );
+
+    # Authentication
+    $req->authorization_basic( $self->username, $self->password )
+        if $self->password;
+
     $req->content($body) if defined $body;
 
     return $self->ua->request( $req );
