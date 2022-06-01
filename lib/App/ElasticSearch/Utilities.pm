@@ -86,7 +86,6 @@ From App::ElasticSearch::Utilities:
     --port          HTTP port for your cluster
     --proto         Defaults to 'http', can also be 'https'
     --http-username HTTP Basic Auth username
-    --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
     --password-exec Script to run to get the users password
     --insecure      Don't verify TLS certificates
     --ca-file       Specify the TLS CA file
@@ -146,11 +145,6 @@ Defaults to 'http', can also be 'https'.
 If HTTP Basic Authentication is required, use this username.
 
 See also the L<HTTP Basic Authentication> section for more details
-
-=item B<http-password>
-
-If HTTP Basic Authentication is required, use this password, B<**INSECURE**>, set
-in globals, netrc, or use the B<password-exec> option below.
 
 =item B<password-exec>
 
@@ -279,7 +273,6 @@ my $PATTERN;
             datesep|date-separator=s
             proto=s
             http-username=s
-            http-password=s
             password-exec=s
             master-only|M
             insecure
@@ -374,16 +367,6 @@ sub es_utils_initialize {
                      : exists $_GLOBALS{'keep-proxy'} ? $_GLOBALS{'keep-proxy'}
                      : 1,
         MASTERONLY  => exists $opts->{'master-only'} ? $opts->{'master-only'} : 0,
-        # HTTP Basic Authentication
-        USERNAME    => exists $opts->{'http-username'}    ? $opts->{'http-username'}
-                     : exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'}
-                     : $ENV{USER},
-        PASSWORD    => exists $opts->{'http-password'}   ? $opts->{'http-password'}
-                     : exists $_GLOBALS{'http-password'} ? $_GLOBALS{'http-password'}
-                     : undef,
-        PASSEXEC    => exists $opts->{'password-exec'}   ? $opts->{'password-exec'}
-                     : exists $_GLOBALS{'password-exec'} ? $_GLOBALS{'password-exec'}
-                     : undef,
         # Index selection opts->ions
         INDEX       => exists $opts->{index}  ? $opts->{index} : undef,
         BASE        => exists $opts->{base}   ? lc $opts->{base}
@@ -396,6 +379,13 @@ sub es_utils_initialize {
                      : exists $_GLOBALS{datesep}          ? $_GLOBALS{datesep}
                      : exists $_GLOBALS{"date-separator"} ? $_GLOBALS{"date-separator"}
                      : '.',
+        # HTTP Basic Authentication
+        USERNAME    => exists $opts->{'http-username'}    ? $opts->{'http-username'}
+                     : exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'}
+                     : $ENV{USER},
+        PASSEXEC    => exists $opts->{'password-exec'}   ? $opts->{'password-exec'}
+                     : exists $_GLOBALS{'password-exec'} ? $_GLOBALS{'password-exec'}
+                     : undef,
         # TLS Options
         INSECURE    => exists $opts->{insecure} ? 1
                     :  exists $_GLOBALS{insecure} ? $_GLOBALS{insecure}
@@ -455,10 +445,8 @@ sub es_globals {
 
 =head1 HTTP Basic Authentication
 
-The implementation for HTTP Basic Authentication leverages the LWP::UserAgent's underlying HTTP 401
-detection and is automatic.  There is no way to force basic authentication, it has to be requested
-by the server.  If the server does request it, here's what you need to know about how usernames and
-passwords are resolved.
+HTTP Basic Authorization is only supported when the C<proto> is set to B<https>
+as not to leak credentials all over.
 
 The username is selected by going through these mechanisms until one is found:
 
@@ -469,8 +457,6 @@ The username is selected by going through these mechanisms until one is found:
 
 Once the username has been resolved, the following mechanisms are tried in order:
 
-    --http-password
-    'http-password' in /etc/es-utils.yml or ~/.es-utils.yml
     Netrc element matching the hostname of the request
     Password executable defined by --password-exec
     'password-exec' in /etc/es-utils.yml, ~/.es-utils.yml
@@ -542,7 +528,7 @@ sub es_basic_auth {
     # Lookup the details netrc
     my $netrc = Net::Netrc->lookup($host);
     if( $DEF{HOST} eq $host ) {
-        %auth = map { lc($_) => $DEF{$_} } qw(USERNAME PASSWORD);
+        %auth = map { lc($_) => $DEF{$_} } qw(USERNAME);
     }
     my %meta = ();
     foreach my $k (qw( http-username password-exec )) {
@@ -606,8 +592,6 @@ sub es_pass_exec {
     # Format and return the result
     my $passwd = $out[-1];
     chomp($passwd);
-
-    return unless defined $passwd and length $passwd;
     return $passwd;
 }
 
@@ -711,11 +695,13 @@ sub es_connect {
         port     => $DEF{PORT},
         proto    => $DEF{PROTO},
         timeout  => $DEF{TIMEOUT},
-        username => $DEF{USERNAME},
-        ssl_opts => _get_ssl_opts(),
-        # Optionally add the password exec
-        $DEF{PASSEXEC} ? ( password => es_pass_exec(@DEF{qw(HOST USERNAME)}) ) : (),
     );
+    # Only authenticate over TLS
+    if( $DEF{PROTO} eq 'https' ) {
+        $conn{username} = $DEF{USERNAME};
+        $conn{ssl_opts} = _get_ssl_opts;
+        $conn{password} = es_pass_exec(@DEF{qw(HOST USERNAME)}) if $DEF{PASSEXEC};
+    }
 
     # If we're overriding, return a unique handle
     if(defined $override_servers) {

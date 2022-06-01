@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 8.3
+version 8.4
 
 # SYNOPSIS
 
@@ -47,7 +47,7 @@ distribution.
 
 # FUNCTIONS
 
-## es\_utils\_intialize()
+## es\_utils\_initialize()
 
 Takes an optional reference to an `@ARGV` like array. Performs environment and
 argument parsing.
@@ -258,8 +258,10 @@ From App::ElasticSearch::Utilities:
     --port          HTTP port for your cluster
     --proto         Defaults to 'http', can also be 'https'
     --http-username HTTP Basic Auth username
-    --http-password HTTP Basic Auth password (if not specified, and --http-user is, you will be prompted)
     --password-exec Script to run to get the users password
+    --insecure      Don't verify TLS certificates
+    --ca-file       Specify the TLS CA file
+    --ca-dir        Specify the directory with TLS CAs
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 10
     --keep-proxy    Do not remove any proxy settings from %ENV
@@ -314,11 +316,6 @@ can all be set in the globals file.
 
     See also the ["HTTP Basic Authentication"](#http-basic-authentication) section for more details
 
-- **http-password**
-
-    If HTTP Basic Authentication is required, use this password, **\*\*INSECURE\*\***, set
-    in globals, netrc, or use the **password-exec** option below.
-
 - **password-exec**
 
     If HTTP Basic Authentication is required, run this command, passing the arguments:
@@ -340,6 +337,18 @@ can all be set in the globals file.
 
     By default, HTTP proxy environment variables are stripped. Use this option to keep your proxy environment variables
     in tact.
+
+- **insecure**
+
+    Don't verify TLS certificates
+
+- **ca-file**
+
+    Specify a file with the TLS CA certificates.
+
+- **ca-dir**
+
+    Specify a directory containing the TLS CA certificates.
 
 # INDEX SELECTION ARGUMENTS
 
@@ -387,10 +396,8 @@ can all be set in the globals file.
 
 # HTTP Basic Authentication
 
-The implementation for HTTP Basic Authentication leverages the LWP::UserAgent's underlying HTTP 401
-detection and is automatic.  There is no way to force basic authentication, it has to be requested
-by the server.  If the server does request it, here's what you need to know about how usernames and
-passwords are resolved.
+HTTP Basic Authorization is only supported when the `proto` is set to **https**
+as not to leak credentials all over.
 
 The username is selected by going through these mechanisms until one is found:
 
@@ -401,8 +408,6 @@ The username is selected by going through these mechanisms until one is found:
 
 Once the username has been resolved, the following mechanisms are tried in order:
 
-    --http-password
-    'http-password' in /etc/es-utils.yml or ~/.es-utils.yml
     Netrc element matching the hostname of the request
     Password executable defined by --password-exec
     'password-exec' in /etc/es-utils.yml, ~/.es-utils.yml

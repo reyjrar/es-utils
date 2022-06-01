@@ -116,9 +116,7 @@ HTTP Basic Authorization password, if set, we'll try authentication.
 =cut
 
 has 'password' => (
-    is      => 'ro',
-    isa     => Str,
-    default => sub { $ENV{USER} },
+    is => 'ro',
 );
 
 =attr ssl_opts
@@ -143,19 +141,6 @@ has 'ua' => (
     is  => 'lazy',
     isa => InstanceOf["LWP::UserAgent"],
 );
-
-
-# Monkey Patch LWP::UserAgent to use our credentials
-{
-    no warnings 'redefine';
-
-    sub LWP::UserAgent::get_basic_credentials {
-        my ($self,$realm,$url) = @_;
-        my $uri = URI->new( $url );
-        load "App::ElasticSearch::Utilities" => 'es_basic_auth';
-        return es_basic_auth( $uri->host );
-    }
-}
 
 sub _build_ua {
     my ($self) = @_;
@@ -209,6 +194,10 @@ sub _build_ua {
         }
         $_[0] = $response;
     });
+
+    # Disable TLS
+    warn "HTTP Basic Authorization configured and not using TLS, this is not supported"
+        if length $self->password && $self->proto ne 'https';
 
     return $ua;
 }
@@ -276,7 +265,7 @@ sub request {
 
     # Authentication
     $req->authorization_basic( $self->username, $self->password )
-        if $self->password;
+        if $self->password and $self->proto eq 'https';
 
     $req->content($body) if defined $body;
 
