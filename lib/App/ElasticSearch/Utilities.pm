@@ -7,6 +7,7 @@ use warnings;
 
 # VERSION
 
+use App::ElasticSearch::Utilities::HTTPRequest;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(GetOptionsFromArray :config pass_through no_auto_abbrev);
 use Hash::Flatten qw(flatten);
@@ -626,13 +627,21 @@ sub _get_ssl_opts {
 sub _get_es_version {
     return $CURRENT_VERSION if defined $CURRENT_VERSION;
     my $conn = es_connect();
-    my $req  = HTTP::Request->new( GET => sprintf "%s://%s:%d", $conn->proto, $conn->host, $conn->port );
+    # Build the request
+    my $req  = App::ElasticSearch::Utilities::HTTPRequest->new(
+        GET => sprintf "%s://%s:%d",
+                    $conn->proto, $conn->host, $conn->port
+    );
+    # Check if we're doing auth
+    my @auth = $DEF{PASSEXEC} ? es_basic_auth($conn->host) : ();
+    # Add authentication if we get a password
+    $req->authorization_basic( @auth ) if @auth;
 
     # Retry with TLS and/or Auth
     my %try = map { $_ => 1 } qw( tls auth );
     my $resp;
     while( not defined $CURRENT_VERSION ) {
-        $resp = $conn->ua->get( sprintf "%s://%s:%d", $conn->proto, $conn->host, $conn->port );
+        $resp = $conn->ua->request($req);
         if( $resp->is_success ) {
             my $ver;
             eval {
@@ -695,11 +704,11 @@ sub es_connect {
         port     => $DEF{PORT},
         proto    => $DEF{PROTO},
         timeout  => $DEF{TIMEOUT},
+        ssl_opts => _get_ssl_opts,
     );
     # Only authenticate over TLS
     if( $DEF{PROTO} eq 'https' ) {
         $conn{username} = $DEF{USERNAME};
-        $conn{ssl_opts} = _get_ssl_opts;
         $conn{password} = es_pass_exec(@DEF{qw(HOST USERNAME)}) if $DEF{PASSEXEC};
     }
 

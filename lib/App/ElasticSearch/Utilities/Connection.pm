@@ -156,7 +156,7 @@ sub _build_ua {
         timeout           => $self->timeout,
         ssl_opts          => $self->ssl_opts,
     );
-    debug({color=>'cyan'}, sprintf "Initialized a UA: %s", $ua->agent);
+    debug({color=>'cyan'}, sprintf "Initialized a UA: %s%s", $ua->agent, $self->password ? ' (password provided)' : '');
 
     # Decode the JSON Automatically
     $ua->add_handler( response_done => sub {
@@ -265,7 +265,7 @@ sub request {
 
     # Authentication
     $req->authorization_basic( $self->username, $self->password )
-        if $self->password and $self->proto eq 'https';
+        if length $self->password and $self->proto eq 'https';
 
     $req->content($body) if defined $body;
 
