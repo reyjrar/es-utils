@@ -32,8 +32,10 @@ From App::ElasticSearch::Utilities:
     --http-username HTTP Basic Auth username
     --password-exec Script to run to get the users password
     --insecure      Don't verify TLS certificates
-    --ca-file       Specify the TLS CA file
-    --ca-dir        Specify the directory with TLS CAs
+    --cacert        Specify the TLS CA file
+    --capath        Specify the directory with TLS CAs
+    --cert          Specify the path to the client certificate
+    --key           Specify the path to the client private key file
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 10
     --keep-proxy    Do not remove any proxy settings from %ENV

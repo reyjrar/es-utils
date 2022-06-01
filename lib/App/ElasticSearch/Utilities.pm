@@ -89,8 +89,10 @@ From App::ElasticSearch::Utilities:
     --http-username HTTP Basic Auth username
     --password-exec Script to run to get the users password
     --insecure      Don't verify TLS certificates
-    --ca-file       Specify the TLS CA file
-    --ca-dir        Specify the directory with TLS CAs
+    --cacert        Specify the TLS CA file
+    --capath        Specify the directory with TLS CAs
+    --cert          Specify the path to the client certificate
+    --key           Specify the path to the client private key file
     --noop          Any operations other than GET are disabled, can be negated with --no-noop
     --timeout       Timeout to ElasticSearch, default 10
     --keep-proxy    Do not remove any proxy settings from %ENV
@@ -174,13 +176,21 @@ in tact.
 
 Don't verify TLS certificates
 
-=item B<ca-file>
+=item B<cacert>
 
 Specify a file with the TLS CA certificates.
 
-=item B<ca-dir>
+=item B<capath>
 
 Specify a directory containing the TLS CA certificates.
+
+=item B<cert>
+
+Specify the path to the TLS client certificate file..
+
+=item B<key>
+
+Specify the path to the TLS client private key file.
 
 =back
 
@@ -277,8 +287,10 @@ my $PATTERN;
             password-exec=s
             master-only|M
             insecure
-            ca-dir=s
-            ca-file=s
+            capath=s
+            cacert=s
+            cert=s
+            key=s
         );
 
         my $argv;
@@ -391,11 +403,17 @@ sub es_utils_initialize {
         INSECURE    => exists $opts->{insecure} ? 1
                     :  exists $_GLOBALS{insecure} ? $_GLOBALS{insecure}
                     :  0,
-        CA_FILE     => exists $opts->{'ca-file'} ? 1
-                    :  exists $_GLOBALS{'ca-file'} ? $_GLOBALS{'ca-file'}
+        CACERT      => exists $opts->{cacert} ? 1
+                    :  exists $_GLOBALS{cacert} ? $_GLOBALS{cacert}
                     :  undef,
-        CA_DIR      => exists $opts->{'ca-dir'} ? 1
-                    :  exists $_GLOBALS{'ca-dir'} ? $_GLOBALS{'ca-dir'}
+        CAPATH      => exists $opts->{capath} ? 1
+                    :  exists $_GLOBALS{capath} ? $_GLOBALS{capath}
+                    :  undef,
+        CERT        => exists $opts->{cert} ? 1
+                    :  exists $_GLOBALS{cert} ? $_GLOBALS{cert}
+                    :  undef,
+        KEY         => exists $opts->{key} ? 1
+                    :  exists $_GLOBALS{key} ? $_GLOBALS{key}
                     :  undef,
     );
     CLI::Helpers::override(verbose => 1) if $DEF{NOOP};
@@ -618,9 +636,11 @@ sub es_pattern {
 sub _get_ssl_opts {
     es_utils_initialize() unless keys %DEF;
     my %opts = ();
-    $opts{verify_hostname} = 0 if $DEF{INSECURE};
-    $opts{SSL_ca_file} = $DEF{CA_FILE} if $DEF{CA_FILE};
-    $opts{SSL_ca_path} = $DEF{CA_DIR} if $DEF{CA_DIR};
+    $opts{verify_hostname} = 0            if $DEF{INSECURE};
+    $opts{SSL_ca_file}     = $DEF{CACERT} if $DEF{CACERT};
+    $opts{SSL_ca_path}     = $DEF{CAPATH} if $DEF{CAPATH};
+    $opts{SSL_cert_file}   = $DEF{CERT}   if $DEF{CERT};
+    $opts{SSL_key_file}    = $DEF{KEY}    if $DEF{KEY};
     return \%opts;
 }
 
