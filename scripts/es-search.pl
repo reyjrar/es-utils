@@ -650,8 +650,12 @@ sub display_aggregations {
                 }
                 if(exists $agg->{by} ) {
                     my $by = delete $agg->{by};
-                    if( exists $by->{value} ) {
-                        unshift @out, $by->{value};
+                    if( exists $by->{value_as_string} ) {
+                        unshift @out, $by->{value_as_string};
+                    }
+                    elsif( exists $by->{value} ) {
+                        my $v = $by->{value} =~ /^\d+\.\d+$/ ? sprintf($CONFIG{decimal_format}, $by->{value}) : $by->{value};
+                        unshift @out, $v;
                     }
                 }
                 # Handle the --with elements
@@ -677,8 +681,13 @@ sub display_aggregations {
                             $subaggs{$k} = \@sub if @sub;
                         }
                         # Simple Numeric Aggs
+                        elsif( exists $agg->{$k}{value_as_string} ) {
+                            $subaggs{$k} = [ [ $agg->{$k}{value_as_string} ] ];
+                        }
                         elsif( exists $agg->{$k}{value} ) {
-                            $subaggs{$k} = [ [ $agg->{$k}{value} ] ];
+                            my $v = $agg->{$k}{value} =~ /^\d+\.\d+$/ ? sprintf $CONFIG{decimal_format}, $agg->{$k}{value}
+                                                                      : $agg->{$k}{value};
+                            $subaggs{$k} = [ [ $v ] ];
                         }
                         # Percentiles
                         elsif( exists $agg->{$k}{values} ) {
@@ -688,8 +697,8 @@ sub display_aggregations {
                             }
                             $subaggs{$k} = [ \@pcts ];
                         }
-                        # Statistics
-                        elsif( exists $agg->{$k}{avg} ) {
+                        else {
+                            # Statistics
                             my @stats;
                             my %alias = qw( variance var std_deviation stdev );
                             foreach my $stat (qw(count min avg max sum variance std_deviation)) {
@@ -698,7 +707,7 @@ sub display_aggregations {
                                                                     : $agg->{$k}{$stat};
                                 push @stats, $alias{$stat} || $stat => $v;
                             }
-                            $subaggs{$k} = [ \@stats ];
+                            $subaggs{$k} = [ \@stats ] if @stats;
                         }
                     }
                 }
