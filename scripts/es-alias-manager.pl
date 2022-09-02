@@ -10,7 +10,7 @@ use DateTime;
 use Getopt::Long qw(:config no_ignore_case no_ignore_case_always);
 use Pod::Usage;
 use Ref::Util qw( is_ref );
-use YAML;
+use YAML::XS ();
 
 #------------------------------------------------------------------------#
 # Argument Collection
@@ -52,7 +52,7 @@ foreach my $setting (keys %CFG) {
 if ( !exists $CFG{config} and ! -f $CFG{config} ) {
     pod2usage(1);
 }
-my $ALIAS = YAML::LoadFile( $CFG{config} ) or die "unable to read $CFG{config}";
+my $ALIAS = YAML::XS::LoadFile( $CFG{config} ) or die "unable to read $CFG{config}";
 
 # Create the target uri for the ES Cluster
 my $TARGET = exists $opt{host} && defined $opt{host} ? $opt{host} : 'localhost';

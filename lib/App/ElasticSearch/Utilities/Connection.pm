@@ -195,7 +195,7 @@ sub _build_ua {
         $_[0] = $response;
     });
 
-    # Disable TLS
+    # Warn About Basic Auth without TLS
     warn "HTTP Basic Authorization configured and not using TLS, this is not supported"
         if length $self->password && $self->proto ne 'https';
 

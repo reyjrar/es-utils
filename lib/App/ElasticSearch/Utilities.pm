@@ -20,7 +20,7 @@ use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Time::Local;
 use URI;
 use URI::QueryParam;
-use YAML;
+use YAML::XS;
 
 # Control loading ARGV
 my $ARGV_AT_INIT    = 1;
@@ -347,7 +347,7 @@ sub es_utils_initialize {
         next unless -f $config_file;
         debug("Loading options from $config_file");
         eval {
-            my $ref = YAML::LoadFile($config_file);
+            my $ref = YAML::XS::LoadFile($config_file);
             push @ConfigData, $ref;
             debug_var($ref);
             1;
@@ -698,7 +698,7 @@ sub _get_es_version {
     }
     if( !defined $CURRENT_VERSION || $CURRENT_VERSION <= 2 ) {
         output({color=>'red',stderr=>1}, sprintf "[%d] Unable to determine Elasticsearch version, something has gone terribly wrong: aborting.", $resp->code);
-        output({color=>'red',stderr=>1}, ref $resp->content ? YAML::Dump($resp->content) : $resp->content) if $resp->content;
+        output({color=>'red',stderr=>1}, ref $resp->content ? YAML::XS::Dump($resp->content) : $resp->content) if $resp->content;
         exit 1;
     }
     debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");

@@ -15,7 +15,8 @@ use Pod::Usage;
 use POSIX qw(strftime);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Time::HiRes qw(sleep time);
-use YAML;
+use YAML::XS;
+local $YAML::XS::Boolean = "JSON::PP";
 
 #------------------------------------------------------------------------#
 # Argument Parsing

@@ -15,7 +15,7 @@ use Getopt::Long::Descriptive;
 use JSON::MaybeXS;
 use Pod::Usage;
 use Storable qw(dclone);
-use YAML ();
+use YAML::XS ();
 
 # Grab a copy of the args
 my @args = @ARGV;
@@ -61,12 +61,12 @@ foreach my $token ( reverse @args ) {
     }
 }
 
-output({color=>'yellow'}, YAML::Dump($q->aggregations)) if $opt->show_aggs;
+output({color=>'yellow'}, YAML::XS::Dump($q->aggregations)) if $opt->show_aggs;
 
 my $result = $q->execute();
 my $aggs   = $result->{aggregations};
 
-output({color=>'cyan'}, YAML::Dump($aggs)) if $opt->show_raw;
+output({color=>'cyan'}, YAML::XS::Dump($aggs)) if $opt->show_raw;
 
 my $flat = es_flatten_aggs($aggs);
 foreach my $row ( @{ $flat } ) {
