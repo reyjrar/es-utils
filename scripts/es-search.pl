@@ -620,7 +620,7 @@ sub show_bases {
 sub display_aggregations {
     my ($aggregations,$total_docs) = (@_);
 
-    my $out_of =  $aggregations->{out_of}{value};
+    my $out_of = $aggregations->{out_of}{value} || 0;
     $OUT_OF = $out_of if $out_of > $OUT_OF;
     my $steps = exists $aggregations->{step} ? $aggregations->{step}{buckets}
                 : [ $aggregations ];
