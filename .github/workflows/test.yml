@@ -1,0 +1,31 @@
+name: Test Matrix
+
+# Controls when the workflow will run
+on:
+  push:
+    branches: [ "master", "develop" ]
+  pull_request:
+    branches: [ "master" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest']
+        perl: [ '5.36', '5.34', '5.32', '5.30', '5.28', '5.26', '5.24', '5.22', '5.20', '5.18', '5.16', '5.14' ]
+    name: Perl ${{ matrix.perl }} on ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+      - name: Install dependencies
+        run: cpm install -g
+      - name: Run Tests
+        run: prove -Ilib -v t
