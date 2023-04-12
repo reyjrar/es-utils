@@ -1144,7 +1144,8 @@ sub es_index_days_old {
             }
         }
         $date[1]--; # move 1-12 -> 0-11
-        my $idx_time = timegm( 0,0,0, @date );
+        my $idx_time = eval { timegm( 0,0,0, @date ) };
+        return unless $idx_time;
         my $diff = $NOW - $idx_time;
         $diff++;    # Add one second
         debug({color=>"yellow"}, sprintf "es_index_days_old(%s) - Time difference is %0.3f", $index, $diff/86400);
