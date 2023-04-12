@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 8.4
+version 8.5
 
 # SYNOPSIS
 
@@ -20,7 +20,6 @@ Included are:
 
 **MONITORING**:
 
-    scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
     scripts/es-status.pl - Command line utility for ES Metrics
     scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
@@ -34,8 +33,9 @@ Included are:
 
 **MANAGEMENT**:
 
-    scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
+    scripts/es-cluster-settings.pl - Manage cluster settings
+    scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
 
 **DEPRECATED**:
@@ -566,7 +566,7 @@ This module's source code is available by visiting:
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2022 by Brad Lhotsky.
+This software is Copyright (c) 2023 by Brad Lhotsky.
 
 This is free software, licensed under:
 
