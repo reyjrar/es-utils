@@ -20,7 +20,7 @@ use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Time::Local;
 use URI;
 use URI::QueryParam;
-use YAML::XS;
+use YAML::XS ();
 
 # Control loading ARGV
 my $ARGV_AT_INIT    = 1;
@@ -1545,7 +1545,6 @@ B<SEARCHING>:
 
 B<MONITORING>:
 
-    scripts/es-nagios-check.pl - Monitor ES remotely or via NRPE with this script
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
     scripts/es-status.pl - Command line utility for ES Metrics
     scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
@@ -1559,8 +1558,9 @@ B<MAINTENANCE>:
 
 B<MANAGEMENT>:
 
-    scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
+    scripts/es-cluster-settings.pl - Manage cluster settings
+    scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
 
 B<DEPRECATED>:
