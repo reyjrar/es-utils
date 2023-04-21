@@ -29,7 +29,7 @@ the API you'd expect from B<Elastijk>.
 
 =cut
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

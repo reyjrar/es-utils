@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::Nested;
 # ABSTRACT: Implement the proposed Elasticsearch nested query syntax
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

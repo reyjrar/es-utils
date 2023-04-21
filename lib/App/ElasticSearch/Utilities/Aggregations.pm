@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::Aggregations;
 # ABSTRACT: Code to simplify creating and working with Elasticsearch aggregations
 
-use strict;
+use v5.16;
 use warnings;
 
 use Storable qw(dclone);
@@ -539,6 +539,7 @@ sub es_flatten_aggregations {
             my $k = delete $result->{key};
             my $ks = delete $result->{key_as_string};
             push @{ $row }, $field, $ks || $k;
+            push @{ $row }, "$field.raw", $k if $ks;
             push @{ $row }, "$field.hits", delete $result->{doc_count} || 0;
         }
         my %buckets = ();

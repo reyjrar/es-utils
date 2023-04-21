@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::IP;
 # ABSTRACT: Expand IP CIDR Notation to ES ranges
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::FileExpansion;
 # ABSTRACT: Build a terms query from unique values in a column of a file
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

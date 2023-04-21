@@ -1,7 +1,7 @@
 # ABSTRACT: Fix version issues to support all the things
 package App::ElasticSearch::Utilities::VersionHacks;
 
-use strict;
+use v5.16;
 use warnings;
 use version;
 

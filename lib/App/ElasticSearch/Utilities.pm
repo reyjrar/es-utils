@@ -1,8 +1,7 @@
 # ABSTRACT: Utilities for Monitoring ElasticSearch
 package App::ElasticSearch::Utilities;
 
-use v5.10;
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION
@@ -62,10 +61,13 @@ use Sub::Exporter -setup => {
         es_apply_index_settings
         es_local_index_meta
         es_flatten_hash
+        es_human_count
+        es_human_size
     )],
     groups => {
         config  => [qw(es_utils_initialize es_globals)],
         default => [qw(es_utils_initialize es_connect es_indices es_request)],
+        human   => [qw(es_human_count es_human_size)],
         indices => [qw(:default es_indices_meta)],
         index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_bases)],
     },
@@ -1078,7 +1080,12 @@ sub es_index_strip_date {
 
     es_utils_initialize() unless keys %DEF;
 
-    if( $index =~ s/[-_]$PATTERN_REGEX{DATE}.*// ) {
+    # Try the Date Pattern
+    if( $index =~ s/[-_]$PATTERN_REGEX{DATE}.*//o ) {
+        return $index;
+    }
+    # Fallback to matching thing-YYYY-MM-DD or thing-YYYY.MM.DD
+    elsif( $index =~ s/[-_]\d{4}([.-])\d{2}\g{1}\d{2}(?:[-_.]\d+)?$// ) {
         return $index;
     }
     return;
@@ -1463,6 +1470,53 @@ sub es_flatten_hash {
     my $_flat = flatten($hash, { HashDelimiter=>':', ArrayDelimiter=>':' });
     my %compat = map { s/:/./gr => $_flat->{$_} } keys %{ $_flat };
     return \%compat;
+}
+
+=func es_human_count
+
+Takes a number and returns the number as a string in docs, thousands, millions, or billions.
+
+    1_000     -> "1.00 thousand",
+    1_000_000 -> "1.00 million",
+
+=cut
+
+sub es_human_count {
+    my ($size) = @_;
+
+    my $unit = 'docs';
+    my @units = qw(thousand million billion);
+
+    while( $size > 1000 && @units ) {
+        $size /= 1000;
+        $unit = shift @units;
+    }
+
+    return sprintf "%0.2f %s", $size, $unit;
+}
+
+=func es_human_size
+
+Takes a number and returns the number as a string in bytes, Kb, Mb, Gb, or Tb using base 1024.
+
+    1024        -> '1.00 Kb',
+    1048576     -> '1.00 Mb',
+    1073741824  -> '1.00 Gb',
+
+=cut
+
+sub es_human_size {
+    my ($size) = @_;
+
+    my $unit = 'b';
+    my @units = qw(Kb Mb Gb Tb);
+
+    while( $size > 1024 && @units ) {
+        $size /= 1024;
+        $unit = shift @units;
+    }
+
+    return sprintf "%0.2f %s", $size, $unit;
 }
 
 =func def('key')
