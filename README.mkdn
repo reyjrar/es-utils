@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 8.5
+version 8.6
 
 # SYNOPSIS
 
@@ -216,6 +216,21 @@ Returns a hashref
 ## es\_flatten\_hash
 
 Performs flattening that's compatible with Elasticsearch's flattening.
+
+## es\_human\_count
+
+Takes a number and returns the number as a string in docs, thousands, millions, or billions.
+
+    1_000     -> "1.00 thousand",
+    1_000_000 -> "1.00 million",
+
+## es\_human\_size
+
+Takes a number and returns the number as a string in bytes, Kb, Mb, Gb, or Tb using base 1024.
+
+    1024        -> '1.00 Kb',
+    1048576     -> '1.00 Mb',
+    1073741824  -> '1.00 Gb',
 
 ## def('key')
 

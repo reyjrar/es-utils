@@ -42,7 +42,7 @@ requires "YAML::XS" => "0";
 requires "feature" => "0";
 requires "namespace::autoclean" => "0";
 requires "parent" => "0";
-requires "perl" => "5.013002";
+requires "perl" => "v5.16.0";
 requires "strict" => "0";
 requires "version" => "0";
 requires "warnings" => "0";
@@ -54,12 +54,12 @@ on 'test' => sub {
   requires "IO::Handle" => "0";
   requires "IPC::Open3" => "0";
   requires "Test::More" => "0";
-  requires "perl" => "5.013002";
+  requires "perl" => "v5.16.0";
 };
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "0";
-  requires "perl" => "5.013002";
+  requires "perl" => "v5.16.0";
 };
 
 on 'develop' => sub {

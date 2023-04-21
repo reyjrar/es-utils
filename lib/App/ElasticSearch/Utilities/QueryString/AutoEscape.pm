@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::AutoEscape;
 # ABSTRACT: Provides a prefix of '=' to use the term filter
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

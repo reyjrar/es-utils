@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::Underscored;
 # ABSTRACT: Extend some _<type>_ queries
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

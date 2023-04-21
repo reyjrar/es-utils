@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString;
 # ABSTRACT: CLI query string fixer
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

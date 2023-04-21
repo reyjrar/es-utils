@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::BareWords;
 # ABSTRACT: Mostly fixing case and tracking dangling words
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

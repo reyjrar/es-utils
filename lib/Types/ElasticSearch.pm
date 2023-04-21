@@ -1,7 +1,7 @@
 package Types::ElasticSearch;
 # ABSTRACT: Types for working with ElasticSearch
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

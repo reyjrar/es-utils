@@ -9,7 +9,7 @@ use this module in your code.
 
 =cut
 
-use strict;
+use v5.16;
 use warnings;
 no warnings 'uninitialized';
 

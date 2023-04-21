@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::Ranges;
 # ABSTRACT: Implement parsing comparison operators to Equivalent Lucene syntax
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION

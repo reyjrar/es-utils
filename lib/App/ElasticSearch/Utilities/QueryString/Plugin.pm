@@ -1,7 +1,7 @@
 package App::ElasticSearch::Utilities::QueryString::Plugin;
 # ABSTRACT: Moo::Role for implementing QueryString Plugins
 
-use strict;
+use v5.16;
 use warnings;
 
 # VERSION
