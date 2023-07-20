@@ -59,12 +59,36 @@ the `_node/_local/stats` stats.  Defaults to:
 
     [qw(adaptive_selection)]
 
+Plus ignores sections containing C<ingest>, C<ml>, C<transform> B<UNLESS> those
+roles appear in the node's roles.  Also, unless the node is tagged as a
+C<data*> node, the following keys are ignored:
+
+    [qw(force_merge merges pressure recovery segments translog)]
+
 =cut
 
 has 'ignore' => (
     is      => 'lazy',
     isa     => ArrayRef[Str],
-    default => sub { [qw(adaptive_selection)] },
+    default => sub {
+        my ($self) = @_;
+
+        my %roles = map { $_ => 1 } @{ $self->node_details->{roles} };
+        my @ignore = qw(adaptive_selection);
+
+        # Easy roles and sections are the same
+        foreach my $section ( qw(ingest ml transform) ) {
+            push @ignore, $section
+                unless $roles{$section};
+        }
+
+        # Skip some sections if we're not a data node
+        if( ! grep { /^data/ } keys %roles ) {
+            push @ignore, qw(force_merge merges pressure recovery segments translog);
+        }
+
+        return \@ignore;
+    },
 );
 
 =attr node_details
@@ -292,7 +316,7 @@ sub collect_index_metrics {
         # Figure out the Index Basename
         my $index = $shard->{index} =~ s/[-_]\d{4}([.-])\d{2}\g{1}\d{2}(?:[-_.]\d+)?$//r;
         next unless $index;
-        $index =~ s/\./_/g;
+        $index =~ s/[^a-zA-Z0-9]+/_/g;
 
         my $type  = $shard->{prirep} eq 'p' ? 'primary' : 'replica';
 
@@ -353,9 +377,9 @@ sub _stat_collector {
 
         # Sanitize Key Name
         my $key_name = $key;
-        $key_name =~ s/(?:time_)?in_millis/ms/;
+        $key_name =~ s/(?:_time)?(?:_in)?_millis/_ms/;
         $key_name =~ s/(?:size_)?in_bytes/bytes/;
-        $key_name =~ s/\./_/g;
+        $key_name =~ s/[^a-zA-Z0-9]+/_/g;
 
         if( is_hashref($ref->{$key}) ) {
             # Recurse
