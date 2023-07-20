@@ -91,6 +91,9 @@ sub _build_node_details {
             }
         }
     }
+
+    # Fail our type check
+    return;
 }
 
 =attr node_id
@@ -111,8 +114,11 @@ sub _build_node_id {
         return $details->{id};
     }
 
-    die sprintf "unable to determine node_id for %s:%d",
+    warn sprintf "unable to determine node_id for %s:%d",
         $self->host, $self->port;
+
+    # Fail our type check
+    return;
 }
 
 =attr with_cluster_metrics
@@ -186,6 +192,9 @@ sub collect_node_metrics {
     if( my $res = $self->request('_nodes/_local/stats')->content ) {
         return $self->_stat_collector( $res->{nodes}{$self->node_id} );
     }
+
+    # Explicit return of empty list
+    return;
 }
 
 =method collect_cluster_metrics()
@@ -244,6 +253,8 @@ sub _collect_index_blocks {
         return map { { key => "cluster.$_", value => $collected{$_} } } sort keys %collected;
     }
 
+    # Explicit return of empty list
+    return;
 }
 
 =method collect_index_metrics()
