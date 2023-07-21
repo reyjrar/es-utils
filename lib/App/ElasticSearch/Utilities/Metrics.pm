@@ -57,13 +57,13 @@ my @_IGNORES = qw(
 An array of metric names to ignore, in addition to the static list when parsing
 the `_node/_local/stats` stats.  Defaults to:
 
-    [qw(adaptive_selection)]
+    [qw(adaptive_selection discovery)]
 
 Plus ignores sections containing C<ingest>, C<ml>, C<transform> B<UNLESS> those
 roles appear in the node's roles.  Also, unless the node is tagged as a
 C<data*> node, the following keys are ignored:
 
-    [qw(force_merge merges pressure recovery segments translog)]
+    [qw(force_merge indexing indices merges pressure recovery segments translog)]
 
 =cut
 
@@ -74,7 +74,7 @@ has 'ignore' => (
         my ($self) = @_;
 
         my %roles = map { $_ => 1 } @{ $self->node_details->{roles} };
-        my @ignore = qw(adaptive_selection);
+        my @ignore = qw(adaptive_selection discovery);
 
         # Easy roles and sections are the same
         foreach my $section ( qw(ingest ml transform) ) {
@@ -82,9 +82,13 @@ has 'ignore' => (
                 unless $roles{$section};
         }
 
+        if( ! $roles{ml} ) {
+            push @ignore, qw(ml_datafeed ml_job_comms ml_utility);
+        }
+
         # Skip some sections if we're not a data node
         if( ! grep { /^data/ } keys %roles ) {
-            push @ignore, qw(force_merge merges pressure recovery segments translog);
+            push @ignore, qw(force_merge indexing indices merges pressure recovery segments translog);
         }
 
         return \@ignore;
