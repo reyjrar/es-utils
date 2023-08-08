@@ -73,7 +73,6 @@ if( exists $cfg{'carbon-server'} and length $cfg{'carbon-server'} ) {
 
 #------------------------------------------------------------------------#
 # Collect and Decode the Cluster Statistics
-
 my @metrics = sort map { "$_->{key} $_->{value}" } @{ $Fetcher->get_metrics };
 if( !@metrics ) {
     output({color=>'red'}, "Error retrieving metrics");

@@ -101,7 +101,6 @@ From App::ElasticSearch::Utilities:
     --index         Index to run commands against
     --base          For daily indexes, reference only those starting with "logstash"
                      (same as --pattern logstash-* or logstash-DATE)
-    --datesep       Date separator, default '.' also (--date-separator)
     --pattern       Use a pattern to operate on the indexes
     --days          If using a pattern or base, how many days back to go, default: 1
 
@@ -249,9 +248,19 @@ The indexes are compared against this pattern.
 # Global Variables
 our %_GLOBALS = ();
 my  %DEF      = ();
-my %PATTERN_REGEX = (
+my  %PATTERN_REGEX = (
     '*'  => qr/.*/,
     ANY  => qr/.*/,
+    DATE => qr/
+        (?<datestr>
+                (?<year>\d{4})              # Extract 4 digits for the year
+                (?:(?<datesep>[\-.]))?      # Optionally, look for . - as a separator
+                (?<month>\d{2})             # Two digits for the month
+                \g{datesep}                 # Whatever the date separator was in the previous match
+                (?<day>\d{2})               # Two digits for the day
+                (?![a-zA-Z0-9])             # Zero width negative look ahead, not alphanumeric
+        )
+    /x,
 );
 my $PATTERN;
 
@@ -283,7 +292,6 @@ my $PATTERN;
             base|index-basename=s
             days=i
             noop!
-            datesep|date-separator=s
             proto=s
             http-username=s
             password-exec=s
@@ -390,10 +398,6 @@ sub es_utils_initialize {
         PATTERN     => exists $opts->{pattern} ? $opts->{pattern} : '*',
         DAYS        => exists $opts->{days}    ? $opts->{days}
                      : exists $_GLOBALS{days}  ? $_GLOBALS{days} : 1,
-        DATESEP     => exists $opts->{datesep}            ? $opts->{datesep}
-                     : exists $_GLOBALS{datesep}          ? $_GLOBALS{datesep}
-                     : exists $_GLOBALS{"date-separator"} ? $_GLOBALS{"date-separator"}
-                     : '.',
         # HTTP Basic Authentication
         USERNAME    => exists $opts->{'http-username'}    ? $opts->{'http-username'}
                      : exists $_GLOBALS{'http-username'}  ? $_GLOBALS{'http-username'}
@@ -425,20 +429,11 @@ sub es_utils_initialize {
         delete $ENV{$_} for qw(http_proxy HTTP_PROXY);
     }
 
-    # Setup Variables based on the config
-    %PATTERN_REGEX = (
-        '*'  => qr/.*/,
-        DATE => qr/\d{4}(?:\Q$DEF{DATESEP}\E)?\d{2}(?:\Q$DEF{DATESEP}\E)?\d{2}/,
-        ANY  => qr/.*/,
-    );
-    my @ordered = qw(* DATE ANY);
-
-    if( index($DEF{DATESEP},'-') >= 0 ) {
-        output({stderr=>1,color=>'yellow'}, "=== Using a '-' as your date separator may cause problems with other utilities. ===");
-    }
 
     # Build the Index Pattern
     $PATTERN = $DEF{PATTERN};
+
+    my @ordered = qw(* DATE ANY);
     foreach my $literal ( @ordered ) {
         $PATTERN =~ s/\Q$literal\E/$PATTERN_REGEX{$literal}/g;
     }
@@ -1043,7 +1038,6 @@ sub es_indices {
                 }
             }
             elsif( $args{check_dates} && defined $DEF{DAYS} ) {
-
                 my $days_old = es_index_days_old( $index );
                 if( !defined $days_old ) {
                     debug({indent=>2,color=>'red'}, "! error locating date in string, skipping !");
@@ -1081,12 +1075,8 @@ sub es_index_strip_date {
     es_utils_initialize() unless keys %DEF;
 
     # Try the Date Pattern
-    if( $index =~ s/[-_]$PATTERN_REGEX{DATE}.*//o ) {
-        return $index;
-    }
-    # Fallback to matching thing-YYYY-MM-DD or thing-YYYY.MM.DD
-    elsif( $index =~ s/[-_]\d{4}([.-])\d{2}\g{1}\d{2}(?:[-_.]\d+)?$// ) {
-        return $index;
+    if( my $base = $index =~ s/[^a-z0-9]+$PATTERN_REGEX{DATE}.*$//rio ) {
+        return $base;
     }
     return;
 }
@@ -1106,6 +1096,8 @@ sub es_index_bases {
 
     # Strip to the base
     my $stripped = es_index_strip_date($index);
+    # Remove the rollover portion
+    $stripped =~ s/[\-_.]\d+$//;
     return unless defined $stripped and length $stripped;
 
     # Compute if we haven't already memoized
@@ -1132,7 +1124,6 @@ Return the number of days old this index is.
 
 =cut
 
-my $NOW = timegm(0,0,0,(gmtime)[3,4,5]);
 sub es_index_days_old {
     my ($index) = @_;
 
@@ -1140,24 +1131,32 @@ sub es_index_days_old {
 
     es_utils_initialize() unless keys %DEF;
 
-    if( my ($dateStr) = ($index =~ /($PATTERN_REGEX{DATE})/) ) {
-        my @date=();
-        if(length $DEF{DATESEP}) {
-           @date = reverse map { int } split /\Q$DEF{DATESEP}\E/, $dateStr;
-        }
-        else {
-            for my $len (qw(4 2 2)) {
-                unshift @date, substr($dateStr,0,$len,'');
-            }
-        }
+
+    if( $index =~ /[^a-z0-9]$PATTERN_REGEX{DATE}/io ) {
+        # Build Date Array
+        my @date = map { int }
+                    grep { length }
+                    map { $+{$_} =~ s/^0//r } qw(day month year);
         $date[1]--; # move 1-12 -> 0-11
+        # Validate
+        if( @date != 3 ) {
+            warn sprintf "es_index_days_old(%s) matched DATE(%s), but did not receive enough parts: %s",
+                $index,
+                $+{datestr},
+                join(', ', map { "'$_'" } @date);
+            return;
+        }
+
+        # Calculate Difference
+        my $now = timegm(0,0,0,(gmtime)[3,4,5]);
         my $idx_time = eval { timegm( 0,0,0, @date ) };
         return unless $idx_time;
-        my $diff = $NOW - $idx_time;
+        my $diff = $now - $idx_time;
         $diff++;    # Add one second
         debug({color=>"yellow"}, sprintf "es_index_days_old(%s) - Time difference is %0.3f", $index, $diff/86400);
         return int($diff / 86400);
     }
+    verbose({color=>"red"}, "es_index_days_old($index) - date string not found");
     return;
 }
 
@@ -1570,9 +1569,9 @@ sub es_local_index_meta {
     es_utils_initialize() unless keys %DEF;
 
     if( exists $_GLOBALS{meta} ) {
-        my $meta = $_GLOBALS{meta};
+        my $meta   = $_GLOBALS{meta};
         my @search = ( $name_or_base );
-        push @search, es_index_strip_date( $name_or_base );
+        push @search, es_index_strip_date($name_or_base);
         push @search, es_index_bases($name_or_base);
 
         foreach my $check ( @search ) {

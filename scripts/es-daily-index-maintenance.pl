@@ -28,7 +28,6 @@ GetOptions(\%opt,
     'optimize',
     'optimize-days=i',
     'index-basename=s',
-    'date-separator=s',
     'timezone=s',
     'skip-alias=s@',
     # Basic options
