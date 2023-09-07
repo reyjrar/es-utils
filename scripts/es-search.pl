@@ -196,8 +196,8 @@ pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Cannot use --
     if exists $OPT{tail} && $OPT{sort};
 pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Cannot use --sort along with --asc or --desc'})
     if $OPT{sort} && ($OPT{asc} || $OPT{desc});
-pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Please specify --show with --tail'})
-    if exists $OPT{tail} && !@SHOW;
+pod2usage({-exitval=>1, -verbose=>0, -sections=>'SYNOPSIS', -msg=>'Please specify --show or --jq with --tail'})
+    if exists $OPT{tail} && !( @SHOW || $OPT{json});
 
 # Process extra parameters
 foreach my $presence ( qw( exists missing ) ) {
