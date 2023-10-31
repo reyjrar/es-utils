@@ -22,7 +22,7 @@ my %TESTS=(
             es_index_days_old   => undef,
             es_index_strip_date => 'notadate-100000',
     },
-    strftime('mystery-science-theater-3000-%Y.%m.%d', localtime) => {
+    strftime('mystery-science-theater-3000-%Y.%m.%d', gmtime) => {
             es_index_bases      => 'mystery,mystery-science,mystery-science-theater',
             es_index_days_old   => 0,
             es_index_strip_date => 'mystery-science-theater-3000',

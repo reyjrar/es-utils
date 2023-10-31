@@ -9,7 +9,7 @@ use warnings;
 use Hash::Merge::Simple qw(clone_merge);
 use Moo::Role;
 use Ref::Util qw(is_arrayref is_hashref);
-use Types::Standard qw( Str Int );
+use Types::Standard qw( HashRef Str Int );
 
 =attr name
 
@@ -40,6 +40,18 @@ has priority => (
     isa => Int,
 );
 sub _build_priority { 50; }
+
+=attr fields_meta
+
+A hash reference with the field data from L<App::ElasticSearch::Utilities::es_index_fields>.
+
+=cut
+
+has fields_meta => (
+    is => 'rw',
+    isa => HashRef,
+    default => sub { {} },
+);
 
 =head1 INTERFACE
 

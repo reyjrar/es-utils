@@ -4,7 +4,7 @@ es-search.pl - Provides a CLI for quick searches of data in ElasticSearch daily 
 
 # VERSION
 
-version 8.7
+version 8.8
 
 # SYNOPSIS
 
@@ -386,7 +386,17 @@ es-search.pl - Search a logging cluster for information
 The search string is pre-analyzed before being sent to ElasticSearch.  The following plugins
 work to manipulate the query string and provide richer, more complete syntax for CLI applications.
 
-## App::ElasticSearch::Utilities::QueryString::AutoEscape
+## App::ElasticSearch::Utilities::QueryString::Barewords
+
+The following barewords are transformed:
+
+    or => OR
+    and => AND
+    not => NOT
+
+## App::ElasticSearch::Utilities::QueryString::Text
+
+### Terms Query via '='
 
 Provide an '=' prefix to a query string parameter to promote that parameter to a `term` filter.
 
@@ -404,15 +414,63 @@ Is translated into:
 
     { term => { user_agent => "Mozilla/5.0 (iPhone; CPU iPhone OS 12_1_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.0 Mobile/15E148 Safari/604.1" } }
 
-Which provides an exact match to the term in the query.
+### Wildcard Query via '\*'
 
-## App::ElasticSearch::Utilities::QueryString::Barewords
+Provide an '\*' prefix to a query string parameter to promote that parameter to a `wildcard` filter.
 
-The following barewords are transformed:
+This uses the wild card match for text fields to making matching more intuitive.
 
-    or => OR
-    and => AND
-    not => NOT
+E.g.:
+
+    *user_agent:"Mozilla*"
+
+Is translated into:
+
+    { wildcard => { user_agent => "Mozilla* } }
+
+### Regexp Query via '/'
+
+Provide an '/' prefix to a query string parameter to promote that parameter to a `regexp` filter.
+
+If you want to use regexp matching for finding data, you can use:
+
+    /message:'\\bden(ial|ied|y)'
+
+Is translated into:
+
+    { regexp => { message => "\\bden(ial|ied|y)" } }
+
+### Fuzzy Matching via '~'
+
+Provide an '~' prefix to a query string parameter to promote that parameter to a `fuzzy` filter.
+
+    ~message:deny
+
+Is translated into:
+
+    { fuzzy => { message => "deny" } }
+
+### Phrase Matching via '+'
+
+Provide an '+' prefix to a query string parameter to promote that parameter to a `match_phrase` filter.
+
+    +message:"login denied"
+
+Is translated into:
+
+    { match_phrase => { message => "login denied" } }
+
+### Automatic Match Queries for Text Fields
+
+If the field meta data is provided and the field is a `text` type, the query
+will automatically be mapped to a `match` query.
+
+    # message field is text
+    message:"foo"
+
+Is translated into:
+
+    { match => { message => "foo" } }
 
 ## App::ElasticSearch::Utilities::QueryString::IP
 

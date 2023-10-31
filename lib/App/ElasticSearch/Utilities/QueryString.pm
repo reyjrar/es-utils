@@ -186,12 +186,18 @@ sub _build_plugins {
     my $globals = es_globals('plugins');
     my $finder = Module::Pluggable::Object->new(
         search_path => ['App::ElasticSearch::Utilities::QueryString',@{ $self->search_path }],
-        except      => [qw(App::ElasticSearch::Utilities::QueryString::Plugin)],
+        except      => [qw(
+                            App::ElasticSearch::Utilities::QueryString::AutoEscape
+                            App::ElasticSearch::Utilities::QueryString::Plugin
+                        )],
         instantiate => 'new',
     );
     my @plugins;
     foreach my $p ( sort { $a->priority <=> $b->priority || $a->name cmp $b->name }
-        $finder->plugins( options => defined $globals ? $globals : {} )
+        $finder->plugins(
+            fields_meta => $self->fields_meta,
+            options => defined $globals ? $globals : {},
+        )
     ) {
         debug(sprintf "Loaded %s with priority:%d", $p->name, $p->priority);
         push @plugins, $p;
@@ -246,9 +252,9 @@ words to prevent syntax errors.
 The search string is pre-analyzed before being sent to ElasticSearch.  The following plugins
 work to manipulate the query string and provide richer, more complete syntax for CLI applications.
 
-=from_other App::ElasticSearch::Utilities::QueryString::AutoEscape / SYNOPSIS
-
 =from_other App::ElasticSearch::Utilities::QueryString::BareWords / SYNOPSIS
+
+=from_other App::ElasticSearch::Utilities::QueryString::Text / SYNOPSIS
 
 =from_other App::ElasticSearch::Utilities::QueryString::IP / SYNOPSIS
 

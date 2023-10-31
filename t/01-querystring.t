@@ -146,15 +146,117 @@ my %tests = (
           }
         },
     ],
+    '07-term-filter' => [
+        [qw(=foo:bar)],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'term' => {
+                  'foo' => 'bar',
+                }
+              }
+            ]
+          }
+        },
+    ],
+    '08-fuzzy-filter' => [
+        [qw(~foo:bar)],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'fuzzy' => {
+                  'foo' => 'bar',
+                }
+              }
+            ]
+          }
+        },
+    ],
+    '08-wildcard-filter' => [
+        [qw(*foo:bar*)],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'wildcard' => {
+                  'foo' => 'bar*',
+                }
+              }
+            ]
+          }
+        },
+    ],
+    '09-regexp-filter' => [
+        [qw(/foo:bar.*)],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'regexp' => {
+                  'foo' => 'bar.*',
+                }
+              }
+            ]
+          }
+        },
+    ],
+    '10-phrase-filter' => [
+        ['+foo:bar baz'],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'match_phrase' => {
+                  'foo' => 'bar baz',
+                }
+              }
+            ]
+          }
+        },
+    ],
+    '11-match-promotion' => [
+        ['a_text_field:foo'],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'match' => {
+                  'a_text_field' => 'foo',
+                }
+              }
+            ]
+          }
+        },
+    ],
+    '12-match-not-terms' => [
+        ['=a_text_field:foo'],
+        {
+          'bool' => {
+            'must' => [
+              {
+                'match' => {
+                  'a_text_field' => 'foo',
+                }
+              }
+            ]
+          }
+        },
+    ],
 );
 
-my $qs = App::ElasticSearch::Utilities::QueryString->new();
+my $qs = App::ElasticSearch::Utilities::QueryString->new(
+    fields_meta => {
+        a_text_field => { type => "text" },
+    },
+);
 
 foreach my $t (sort keys %tests) {
     my $q = $qs->expand_query_string( @{ $tests{$t}->[0] } );
 
     is_deeply( $q->query, $tests{$t}->[1], $t )
-        or diag( Dumper $q->query );
+        or diag( join(' ', @{ $tests{$t}->[0] }) . "\n", Dumper $q->query );
 }
 done_testing();
 __DATA__
