@@ -11,10 +11,19 @@ use JSON::MaybeXS;
 
 my %OPT;
 GetOptions(\%OPT, qw(
-        or
+    or
+    field=s%
 ));
 my $json  = JSON->new->ascii->canonical(1)->pretty;
+my %fields = ();
+if( $OPT{field} ) {
+    foreach my $f ( keys %{ $OPT{field} } ) {
+        $fields{$f} = { type => $OPT{field}->{$f} },
+    }
+    output({color=>'yellow'}, "Fields: " . $json->encode(\%fields));
+}
 my $qs    = App::ElasticSearch::Utilities::QueryString->new(
+                fields_meta => \%fields,
                 default_join => $OPT{or} ? 'OR' : 'AND',
 );
 my $query = $qs->expand_query_string(@ARGV);
