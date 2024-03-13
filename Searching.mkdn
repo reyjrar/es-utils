@@ -396,6 +396,8 @@ The following barewords are transformed:
 
 ## App::ElasticSearch::Utilities::QueryString::Text
 
+Provides field prefixes to manipulate the text search capabilities.
+
 ### Terms Query via '='
 
 Provide an '=' prefix to a query string parameter to promote that parameter to a `term` filter.
@@ -666,7 +668,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2023 by Brad Lhotsky.
+This software is Copyright (c) 2024 by Brad Lhotsky.
 
 This is free software, licensed under:
 
