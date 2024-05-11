@@ -7,6 +7,7 @@ use warnings;
 # VERSION
 
 use App::ElasticSearch::Utilities::HTTPRequest;
+use CHI;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(GetOptionsFromArray :config pass_through no_auto_abbrev);
 use Hash::Flatten qw(flatten);
@@ -47,6 +48,7 @@ use Sub::Exporter -setup => {
         es_index_bases
         es_index_strip_date
         es_index_days_old
+        es_index_docs
         es_index_shards
         es_index_segments
         es_index_stats
@@ -940,7 +942,7 @@ sub es_request {
     }
 
     # For the cat api, index goes *after* the command
-    if( $url =~ /^_(cat|stats)/ && $index ) {
+    if( $url =~ /^_cat/ && $index ) {
         $url =~ s/\/$//;
         $url = join('/', $url, $index);
         delete $options->{command};
@@ -1039,18 +1041,20 @@ Returns the hash of index meta data.
 
 =cut
 
-my $_indices_meta;
 sub es_indices_meta {
-    if(!defined $_indices_meta) {
+    state $cache = _get_memory_cache();
+
+    my $data = $cache->compute(indices_meta => sub {
         my $result = es_request('_cluster/state/metadata');
         if ( !defined $result ) {
             output({stderr=>1,color=>"red"}, "es_indices_meta(): Unable to locate indices in status!");
             exit 1;
         }
-        $_indices_meta = $result->{metadata}{indices};
-    }
+        $result->{metadata}{indices};
+    });
 
-    my %copy = %{ $_indices_meta };
+    # Shallow Copy
+    my %copy = %{ $data };
     return wantarray ? %copy : \%copy;
 }
 
@@ -1268,6 +1272,29 @@ sub es_index_days_old {
     return;
 }
 
+=func es_index_docs( 'index-name' )
+
+Return the number of docs in the index.
+
+=cut
+
+sub es_index_docs {
+    my ($index,$type) = @_;
+
+    state $_types = { map { $_ => 1 } qw( primaries total ) };
+    $type = 'primaries' unless defined $type && exists $_types->{$type};
+
+    return unless defined $index;
+
+    es_utils_initialize() unless keys %DEF;
+
+    if( my $res = es_index_stats($index, 'docs') ) {
+        return $res->{indices}{$index}{$type}{docs}{count};
+    }
+    return;
+}
+
+
 
 =index es_index_shards( 'index-name' )
 
@@ -1446,13 +1473,14 @@ Optimize an index to a single segment per shard
 =cut
 
 sub es_optimize_index {
-    my($index) = @_;
+    my($index,@args) = @_;
 
     return es_request('_forcemerge',{
             method    => 'POST',
             index     => $index,
             uri_param => {
                 max_num_segments => 1,
+                @args,
             },
     });
 }
@@ -1506,15 +1534,11 @@ sub es_segment_stats {
     my ($index) = @_;
 
     my %segments =  map { $_ => 0 } qw(shards segments);
-    my $result = es_index_segments($index);
-
-    if(defined $result) {
-        my $shard_data = $result->{indices}{$index}{shards};
-        foreach my $id (keys %{$shard_data}) {
-            $segments{segments} += $shard_data->{$id}[0]{num_search_segments};
-            $segments{shards}++;
-        }
+    if ( my $result = es_index_stats($index, 'segments,shard_stats') ) {
+        $segments{segments} = $result->{_all}{total}{segments}{count};
+        $segments{shards} = $result->{_all}{total}{shard_stats}{total_count};
     }
+
     return wantarray ? %segments : \%segments;
 }
 
@@ -1528,9 +1552,12 @@ Returns a hashref
 =cut
 
 sub es_index_stats {
-    my ($index) = @_;
+    my ($index,$section) = @_;
 
-    return es_request('_stats', {
+    my $action = '_stats';
+    $action .= "/$section" if length $section;
+
+    return es_request($action =>, {
         index     => $index
     });
 }
@@ -1715,6 +1742,19 @@ sub es_local_index_meta {
     return;
 }
 
+## Convenience Functions
+sub _get_memory_cache {
+    return CHI->new(
+        expires_in => '5m',
+        # Overrides
+        @_,
+        # Forced Options
+        driver => 'Memory',
+        datastore => {},
+    );
+}
+
+
 =head1 SYNOPSIS
 
 This distribution contains modules for interacting with ElasticSearch and
@@ -1747,10 +1787,10 @@ This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
 =head2 MANAGEMENT
 
-    scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
     scripts/es-cluster-settings.pl - Manage cluster settings
     scripts/es-copy-index.pl - Copy an index from one cluster to another
-    scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
+    scripts/es-index-optimize.pl - Forcemerge many indices at once
+    scripts/es-index-settings.pl - Apply settings to all indexes matching a pattern
 
 The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.

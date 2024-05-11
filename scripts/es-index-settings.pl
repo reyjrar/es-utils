@@ -1,5 +1,5 @@
 #!perl
-# PODNAME: es-apply-settings.pl
+# PODNAME: es-index-settings.pl
 # ABSTRACT: Run to apply a JSON list of settings to indexes matching a pattern
 use strict;
 use warnings;
@@ -133,7 +133,7 @@ __END__
 
 =head1 SYNOPSIS
 
-es-apply-settings.pl --local --pattern logstash-* settings.json
+es-index-settings.pl --local --pattern logstash-* settings.json
 
 Options:
 
@@ -168,7 +168,7 @@ next index.
 When this option is used along with the --days option the the setting will only be applied
 to indexs that are older than the days specified.
 
-    es-apply-settings.pl --older --days 30 --pattern logstash-*
+    es-index-settings.pl --older --days 30 --pattern logstash-*
 
 =item B<skip-alias>
 
@@ -196,12 +196,12 @@ This script allows you to change index settings on indexes whose name matches th
 
 Usage:
 
-    $ es-apply-settings.pl --local --pattern logstash-*
+    $ es-index-settings.pl --local --pattern logstash-*
     > { "index.routing.allocation.exclude.ip": "192.168.10.120" }
 
 Or specify a file containing the settings
 
-    $ es-apply-settings.pl --local --pattern logstash-* settings.json
+    $ es-index-settings.pl --local --pattern logstash-* settings.json
 
 =from_other App::ElasticSearch::Utilities / PATTERNS / all
 

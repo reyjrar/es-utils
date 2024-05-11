@@ -38,10 +38,10 @@ This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
 ## MANAGEMENT
 
-    scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
     scripts/es-cluster-settings.pl - Manage cluster settings
     scripts/es-copy-index.pl - Copy an index from one cluster to another
-    scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
+    scripts/es-index-optimize.pl - Forcemerge many indices at once
+    scripts/es-index-settings.pl - Apply settings to all indexes matching a pattern
 
 The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.
@@ -545,6 +545,10 @@ Options include:
 - **check\_dates**
 
     Default is 1, set to 0 to disable checking index age.
+
+## es\_index\_docs( 'index-name' )
+
+Return the number of docs in the index.
 
 ## es\_segment\_stats($index)
 
