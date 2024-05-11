@@ -5,6 +5,7 @@ use strict;
 use warnings;
 
 use App::ElasticSearch::Utilities qw(:all);
+use CHI;
 use CLI::Helpers qw(:all);
 use Const::Fast;
 use JSON::MaybeXS;
@@ -14,14 +15,15 @@ use Pod::Usage;
 #------------------------------------------------------------------------#
 # Argument Collection
 const my %DEFAULT => (
-    batch_size       => 10,
+    max_concurrent_merges => 10,
     max_num_segments => 1,
 );
 my ($opt,$usage) = describe_options('%c %o',
     ['min-docs|m=i', "Minimum documents in an index to optimize"],
     ['max-docs|M=i', "Maximum documents in an index to optimize"],
-    ['batch-size|b=i', "Number of indices optimize at a time, defaults to $DEFAULT{batch_size}, set to 0 to do everything",
-        { default => $DEFAULT{batch_size} }
+    # TODO: Make this equal the number of data nodeCheck if we've gone through the batch sizes
+    ['max-concurrent-merges|C=i', "Maximum concurrent merge jobs defaults to $DEFAULT{max_concurrent_merges}",
+        { default => $DEFAULT{max_concurrent_merges} }
     ],
     ['max-num-segments|n=i', "Maximum number of segments per shard, defaults to $DEFAULT{max_num_segments}",
         { default => $DEFAULT{max_num_segments} }
@@ -42,10 +44,15 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $opt->manual;
 
 #------------------------------------------------------------------------#
 my $json = JSON->new->pretty->utf8->canonical;
+my $cache = CHI->new(
+    driver     => 'Memory',
+    global     => 1,
+    expires_in => '1m',
+);
 
 my %indices = map { $_ => (es_index_days_old($_) || 0) } es_indices();
 
-my $optimizing = 0;
+my $optimized = 0;
 foreach my $idx ( sort { $indices{$b} <=> $indices{$a} } keys %indices ) {
     if( $indices{$idx} < 1 ) {
         output({color=>'magenta'}, "Skipping today's index $idx");
@@ -76,18 +83,21 @@ foreach my $idx ( sort { $indices{$b} <=> $indices{$a} } keys %indices ) {
         }
     }
 
+    # Ensure it needs optimizing
     next unless $opt->force || needs_optimizing($idx);
 
+    # Check for existing optimizing runs
     next if already_optimizing($idx);
 
+    # wait for other merges to finish
+    check_merges();
+
     output(sprintf "%s optimizing%s", $idx, $opt->force ? ' [forced]' : '');
-
-    if( ++$optimizing >= $opt->batch_size ) {
-        last unless confirm("Currently optimizing $optimizing indices, continue?");
-    }
-
     optimize_index($idx);
+    $optimized++;
 }
+
+output({color=>'green'}, "Optimized $optimized indices");
 
 sub needs_optimizing {
     my ($index) = @_;
@@ -117,13 +127,7 @@ sub needs_optimizing {
 sub already_optimizing {
     my ($index) = @_;
 
-    my %options = (
-        uri_param => {
-            actions => "*merge*",
-            detailed => 'true',
-        }
-    );
-    if ( my $res = es_request('_cat/tasks', \%options) ) {
+    if ( my $res = _get_merge_tasks() ) {
         my $desc = "Force-merge indices [$index]";
         foreach my $task ( @{ $res } ) {
             if ( index($task->{description}, $desc) >= 0 ) {
@@ -135,13 +139,48 @@ sub already_optimizing {
     return;
 }
 
+sub check_merges {
+    my $pause = 5;
+
+    while( 1 ) {
+        my $res = _get_merge_tasks();
+
+        die "Unable to check merge tasks in process, exitting"
+            unless defined $res;
+
+        my $current_merges = @{ $res };
+
+        last if $current_merges < $opt->max_concurrent_merges;
+
+        output({indent=>1, color=>'blue'}, "currently $current_merges running, waiting ${pause}s");
+        sleep $pause;
+    }
+}
+
 sub optimize_index {
     my ($index) = @_;
-    my $result = es_optimize_index($index,  wait_for_completion => 'false' );
-    if( !defined $result ) {
-        output({color=>"red",indent => 1}, " !! Encountered error during optimize !!");
-    }
-    else {
-        output({color=>"green",indent => 1}, "= $result->{_shards}{successful} of $result->{_shards}{total} shards optimized.");
-    }
+    eval {
+        my $result = es_optimize_index($index,  wait_for_completion => 'false' );
+        if( !defined $result ) {
+            output({color=>"red",indent => 1}, " !! Encountered error during optimize !!");
+        }
+        else {
+            output({color=>"green",indent => 1}, "= $result->{_shards}{successful} of $result->{_shards}{total} shards optimized.");
+        }
+        1;
+    } or do {
+        my $err = $@;
+        output({color=>'magenta', indent => 1}, '+ forcemerge requested');
+    };
+}
+
+sub _get_merge_tasks {
+    my %options = (
+        uri_param => {
+            actions => "*merge*",
+            detailed => 'true',
+        }
+    );
+
+    return es_request('_cat/tasks', \%options);
 }
