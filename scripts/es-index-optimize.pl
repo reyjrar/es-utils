@@ -142,8 +142,6 @@ sub optimize_index {
         output({color=>"red",indent => 1}, " !! Encountered error during optimize !!");
     }
     else {
-        use DDP;
-        p( $result );
         output({color=>"green",indent => 1}, "= $result->{_shards}{successful} of $result->{_shards}{total} shards optimized.");
     }
 }
