@@ -7,6 +7,7 @@ use warnings;
 # VERSION
 
 use App::ElasticSearch::Utilities::HTTPRequest;
+use CHI;
 use CLI::Helpers qw(:all);
 use Getopt::Long qw(GetOptionsFromArray :config pass_through no_auto_abbrev);
 use Hash::Flatten qw(flatten);
@@ -47,6 +48,7 @@ use Sub::Exporter -setup => {
         es_index_bases
         es_index_strip_date
         es_index_days_old
+        es_index_docs
         es_index_shards
         es_index_segments
         es_index_stats
@@ -69,7 +71,7 @@ use Sub::Exporter -setup => {
         default => [qw(es_utils_initialize es_connect es_indices es_request)],
         human   => [qw(es_human_count es_human_size)],
         indices => [qw(:default es_indices_meta)],
-        index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_bases)],
+        index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_bases es_index_docs)],
     },
 };
 use App::ElasticSearch::Utilities::Connection;
@@ -832,7 +834,7 @@ sub es_request {
     }
 
     # For the cat api, index goes *after* the command
-    if( $url =~ /^_(cat|stats)/ && $index ) {
+    if( $url =~ /^_cat/ && $index ) {
         $url =~ s/\/$//;
         $url = join('/', $url, $index);
         delete $options->{command};
@@ -931,18 +933,20 @@ Returns the hash of index meta data.
 
 =cut
 
-my $_indices_meta;
 sub es_indices_meta {
-    if(!defined $_indices_meta) {
+    state $cache = _get_memory_cache();
+
+    my $data = $cache->compute(indices_meta => sub {
         my $result = es_request('_cluster/state/metadata');
         if ( !defined $result ) {
             output({stderr=>1,color=>"red"}, "es_indices_meta(): Unable to locate indices in status!");
             exit 1;
         }
-        $_indices_meta = $result->{metadata}{indices};
-    }
+        $result->{metadata}{indices};
+    });
 
-    my %copy = %{ $_indices_meta };
+    # Shallow Copy
+    my %copy = %{ $data };
     return wantarray ? %copy : \%copy;
 }
 
@@ -1160,6 +1164,29 @@ sub es_index_days_old {
     return;
 }
 
+=func es_index_docs( 'index-name' )
+
+Return the number of docs in the index.
+
+=cut
+
+sub es_index_docs {
+    my ($index,$type) = @_;
+
+    state $_types = { map { $_ => 1 } qw( primaries total ) };
+    $type = 'primaries' unless defined $type && exists $_types->{$type};
+
+    return unless defined $index;
+
+    es_utils_initialize() unless keys %DEF;
+
+    if( my $res = es_index_stats($index, 'docs') ) {
+        return $res->{indices}{$index}{$type}{docs}{count};
+    }
+    return;
+}
+
+
 
 =func es_index_shards( 'index-name' )
 
@@ -1338,13 +1365,14 @@ Optimize an index to a single segment per shard
 =cut
 
 sub es_optimize_index {
-    my($index) = @_;
+    my($index,@args) = @_;
 
     return es_request('_forcemerge',{
             method    => 'POST',
             index     => $index,
             uri_param => {
                 max_num_segments => 1,
+                @args,
             },
     });
 }
@@ -1420,9 +1448,12 @@ Returns a hashref
 =cut
 
 sub es_index_stats {
-    my ($index) = @_;
+    my ($index,$section) = @_;
 
-    return es_request('_stats', {
+    my $action = '_stats';
+    $action .= "/$section" if length $section;
+
+    return es_request($action =>, {
         index     => $index
     });
 }
@@ -1583,6 +1614,19 @@ sub es_local_index_meta {
 
     return;
 }
+
+## Convenience Functions
+sub _get_memory_cache {
+    return CHI->new(
+        expires_in => '5m',
+        # Overrides
+        @_,
+        # Forced Options
+        driver => 'Memory',
+        datastore => {},
+    );
+}
+
 
 =head1 SYNOPSIS
 

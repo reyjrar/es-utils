@@ -48,6 +48,9 @@ my %CALLBACKS = (
     '_search' => {
         default => \&_search_params,
     },
+    '_forcemerge' => {
+        default => \&_forcemerge_params,
+    },
 );
 
 my $version;
@@ -153,6 +156,23 @@ sub _cluster_state_1_0 {
     }
     return ($url,$options,$data);
 }
+
+sub _forcemerge_params {
+    my ($url,$options,$data,$version) = @_;
+
+    my @invalid = ();
+    push @invalid, "wait_for_completion" if qv($version) < qv("8.0.0");
+
+    if( @invalid && exists $options->{uri_param} ) {
+        foreach my $invalid ( @invalid ) {
+            delete $options->{uri_param}{$invalid}
+                if exists $options->{uri_param}{$invalid};
+        }
+    }
+
+    return ($url,$options,$data);
+}
+
 
 sub _search_params {
     my ($url,$options,$data,$version) = @_;
