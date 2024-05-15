@@ -1,7 +1,7 @@
 #!perl
 # PODNAME: es-index-optimize.pl
 # ABSTRACT: Force merge indexes safely
-use strict;
+use v5.16;
 use warnings;
 
 use App::ElasticSearch::Utilities qw(:all);
@@ -15,16 +15,12 @@ use Pod::Usage;
 #------------------------------------------------------------------------#
 # Argument Collection
 const my %DEFAULT => (
-    max_concurrent_merges => 10,
     max_num_segments => 1,
 );
 my ($opt,$usage) = describe_options('%c %o',
     ['min-docs|m=i', "Minimum documents in an index to optimize"],
     ['max-docs|M=i', "Maximum documents in an index to optimize"],
-    # TODO: Make this equal the number of data nodeCheck if we've gone through the batch sizes
-    ['max-concurrent-merges|C=i', "Maximum concurrent merge jobs defaults to $DEFAULT{max_concurrent_merges}",
-        { default => $DEFAULT{max_concurrent_merges} }
-    ],
+    ['max-concurrent-merges|C=i', "Maximum concurrent merge jobs defaults to 2/3 of number of data nodes" ],
     ['max-num-segments|n=i', "Maximum number of segments per shard, defaults to $DEFAULT{max_num_segments}",
         { default => $DEFAULT{max_num_segments} }
     ],
@@ -53,7 +49,8 @@ my $cache = CHI->new(
 my %indices = map { $_ => (es_index_days_old($_) || 0) } es_indices();
 
 my $optimized = 0;
-foreach my $idx ( sort { $indices{$b} <=> $indices{$a} } keys %indices ) {
+foreach my $idx ( sort { $indices{$b} <=> $indices{$a} || $a cmp $b } keys %indices ) {
+    # Always skip the current days index
     if( $indices{$idx} < 1 ) {
         output({color=>'magenta'}, "Skipping today's index $idx");
         next;
@@ -61,6 +58,7 @@ foreach my $idx ( sort { $indices{$b} <=> $indices{$a} } keys %indices ) {
 
     verbose({color=>'cyan'}, "Evaluating $idx");
 
+    # Optionally check the number of documents
     if( $opt->min_docs or $opt->max_docs ) {
         if( my $docs = es_index_docs($idx) ) {
             if( $opt->min_docs && $docs < $opt->min_docs ) {
@@ -150,11 +148,29 @@ sub check_merges {
 
         my $current_merges = @{ $res };
 
-        last if $current_merges < $opt->max_concurrent_merges;
+        last if $current_merges < get_max_concurrent_merges();
 
         output({indent=>1, color=>'blue'}, "currently $current_merges running, waiting ${pause}s");
         sleep $pause;
     }
+}
+
+sub get_max_concurrent_merges {
+    # Simplest case, specified by the user
+    return $opt->max_concurrent_merges if $opt->max_concurrent_merges;
+
+    state $merges;
+    return $merges if $merges;
+
+    # Compute the number of data nodes
+    my $res = es_request('_cat/nodes');
+    my $data_nodes = 0;
+    foreach my $node ( @{$res} ) {
+        $data_nodes++ if $node->{'node.role'} =~ /d/;
+    }
+
+    # Compute merges;
+    return $merges = int( $data_nodes * (2/3) );
 }
 
 sub optimize_index {
