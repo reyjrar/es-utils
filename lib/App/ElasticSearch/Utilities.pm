@@ -1426,15 +1426,11 @@ sub es_segment_stats {
     my ($index) = @_;
 
     my %segments =  map { $_ => 0 } qw(shards segments);
-    my $result = es_index_segments($index);
-
-    if(defined $result) {
-        my $shard_data = $result->{indices}{$index}{shards};
-        foreach my $id (keys %{$shard_data}) {
-            $segments{segments} += $shard_data->{$id}[0]{num_search_segments};
-            $segments{shards}++;
-        }
+    if ( my $result = es_index_stats($index, 'segments,shard_stats') ) {
+        $segments{segments} = $result->{_all}{total}{segments}{count};
+        $segments{shards} = $result->{_all}{total}{shard_stats}{total_count};
     }
+
     return wantarray ? %segments : \%segments;
 }
 

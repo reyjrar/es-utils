@@ -15,15 +15,11 @@ use Pod::Usage;
 #------------------------------------------------------------------------#
 # Argument Collection
 const my %DEFAULT => (
-    max_num_segments => 1,
 );
 my ($opt,$usage) = describe_options('%c %o',
     ['min-docs|m=i', "Minimum documents in an index to optimize"],
     ['max-docs|M=i', "Maximum documents in an index to optimize"],
     ['max-concurrent-merges|C=i', "Maximum concurrent merge jobs defaults to 2/3 of number of data nodes" ],
-    ['max-num-segments|n=i', "Maximum number of segments per shard, defaults to $DEFAULT{max_num_segments}",
-        { default => $DEFAULT{max_num_segments} }
-    ],
     ['force', "Force the optimization, even if we are at the correct number of segments"],
     []     ,
     ['help', 'Display this message', { shortcircuit => 1 }],
@@ -104,12 +100,13 @@ sub needs_optimizing {
     my $segdata = es_segment_stats( $index );
     if( defined $segdata && $segdata->{shards} > 0 ) {
         $segment_ratio = sprintf( "%0.2f", $segdata->{segments} / $segdata->{shards} );
+        debug({color=>"cyan", indent => 1}, "$index: $segdata->{segments} segs, $segdata->{shards} shards (segment_ratio: $segment_ratio).");
     }
 
     die "Failed to get segment stats for $index, bailing"
         unless defined $segment_ratio;
 
-    if( $segment_ratio > $opt->max_num_segments ) {
+    if( $segdata->{segments} > $segdata->{shards}  ) {
         verbose({color=>"yellow", indent => 1}, "$index: required (segment_ratio: $segment_ratio).");
 
         return 1;
