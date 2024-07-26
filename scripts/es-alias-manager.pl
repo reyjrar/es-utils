@@ -129,6 +129,8 @@ debug_var($ALIAS);
 
 # Loop through the indices and take appropriate actions;
 foreach my $index (sort keys %{ $indices }) {
+    next if $index =~ /^[._]/;
+
     debug("$index being evaluated");
     my %current = map { $_ => 1 }
                   grep { !/^\./ }
