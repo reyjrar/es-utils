@@ -10,6 +10,7 @@ use CLI::Helpers qw(:output);
 my $indexes = es_indices(check_dates => 0);
 
 foreach my $idx ( sort @{ $indexes } ) {
+    next if $idx =~ /^[._]/;
     my $age = es_index_days_old( $idx );
     my $result = es_request("/$idx/_stats");
     my $stats = $result->{indices}{$idx}{primaries};
@@ -19,7 +20,7 @@ foreach my $idx ( sort @{ $indexes } ) {
     output("checking $idx.. (age=${age}d, docs=$doc_size, size=$size)");
 
     my $segments = $stats->{segments}{count};
-    my $shards   = $stats->{shard_stats}{total_count};
+    my $shards   = $stats->{shard_stats}{total_count} || $result->{_shards}{total};
 
     if( my $docs = $stats->{docs}{count} ) {
         my $deleted = $stats->{docs}{deleted};

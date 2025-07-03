@@ -633,11 +633,16 @@ sub es_pattern {
 sub _get_ssl_opts {
     es_utils_initialize() unless keys %DEF;
     my %opts = ();
-    $opts{verify_hostname} = 0            if $DEF{INSECURE};
     $opts{SSL_ca_file}     = $DEF{CACERT} if $DEF{CACERT};
     $opts{SSL_ca_path}     = $DEF{CAPATH} if $DEF{CAPATH};
     $opts{SSL_cert_file}   = $DEF{CERT}   if $DEF{CERT};
     $opts{SSL_key_file}    = $DEF{KEY}    if $DEF{KEY};
+
+    # Disable Certificate Verification
+    if ( $DEF{INSECURE} ) {
+        $opts{verify_hostname} = 0;
+        $opts{SSL_verify_mode} = 0x00;
+    }
     return \%opts;
 }
 
@@ -666,10 +671,10 @@ sub _get_es_version {
             };
             if( $ver ) {
                 if( $ver->{distribution} and $ver->{distribution} eq 'opensearch' ) {
-                    $CURRENT_VERSION = '7.10';
+                    $CURRENT_VERSION = version->parse($ver->{minimum_wire_compatibility_version});
                 }
                 else {
-                    $CURRENT_VERSION = join('.', (split /\./,$ver->{number})[0,1]);
+                    $CURRENT_VERSION = version->parse($ver->{number});
                 }
             }
         }
