@@ -63,6 +63,7 @@ use Sub::Exporter -setup => {
         es_flatten_hash
         es_human_count
         es_human_size
+        es_format_numeric
     )],
     groups => {
         config  => [qw(es_utils_initialize es_globals)],
@@ -1521,6 +1522,29 @@ sub es_human_size {
     }
 
     return sprintf "%0.2f %s", $size, $unit;
+}
+
+=func es_format_numeric
+
+Takes a value and the minimum digits of significance.
+
+=cut
+
+sub es_format_numeric {
+    my($v,$len) = @_;
+    $len ||= 3;
+
+    # If this looks like a number, format it
+    if ( $v =~ /^([0-9]+)\.(0*)[0-9]*$/ ) {
+        my $ints   = length($1);
+        my $zeroes = length($2);
+        my $precision = $len + $zeroes - $ints;
+        $v = $ints > $len    ? int($v)
+            : $precision > 0 ? sprintf("%0.${precision}f",$v)
+            : $v;
+    }
+
+    return $v;
 }
 
 =func def('key')

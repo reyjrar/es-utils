@@ -104,7 +104,7 @@ $OPT{'no-decorators'} = 1 if $CONFIG{format} eq 'json';
 $CONFIG{pretty} = $OPT{pretty} ? 1
                 : $CONFIG{format} =~ /pretty/ ? 1
                 : 0;
-$CONFIG{decimal_format} = "%0.$CONFIG{precision}f";
+my $JSON = JSON->new->utf8->canonical;
 #------------------------------------------------------------------------#
 # Handle Indices
 my $ORDER = exists $OPT{asc} && $OPT{asc} ? 'asc' : 'desc';
@@ -467,7 +467,7 @@ AGES: while( !$DONE && @AGES ) {
                     my $v = '-';
                     if( exists $record->{$f} && defined $record->{$f} ) {
                         $v = is_arrayref($record->{$f}) && @{ $record->{$f} } == 1 ? $record->{$f}[0]
-                           : is_ref($record->{$f}) ? to_json($record->{$f},{allow_nonref=>1,canonical=>1})
+                           : is_ref($record->{$f}) ? $JSON->encode($record->{$f})
                            : $record->{$f};
                     }
                     push @cols,$v;
@@ -498,7 +498,7 @@ AGES: while( !$DONE && @AGES ) {
 
 output({stderr=>1,color=>'yellow'},
     "# Search Parameters:",
-    (map { "#    $_" } split /\r?\n/, to_json($q->query,{allow_nonref=>1,canonical=>1,pretty=>$CONFIG{pretty}})),
+    (map { "#    $_" } split /\r?\n/, $JSON->encode($q->query)),
     sprintf("# Displaying %d of %d results%s took %0.2f seconds.",
         $displayed,
         $OUT_OF || $TOTAL_HITS,
@@ -519,7 +519,7 @@ if($CONFIG{summary} && keys %AGGS_TOTALS) {
     }
     foreach my $k (sort { $AGGS_TOTALS{$b} <=> $AGGS_TOTALS{$a} } keys %AGGS_TOTALS) {
         output({data=>1,color=>'green'}, join "\t",
-                $AGGS_TOTALS{$k}, sprintf($CONFIG{decimal_format}, $AGGS_TOTALS{$k} / $TOTAL_HITS), $k
+                $AGGS_TOTALS{$k}, es_format_numeric($AGGS_TOTALS{$k} / $TOTAL_HITS, $CONFIG{precision}), $k
         );
     }
 }
@@ -643,9 +643,9 @@ sub display_aggregations {
                 foreach my $k (qw(score doc_count bg_count key)) {
                     next unless exists $agg->{$k};
                     my $value = delete $agg->{$k};
-                    push @out, defined $value ? ($k eq 'score' ? sprintf $CONFIG{decimal_format}, $value : $value ) : '-';
+                    push @out, defined $value ? es_format_numeric($value, $CONFIG{precision}) : '-';
                     if( $k eq 'doc_count' ) {
-                        push @out, sprintf $CONFIG{decimal_format}, $value ? $value / $total_docs : 0;
+                        push @out, es_format_numeric($value ? $value / $total_docs : 0, $CONFIG{precision});
                         $top_docs = $value;
                     }
                 }
@@ -655,8 +655,7 @@ sub display_aggregations {
                         unshift @out, $by->{value_as_string};
                     }
                     elsif( exists $by->{value} ) {
-                        my $v = $by->{value} =~ /^\d+\.\d+$/ ? sprintf($CONFIG{decimal_format}, $by->{value}) : $by->{value};
-                        unshift @out, $v;
+                        unshift @out, es_format_numeric($by->{value});
                     }
                 }
                 # Handle the --with elements
@@ -673,8 +672,8 @@ sub display_aggregations {
                                 foreach my $dk (qw(score doc_count bg_count)) {
                                     next unless exists $subagg->{$dk};
                                     my $v = delete $subagg->{$dk};
-                                    push @elms, defined $v ? ($dk eq 'score' ? sprintf $CONFIG{decimal_format}, $v : $v ) : '-';
-                                    push @elms, sprintf $CONFIG{decimal_format}, $v / $top_docs
+                                    push @elms, defined $v ? es_format_numeric($v, $CONFIG{precision}) : '-';
+                                    push @elms, es_format_numeric($v / $top_docs,, $CONFIG{precision})
                                         if $dk eq 'doc_count' and $top_docs;
                                 }
                                 push @sub, \@elms;
@@ -686,15 +685,14 @@ sub display_aggregations {
                             $subaggs{$k} = [ [ $agg->{$k}{value_as_string} ] ];
                         }
                         elsif( exists $agg->{$k}{value} ) {
-                            my $v = $agg->{$k}{value} =~ /^\d+\.\d+$/ ? sprintf $CONFIG{decimal_format}, $agg->{$k}{value}
-                                                                      : $agg->{$k}{value};
+                            my $v = es_format_numeric($agg->{$k}{value},$CONFIG{precision});
                             $subaggs{$k} = [ [ $v ] ];
                         }
                         # Percentiles
                         elsif( exists $agg->{$k}{values} ) {
                             my @pcts;
                             foreach my $pctl (sort { $a <=> $b } keys %{ $agg->{$k}{values} }) {
-                                push @pcts, "p$pctl", sprintf $CONFIG{decimal_format}, $agg->{$k}{values}{$pctl};
+                                push @pcts, "p$pctl", es_format_numeric($agg->{$k}{values}{$pctl}, $CONFIG{precision});
                             }
                             $subaggs{$k} = [ \@pcts ];
                         }
@@ -704,8 +702,7 @@ sub display_aggregations {
                             my %alias = qw( variance var std_deviation stdev );
                             foreach my $stat (qw(count min avg max sum variance std_deviation)) {
                                 next unless exists $agg->{$k}{$stat};
-                                my $v = $agg->{$k}{$stat} =~ /\./ ? sprintf $CONFIG{decimal_format}, $agg->{$k}{$stat}
-                                                                    : $agg->{$k}{$stat};
+                                my $v = es_format_numeric($agg->{$k}{$stat}, $CONFIG{precision});
                                 push @stats, $alias{$stat} || $stat => $v;
                             }
                             $subaggs{$k} = [ \@stats ] if @stats;

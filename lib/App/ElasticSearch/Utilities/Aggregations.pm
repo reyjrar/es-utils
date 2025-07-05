@@ -4,6 +4,8 @@ package App::ElasticSearch::Utilities::Aggregations;
 use v5.16;
 use warnings;
 
+use App::ElasticSearch::Utilities qw(es_format_numeric);
+
 use Storable qw(dclone);
 use Sub::Exporter -setup => {
     exports => [ qw(
@@ -125,6 +127,7 @@ Results in:
 
 $Aggregations{histogram} = {
     params => sub {
+        return unless defined $_[0];
         return unless $_[0] > 0;
         return { interval => $_[0] };
     },
@@ -481,7 +484,7 @@ sub expand_aggregate_string {
             $params = $Aggregations{$agg}->{params}->($paramStr);
         }
         $alias ||= join ".", $agg eq 'terms' ? ($field) : ($agg, $field);
-        $aggs{$alias} = { $agg => { field => $field, %{ $params } } };
+        $aggs{$alias} = { $agg => { field => $field, %{ $params || {} } } };
     }
     return \%aggs;
 }
@@ -516,7 +519,7 @@ sub es_flatten_aggregations {
             push @{ $row }, $key, $hash->{value_as_string};
         }
         elsif( $hash->{value} ) {
-            push @{ $row }, $key, $hash->{value};
+            push @{ $row }, $key, es_format_numeric($hash->{value});
         }
         elsif( $hash->{values} ) {
             foreach my $k ( sort keys %{ $hash->{values} } ) {
