@@ -68,11 +68,114 @@ use Sub::Exporter -setup => {
     groups => {
         config  => [qw(es_utils_initialize es_globals)],
         default => [qw(es_utils_initialize es_connect es_indices es_request)],
-        human   => [qw(es_human_count es_human_size)],
+        human   => [qw(es_human_count es_human_size es_format_numeric)],
         indices => [qw(:default es_indices_meta)],
-        index   => [qw(:default es_index_valid es_index_fields es_index_days_old es_index_bases)],
+        index   => [qw(
+            :default es_index_valid es_index_fields es_index_days_old es_index_bases
+            es_index_strip_date es_index_shards es_index_segments es_index_stats
+        )],
+        maintenance => [qw(
+            es_close_index es_open_index es_delete_index es_optimize_index
+            es_apply_index_settings
+        )],
     },
 };
+
+=head1 OVERVIEW
+
+In addition to the scripts, the libraries provide a simplistic interface to
+write your own scripts. It builds C<CLI::Helpers> to provide consistent options
+for scripts.
+
+    use App::ElasticSearch::Utilities qw(:all);
+    use Data::Printer;
+
+    my $res = es_result('_cluster/health');
+    p($res)
+
+See the contents of the scripts for examples.
+
+=head1 EXPORT
+
+This module use L<Sub::Exporter> so you can customize exports.
+
+=head2 Export Groups
+
+The following export groups are provided.
+
+=over 2
+
+=item B<:default> - Default exports
+
+    es_connect()
+    es_indices()
+    es_request()
+    es_utils_initialize()
+
+=item B<:config>
+
+    es_globals()
+    es_utils_initialize()
+
+=item B<:human>
+
+    es_format_numeric()
+    es_human_count()
+    es_human_size()
+
+=item B<:index>
+
+    :default
+    es_index_bases()
+    es_index_days_old()
+    es_index_fields()
+    es_index_shards()
+    es_index_segments()
+    es_index_stats()
+    es_index_strip_date()
+    es_index_valid()
+
+=item B<:indices>
+
+    :default
+    es_indices_meta()
+
+=item B<:maintenance>
+
+    :default
+    es_close_index()
+    es_open_index()
+    es_delete_index()
+    es_optimize_index()
+    es_apply_index_settings()
+
+=item B<:all> - All exportable functions
+
+    :config
+    :default
+    :index
+    :indices
+    :human
+    :maintenance
+    es_basic_auth()
+    es_flatten_hash()
+    es_local_index_meta()
+    es_master()
+    es_nodes()
+    es_node_stats()
+    es_pattern()
+    es_settings()
+    es_segment_stats()
+
+=back
+
+=head2 Configuration
+
+It is possible to control how and when C<@ARGV> is processed to prevent conflicts.
+
+
+=cut
+
 use App::ElasticSearch::Utilities::Connection;
 use App::ElasticSearch::Utilities::VersionHacks qw(_fix_version_request);
 
@@ -107,7 +210,7 @@ From App::ElasticSearch::Utilities:
 
 See also the "CONNECTION ARGUMENTS" and "INDEX SELECTION ARGUMENTS" sections from App::ElasticSearch::Utilities.
 
-=head1 ARGUMENT GLOBALS
+=head1 CONFIG FILES
 
 Some options may be specified in the B</etc/es-utils.yaml>, B<$HOME/.es-utils.yaml>
 or B<$HOME/.config/es-utils/config.yaml> file:
@@ -172,7 +275,6 @@ Timeout for connections and requests, defaults to 10.
 
 By default, HTTP proxy environment variables are stripped. Use this option to keep your proxy environment variables
 in tact.
-
 
 =item B<insecure>
 
@@ -329,7 +431,7 @@ my $PATTERN;
     }
 }
 
-=func es_utils_initialize()
+=config es_utils_initialize()
 
 Takes an optional reference to an C<@ARGV> like array. Performs environment and
 argument parsing.
@@ -445,7 +547,7 @@ sub es_utils_initialize {
 our $CURRENT_VERSION;
 my  $CLUSTER_MASTER;
 
-=func es_globals($key)
+=config es_globals($key)
 
 Grab the value of the global value from the es-utils.yaml files.
 
@@ -460,7 +562,7 @@ sub es_globals {
     return $_GLOBALS{$key};
 }
 
-=head1 HTTP Basic Authentication
+=head1 AUTHENTICATION
 
 HTTP Basic Authorization is only supported when the C<proto> is set to B<https>
 as not to leak credentials all over.
@@ -517,7 +619,7 @@ If all the fails to yield a password, the last resort is to use CLI::Helpers::pr
 password.  If the user is using version 1.1 or higher of CLI::Helpers, this call will turn off echo and readline magic
 for the password prompt.
 
-=func es_basic_auth($host)
+=config es_basic_auth($host)
 
 Get the user/password combination for this host.  This is called from LWP::UserAgent if
 it recieves a 401, so the auth condition must be satisfied.
@@ -708,7 +810,7 @@ sub _get_es_version {
     return $CURRENT_VERSION;
 }
 
-=func es_connect
+=conn es_connect
 
 Without options, this connects to the server defined in the args.  If passed
 an array ref, it will use that as the connection definition.
@@ -795,7 +897,7 @@ sub es_master {
     return $is_master;
 }
 
-=func es_request([$handle],$command,{ method => 'GET', uri_param => { a => 1 } }, {})
+=conn es_request([$handle],$command,{ method => 'GET', uri_param => { a => 1 } }, {})
 
 Retrieve URL from ElasticSearch, returns a hash reference
 
@@ -931,7 +1033,7 @@ sub es_nodes {
     return wantarray ? %_nodes : { %_nodes };
 }
 
-=func es_indices_meta
+=indices es_indices_meta
 
 Returns the hash of index meta data.
 
@@ -1067,7 +1169,7 @@ sub es_indices {
     return wantarray ? @indices : \@indices;
 }
 
-=func es_index_strip_date( 'index-name' )
+=index es_index_strip_date( 'index-name' )
 
 Returns the index name with the date removed.
 
@@ -1087,7 +1189,7 @@ sub es_index_strip_date {
     return;
 }
 
-=func es_index_bases( 'index-name' )
+=index es_index_bases( 'index-name' )
 
 Returns an array of the possible index base names for this index
 
@@ -1124,7 +1226,7 @@ sub es_index_bases {
     return @{ $_stripped{$stripped} };
 }
 
-=func es_index_days_old( 'index-name' )
+=index es_index_days_old( 'index-name' )
 
 Return the number of days old this index is.
 
@@ -1167,7 +1269,7 @@ sub es_index_days_old {
 }
 
 
-=func es_index_shards( 'index-name' )
+=index es_index_shards( 'index-name' )
 
 Returns the number of replicas for a given index.
 
@@ -1186,7 +1288,7 @@ sub es_index_shards {
     return wantarray ? %shards : \%shards;
 }
 
-=func es_index_valid( 'index-name' )
+=index es_index_valid( 'index-name' )
 
 Checks if the specified index is valid
 
@@ -1207,7 +1309,7 @@ sub es_index_valid {
     return $_valid_index{$index} = $result;
 }
 
-=func es_index_fields('index-name')
+=index es_index_fields('index-name')
 
 Returns a hash reference with the following data:
 
@@ -1301,7 +1403,7 @@ sub es_index_fields {
     }
 }
 
-=func es_close_index('index-name')
+=maint es_close_index('index-name')
 
 Closes an index
 
@@ -1313,7 +1415,7 @@ sub es_close_index {
     return es_request('_close',{ method => 'POST', index => $index });
 }
 
-=func es_open_index('index-name')
+=maint es_open_index('index-name')
 
 Open an index
 
@@ -1325,7 +1427,7 @@ sub es_open_index {
     return es_request('_open',{ method => 'POST', index => $index });
 }
 
-=func es_delete_index('index-name')
+=maint es_delete_index('index-name')
 
 Deletes an index
 
@@ -1337,7 +1439,7 @@ sub es_delete_index {
     return es_request('',{ method => 'DELETE', index => $index });
 }
 
-=func es_optimize_index('index-name')
+=maint es_optimize_index('index-name')
 
 Optimize an index to a single segment per shard
 
@@ -1355,7 +1457,7 @@ sub es_optimize_index {
     });
 }
 
-=func es_apply_index_settings('index-name', { settings })
+=maint es_apply_index_settings('index-name', { settings })
 
 Apply a HASH of settings to an index.
 
@@ -1372,7 +1474,7 @@ sub es_apply_index_settings {
     return es_request('_settings',{ method => 'PUT', index => $index },$settings);
 }
 
-=func es_index_segments( 'index-name' )
+=index es_index_segments( 'index-name' )
 
 Exposes GET /$index/_segments
 
@@ -1417,7 +1519,7 @@ sub es_segment_stats {
 }
 
 
-=func es_index_stats( 'index-name' )
+=index es_index_stats( 'index-name' )
 
 Exposes GET /$index/_stats
 
@@ -1477,7 +1579,7 @@ sub es_flatten_hash {
     return \%compat;
 }
 
-=func es_human_count
+=human es_human_count
 
 Takes a number and returns the number as a string in docs, thousands, millions, or billions.
 
@@ -1500,7 +1602,7 @@ sub es_human_count {
     return sprintf "%0.2f %s", $size, $unit;
 }
 
-=func es_human_size
+=human es_human_size
 
 Takes a number and returns the number as a string in bytes, Kb, Mb, Gb, or Tb using base 1024.
 
@@ -1524,7 +1626,7 @@ sub es_human_size {
     return sprintf "%0.2f %s", $size, $unit;
 }
 
-=func es_format_numeric
+=human es_format_numeric
 
 Takes a value and the minimum digits of significance.
 
@@ -1615,73 +1717,43 @@ sub es_local_index_meta {
 
 =head1 SYNOPSIS
 
-This library contains utilities for unified interfaces in the scripts.
+This distribution contains modules for interacting with ElasticSearch and
+OpenSearch and utility scripts.
+
+=head1 SCRIPTS
 
 This a set of utilities to make monitoring ElasticSearch clusters much simpler.
 
-Included are:
+=head2 SEARCHING
 
-B<SEARCHING>:
+    scripts/es-aggregate.pl - Utility to search and aggregate index contents
+    scripts/es-search.pl - Utility to search and explore index contents
 
-    scripts/es-search.pl - Utility to interact with LogStash style indices from the CLI
-
-B<MONITORING>:
+=head2 MONITORING
 
     scripts/es-graphite-dynamic.pl - Perform index maintenance on daily indexes
+    scripts/es-index-fields.pl - Collect and report on field statistics for indices
+    scripts/es-index-scan.pl - Scan for potential index issues
+    scripts/es-nodes.pl - View node information
     scripts/es-status.pl - Command line utility for ES Metrics
     scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
-    scripts/es-nodes.pl - View node information
 
-B<MAINTENANCE>:
+=head2 MAINTENANCE
 
-    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
     scripts/es-alias-manager.pl - Manage index aliases automatically
+    scripts/es-daily-index-maintenance.pl - Perform index maintenance on daily indexes
+    scripts/es-index-blocks.pl - Report and fix any blocks on indices
     scripts/es-open.pl - Open any closed indices matching a index parameters
 
-B<MANAGEMENT>:
+=head2 MANAGEMENT
 
     scripts/es-apply-settings.pl - Apply settings to all indexes matching a pattern
     scripts/es-cluster-settings.pl - Manage cluster settings
     scripts/es-copy-index.pl - Copy an index from one cluster to another
     scripts/es-storage-overview.pl - View how shards/data is aligned on your cluster
 
-B<DEPRECATED>:
-
-    scripts/es-graphite-static.pl - Send ES Metrics to Graphite or Cacti
-
 The App::ElasticSearch::Utilities module simply serves as a wrapper around the scripts for packaging and
 distribution.
-
-=head1 INSTALL
-
-B<This library attempts to provide scripts compatible with version 0.19 through 1.1 of ElasticSearch>.
-
-Recommended install with L<CPAN Minus|http://cpanmin.us>:
-
-    cpanm App::ElasticSearch::Utilities
-
-You can also use CPAN:
-
-    cpan App::ElasticSearch::Utilities
-
-Or if you'd prefer to manually install:
-
-    export RELEASE=<CurrentRelease>
-
-    wget "https://github.com/reyjrar/es-utils/blob/master/releases/App-ElasticSearch-Utilities-$RELEASE.tar.gz?raw=true" -O es-utils.tgz
-
-    tar -zxvf es-utils.tgz
-
-    cd App-ElasticSearch-Utilities-$RELEASE
-
-    perl Makefile.PL
-
-    make
-
-    make install
-
-This will take care of ensuring all the dependencies are satisfied and will install the scripts into the same
-directory as your Perl executable.
 
 =head2 USAGE
 
@@ -1702,6 +1774,5 @@ regular expressions.  Those patterns are:
     ANY     expands to match any number of any characters.
 
 =cut
-
 
 1;
