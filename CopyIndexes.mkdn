@@ -4,7 +4,7 @@ es-copy-index.pl - Copy an index from one cluster to another
 
 # VERSION
 
-version 8.8
+version 8.9
 
 # SYNOPSIS
 
@@ -449,7 +449,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2024 by Brad Lhotsky.
+This software is Copyright (c) 2025 by Brad Lhotsky.
 
 This is free software, licensed under:
 
