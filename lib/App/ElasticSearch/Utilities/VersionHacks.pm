@@ -48,6 +48,9 @@ my %CALLBACKS = (
     '_search' => {
         default => \&_search_params,
     },
+    '_cat/shards' => {
+        default => \&_cat_shards,
+    },
 );
 
 my $version;
@@ -56,7 +59,7 @@ sub _fix_version_request {
     my ($url,$options,$data) = @_;
 
     # Requires App::ElasticSearch::Utilities to be loaded
-    if( ! defined $version  ){
+    if( ! defined $version ){
         eval {
             $version = sprintf "%0.1f", App::ElasticSearch::Utilities::_get_es_version();
             1;
@@ -168,6 +171,14 @@ sub _search_params {
         }
     }
 
+    return ($url,$options,$data);
+}
+
+sub _cat_shards {
+    my ($url,$options,$data,$version) = @_;
+    if ( qv($version) >= qv("7.11.0") ) {
+        delete $options->{uri_param}{local};
+    }
     return ($url,$options,$data);
 }
 

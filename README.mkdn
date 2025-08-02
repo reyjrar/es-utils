@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 8.9
+version 9.0
 
 # SYNOPSIS
 
@@ -285,7 +285,7 @@ for scripts.
     use Data::Printer;
 
     my $res = es_result('_cluster/health');
-    p($res)
+    p($res);
 
 See the contents of the scripts for examples.
 

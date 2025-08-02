@@ -131,6 +131,22 @@ has 'ssl_opts' => (
     default => sub { {} },
 );
 
+=attr version
+
+Detected ElasticSearch version
+
+=cut
+
+has 'version' => (
+    is => 'lazy',
+    isa => Str,
+    init_arg => undef,
+);
+
+sub _build_version {
+    my ($self) = @_;
+}
+
 =attr ua
 
 Lazy built B<LWP::UserAgent> to access LWP::UserAgent directly.
@@ -162,8 +178,8 @@ sub _build_ua {
     $ua->add_handler( response_done => sub {
         my ($response,$lwp_ua,$headers) = @_;
         debug( {color=>'magenta'}, "respone_done handler, got:");
+        debug($response->as_string);
 
-        debug_var($response);
         my $ctype = $response->content_type() || 'invalid';
         # JSON Transform
         if( $ctype =~ m{^application/json\b} ) {
@@ -250,7 +266,7 @@ sub request {
         $uri->path($options->{index});
     }
 
-    debug({color=>'magenta'}, sprintf "Issuing %s with URI of '%s'", $method, $uri->as_string);
+    debug({color=>'magenta'}, sprintf "Issuing %s with URI of '%s' as '%s:%s'", $method, $uri->as_string, $self->username, length $self->password ? 'hunter2' : '');
     if( defined $body ) {
         if( is_ref($body) )  {
             debug_var({indent=>1}, $body);

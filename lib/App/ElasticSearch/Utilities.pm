@@ -91,7 +91,7 @@ for scripts.
     use Data::Printer;
 
     my $res = es_result('_cluster/health');
-    p($res)
+    p($res);
 
 See the contents of the scripts for examples.
 
@@ -172,7 +172,6 @@ The following export groups are provided.
 =head2 Configuration
 
 It is possible to control how and when C<@ARGV> is processed to prevent conflicts.
-
 
 =cut
 
@@ -752,57 +751,38 @@ sub _get_ssl_opts {
 sub _get_es_version {
     return $CURRENT_VERSION if defined $CURRENT_VERSION;
     my $conn = es_connect();
-    # Build the request
-    my $req  = App::ElasticSearch::Utilities::HTTPRequest->new(
-        GET => sprintf "%s://%s:%d",
-                    $conn->proto, $conn->host, $conn->port
-    );
-    # Check if we're doing auth
-    my @auth = $DEF{PASSEXEC} ? es_basic_auth($conn->host) : ();
-    # Add authentication if we get a password
-    $req->authorization_basic( @auth ) if @auth;
 
     # Retry with TLS and/or Auth
-    my %try = map { $_ => 1 } qw( tls auth );
-    my $resp;
-    while( not defined $CURRENT_VERSION ) {
-        $resp = $conn->ua->request($req);
-        if( $resp->is_success ) {
-            my $ver;
-            eval {
-                $ver = $resp->content->{version};
-            };
-            if( $ver ) {
-                if( $ver->{distribution} and $ver->{distribution} eq 'opensearch' ) {
-                    $CURRENT_VERSION = version->parse($ver->{minimum_wire_compatibility_version});
-                }
-                else {
-                    $CURRENT_VERSION = version->parse($ver->{number});
-                }
+    my $resp = $conn->request('/');
+    my $err;
+    if( $resp->is_success ) {
+        my $ver;
+        eval {
+            $ver = $resp->content->{version};
+        };
+        if( $ver ) {
+            if( $ver->{distribution} and $ver->{distribution} eq 'opensearch' ) {
+                $CURRENT_VERSION = version->parse($ver->{minimum_wire_compatibility_version});
             }
-        }
-        elsif( $resp->code == 500 && $resp->message eq "Server closed connection without sending any data back" ) {
-            # Try TLS
-            last unless $try{tls};
-            delete $try{tls};
-            $conn->proto('https');
-            warn "Attempting promotion to HTTPS, try setting 'proto: https' in ~/.es-utils.yaml";
-        }
-        elsif( $resp->code == 401 ) {
-            # Retry with credentials
-            last unless $try{auth};
-            delete $try{auth};
-            warn "Authorization required, try setting 'password-exec: /home/user/bin/get-password.sh` in ~/.es-utils.yaml'"
-                unless $DEF{PASSEXEC};
-            $req->authorization_basic( es_basic_auth($conn->host) );
-        }
-        else {
-            warn "Failed getting version";
-            last;
+            else {
+                $CURRENT_VERSION = version->parse($ver->{number});
+            }
+        } else {
+            $err = "Parsing version failed";
         }
     }
-    if( !defined $CURRENT_VERSION || $CURRENT_VERSION <= 2 ) {
-        output({color=>'red',stderr=>1}, sprintf "[%d] Unable to determine Elasticsearch version, something has gone terribly wrong: aborting.", $resp->code);
+    elsif( $resp->code == 500 && $resp->message eq "Server closed connection without sending any data back" ) {
+        $err = "Attempting promotion to HTTPS, try setting 'proto: https' in ~/.es-utils.yaml";
+    }
+    elsif( $resp->code == 401 ) {
+        $err = $DEF{PASSEXEC} ? sprintf("Authorization failed for user '%s'", $conn->username)
+                              : "Authorization required, try setting 'password-exec: /home/user/bin/get-password.sh` in ~/.es-utils.yaml'";
+    }
+    else {
+        $err = "Failed getting version";
+    }
+    if( $err || !defined $CURRENT_VERSION || $CURRENT_VERSION <= 2 ) {
+        output({color=>'red',stderr=>1}, sprintf "FAIL [%d] Unable to determine Elasticsearch version: %s", $resp->code, $err);
         output({color=>'red',stderr=>1}, ref $resp->content ? YAML::XS::Dump($resp->content) : $resp->content) if $resp->content;
         exit 1;
     }
@@ -817,19 +797,18 @@ an array ref, it will use that as the connection definition.
 
 =cut
 
-my $ES = undef;
-
 sub es_connect {
     my ($override_servers) = @_;
 
     es_utils_initialize() unless keys %DEF;
 
+    # Defaults
     my %conn = (
         host     => $DEF{HOST},
         port     => $DEF{PORT},
         proto    => $DEF{PROTO},
         timeout  => $DEF{TIMEOUT},
-        ssl_opts => _get_ssl_opts,
+        ssl_opts => _get_ssl_opts(),
     );
     # Only authenticate over TLS
     if( $DEF{PROTO} eq 'https' ) {
@@ -846,7 +825,6 @@ sub es_connect {
             $p ||= $conn{port};
             push @servers, { %conn, host => $s, port => $p };
         }
-
         if( @servers > 0 ) {
             my $pick = @servers > 1 ? $servers[int(rand(@servers))] : $servers[0];
             return App::ElasticSearch::Utilities::Connection->new(%{$pick});
@@ -854,21 +832,23 @@ sub es_connect {
     }
     else {
         # Check for index metadata
+        my $changed = 0;
         foreach my $k ( keys %conn ) {
             foreach my $name ( $DEF{INDEX}, $DEF{BASE} ) {
                 next unless $name;
                 if( my $v = es_local_index_meta($k => $name) ) {
+                    $changed++ if $conn{$k} ne $v;
                     $conn{$k} = $v;
                     last;
                 }
             }
         }
+        return App::ElasticSearch::Utilities::Connection->new(%conn) if $changed;
     }
 
     # Otherwise, cache our handle
-    $ES ||= App::ElasticSearch::Utilities::Connection->new(%conn);
-
-    return $ES;
+    state $default_connection = App::ElasticSearch::Utilities::Connection->new(%conn);
+    return $default_connection;
 }
 
 =func es_master([$handle])

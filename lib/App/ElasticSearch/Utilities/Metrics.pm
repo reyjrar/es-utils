@@ -298,7 +298,6 @@ sub collect_index_metrics {
     my $shardres = $self->request('_cat/shards',
         {
             uri_param => {
-                local  => 'true',
                 format => 'json',
                 bytes  => 'b',
                 h => join(',', qw( index prirep docs store id state )),
