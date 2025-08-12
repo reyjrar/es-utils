@@ -1214,7 +1214,6 @@ sub es_index_bases {
 
     # Compute if we haven't already memoized
     if( !exists $_stripped{$stripped} ) {
-        my %bases=();
         my @parts = grep { defined && length } split /[-_]/, $stripped;
         debug(sprintf "es_index_bases(%s) dissected to %s", $index, join(',', @parts));
         my $sep = index( $stripped, '_' ) >= 0 ? '_' : '-';

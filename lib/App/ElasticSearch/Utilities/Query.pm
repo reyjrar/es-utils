@@ -355,7 +355,6 @@ sub request_body {
             debug({color=>'red'}, "request_body() - Failed to retrieve '$section'");
         };
         next unless defined $val;
-        my $data = { $section => $val };
         my $param = $map{$section} || $section;
         $body{$param} = $val;
     }

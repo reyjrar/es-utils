@@ -53,7 +53,8 @@ on 'test' => sub {
   requires "File::Temp" => "0";
   requires "IO::Handle" => "0";
   requires "IPC::Open3" => "0";
-  requires "Test::More" => "0";
+  requires "Test::CheckDeps" => "0.010";
+  requires "Test::More" => "0.94";
   requires "perl" => "v5.16.0";
 };
 
@@ -65,9 +66,11 @@ on 'configure' => sub {
 on 'develop' => sub {
   requires "Pod::Coverage::TrustPod" => "0";
   requires "Test::EOL" => "0";
-  requires "Test::More" => "0.88";
+  requires "Test::Kwalitee" => "1.21";
+  requires "Test::More" => "0.96";
   requires "Test::NoTabs" => "0";
   requires "Test::Perl::Critic" => "0";
   requires "Test::Pod" => "1.41";
   requires "Test::Pod::Coverage" => "1.08";
+  requires "Test::Vars" => "0";
 };

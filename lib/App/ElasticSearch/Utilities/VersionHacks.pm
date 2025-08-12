@@ -65,7 +65,7 @@ sub _fix_version_request {
             1;
         } or do {
             my $err = $@;
-            output({stderr=>1,color=>'red'}, "Failed version detection!", $@);
+            output({stderr=>1,color=>'red'}, "Failed version detection!", $err);
         };
         if (defined $version && $version < $MIN_VERSION) {
             output({stderr=>1,color=>'red',sticky=>1},
