@@ -543,8 +543,7 @@ sub es_utils_initialize {
 }
 
 # Regexes for Pattern Expansion
-our $CURRENT_VERSION;
-my  $CLUSTER_MASTER;
+my $CLUSTER_MASTER;
 
 =config es_globals($key)
 
@@ -748,48 +747,6 @@ sub _get_ssl_opts {
     return \%opts;
 }
 
-sub _get_es_version {
-    return $CURRENT_VERSION if defined $CURRENT_VERSION;
-    my $conn = es_connect();
-
-    # Retry with TLS and/or Auth
-    my $resp = $conn->request('/');
-    my $err;
-    if( $resp->is_success ) {
-        my $ver;
-        eval {
-            $ver = $resp->content->{version};
-        };
-        if( $ver ) {
-            if( $ver->{distribution} and $ver->{distribution} eq 'opensearch' ) {
-                $CURRENT_VERSION = version->parse($ver->{minimum_wire_compatibility_version});
-            }
-            else {
-                $CURRENT_VERSION = version->parse($ver->{number});
-            }
-        } else {
-            $err = "Parsing version failed";
-        }
-    }
-    elsif( $resp->code == 500 && $resp->message eq "Server closed connection without sending any data back" ) {
-        $err = "Attempting promotion to HTTPS, try setting 'proto: https' in ~/.es-utils.yaml";
-    }
-    elsif( $resp->code == 401 ) {
-        $err = $DEF{PASSEXEC} ? sprintf("Authorization failed for user '%s'", $conn->username)
-                              : "Authorization required, try setting 'password-exec: /home/user/bin/get-password.sh` in ~/.es-utils.yaml'";
-    }
-    else {
-        $err = "Failed getting version";
-    }
-    if( $err || !defined $CURRENT_VERSION || $CURRENT_VERSION <= 2 ) {
-        output({color=>'red',stderr=>1}, sprintf "FAIL [%d] Unable to determine Elasticsearch version: %s", $resp->code, $err);
-        output({color=>'red',stderr=>1}, ref $resp->content ? YAML::XS::Dump($resp->content) : $resp->content) if $resp->content;
-        exit 1;
-    }
-    debug({color=>'magenta'}, "FOUND VERISON '$CURRENT_VERSION'");
-    return $CURRENT_VERSION;
-}
-
 =conn es_connect
 
 Without options, this connects to the server defined in the args.  If passed
@@ -896,9 +853,7 @@ If you'd like to proceed you need to catch that error.
 sub es_request {
     my $instance = ref $_[0] eq 'App::ElasticSearch::Utilities::Connection' ? shift @_ : es_connect();
 
-    $CURRENT_VERSION = _get_es_version() if !defined $CURRENT_VERSION;
-
-    my($url,$options,$body) = _fix_version_request(@_);
+    my($url,$options,$body) = _fix_version_request($instance->version, @_);
 
     # Normalize the options
     $options->{method} ||= 'GET';
