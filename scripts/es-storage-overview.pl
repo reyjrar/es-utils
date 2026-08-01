@@ -21,6 +21,7 @@ my ($opt,$usage) = describe_options('%c %o',
     ['desc',    "Sort descending (default by size)"],
     ['limit=i', "Limit to showing only this many, ie top N", { default => 0 }],
     ['raw',     "Display numeric data without rollups"],
+    ['hidden',  "Include system indices that start with a dot"],
     [],
     ['clear-cache', "Clear the _cat/indices cache"],
     [],
@@ -82,10 +83,12 @@ foreach my $row (@{ $result }) {
     # Index Name
     my $index = delete $row->{index};
 
+    next if $index =~ /^\./ && !$opt->hidden;
+
     $overview{indices}++;
     verbose({color=>'green'}, "$index - Gathering statistics");
 
-    my @bases = es_index_strip_date($index);
+    my @bases = es_index_bases($index);
     foreach my $base ( @bases ) {
         # Count Indexes
         $bases{$base}->{indices} ||= 0;

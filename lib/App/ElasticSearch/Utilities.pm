@@ -1028,6 +1028,7 @@ sub es_indices {
         state       => 'open',
         check_state => 1,
         check_dates => 1,
+        show_hidden => 0,
         @_
     );
 
@@ -1063,6 +1064,7 @@ sub es_indices {
 
     foreach my $index (sort keys %idx) {
         if(!exists $args{_all}) {
+            next if $index =~ /^\./ && !$args{show_hidden};
             my $status = $idx{$index};
             # State Check Disqualification
             if($args{state} ne 'all' && $args{check_state})  {
@@ -1113,16 +1115,26 @@ Returns the index name with the date removed.
 sub es_index_strip_date {
     my ($index) = @_;
 
-    return -1 unless defined $index;
+    return unless length $index;
 
     es_utils_initialize() unless keys %DEF;
 
     # Try the Date Pattern
-    if( my $base = $index =~ s/[^a-z0-9]+$PATTERN_REGEX{DATE}.*$//rio ) {
-        return $base;
-    }
-    return;
+    return $index =~ s/[^a-z0-9]+$PATTERN_REGEX{DATE}.*$//rio;
 }
+
+=index es_index_base('index-name')
+
+Returns the full index base stripped of timestamps and rollover index
+
+=cut
+
+sub es_index_base {
+    my ($index) = @_;
+    my $base = es_index_strip_date($index);
+    return $base =~ s/[\-_.]\d+$//r;
+}
+
 
 =index es_index_bases( 'index-name' )
 
@@ -1138,10 +1150,8 @@ sub es_index_bases {
     return unless defined $index;
 
     # Strip to the base
-    my $stripped = es_index_strip_date($index);
-    # Remove the rollover portion
-    $stripped =~ s/[\-_.]\d+$//;
-    return unless defined $stripped and length $stripped;
+    my $stripped = es_index_base($index);
+    return unless length $stripped;
 
     # Compute if we haven't already memoized
     if( !exists $_stripped{$stripped} ) {
