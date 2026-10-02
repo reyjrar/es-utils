@@ -511,16 +511,16 @@ sub es_utils_initialize {
         INSECURE    => exists $opts->{insecure} ? 1
                     :  exists $_GLOBALS{insecure} ? $_GLOBALS{insecure}
                     :  0,
-        CACERT      => exists $opts->{cacert} ? 1
+        CACERT      => exists $opts->{cacert} ? $opts->{cacert}
                     :  exists $_GLOBALS{cacert} ? $_GLOBALS{cacert}
                     :  undef,
-        CAPATH      => exists $opts->{capath} ? 1
+        CAPATH      => exists $opts->{capath} ? $opts->{capath}
                     :  exists $_GLOBALS{capath} ? $_GLOBALS{capath}
                     :  undef,
-        CERT        => exists $opts->{cert} ? 1
+        CERT        => exists $opts->{cert} ? $opts->{cert}
                     :  exists $_GLOBALS{cert} ? $_GLOBALS{cert}
                     :  undef,
-        KEY         => exists $opts->{key} ? 1
+        KEY         => exists $opts->{key} ? $opts->{key}
                     :  exists $_GLOBALS{key} ? $_GLOBALS{key}
                     :  undef,
     );
