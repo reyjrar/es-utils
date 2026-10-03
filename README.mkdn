@@ -4,7 +4,7 @@ App::ElasticSearch::Utilities - Utilities for Monitoring ElasticSearch
 
 # VERSION
 
-version 9.0
+version 9.1
 
 # SYNOPSIS
 
@@ -407,6 +407,10 @@ If you'd like to proceed you need to catch that error.
 ## es\_index\_strip\_date( 'index-name' )
 
 Returns the index name with the date removed.
+
+## es\_index\_base('index-name')
+
+Returns the full index base stripped of timestamps and rollover index
 
 ## es\_index\_bases( 'index-name' )
 
