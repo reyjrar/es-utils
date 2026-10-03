@@ -182,7 +182,7 @@ while( $res && @{ $res->{hits}{hits} }) {
             body => $body
         );
         if ($s2 ne "200") {
-            output({stderr=>1,color=>'red'},"Failed to put documents to $HOST{to} (http status = $status): " . $JSON->encode([ $s2, $r2 ]));
+            output({stderr=>1,color=>'red'},"Failed to put documents to $HOST{to} (http status = $s2): " . $JSON->encode([ $s2, $r2 ]));
             next;
         }
         $success=1;
